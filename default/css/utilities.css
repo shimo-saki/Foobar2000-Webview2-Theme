@@ -1,0 +1,230 @@
+/* ==========================================
+   CloudMusic Theme · Overlays & Utilities
+   ========================================== */
+
+/* ============ Toast ============ */
+.toast-container{
+  position:fixed;right:16px;bottom:calc(var(--bottom-h) + 14px);z-index:1000;
+  display:flex;flex-direction:column;gap:10px;pointer-events:none;
+}
+.toast{
+  display:flex;align-items:center;gap:12px;padding:11px 16px 11px 12px;
+  background:var(--bg-2);border:1px solid var(--border-strong);
+  border-radius:var(--r-l);box-shadow:var(--shadow-pop);
+  min-width:250px;max-width:340px;pointer-events:auto;
+  animation:toast-in 0.38s var(--ease);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+}
+.toast.removing{animation:toast-out 0.3s var(--ease) forwards}
+.toast-icon{
+  width:34px;height:34px;border-radius:var(--r-m);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent-soft);color:var(--accent);
+}
+.toast-icon.success{background:rgba(82,196,110,0.14);color:#52c46e}
+.toast-icon.error{background:rgba(255,107,107,0.13);color:#ff6b6b}
+.toast-icon svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.toast-icon img{width:100%;height:100%;object-fit:cover;border-radius:var(--r-m)}
+.toast-info{flex:1;min-width:0}
+.toast-title{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast-sub{font-size:11px;color:var(--text-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@keyframes toast-in{from{transform:translateY(14px) scale(0.96);opacity:0}to{transform:none;opacity:1}}
+@keyframes toast-out{to{transform:translateX(24px);opacity:0}}
+
+/* ============ Context Menu ============ */
+.ctx-menu{
+  position:fixed;z-index:2000;min-width:180px;max-width:280px;
+  background:var(--bg-2);border:1px solid var(--border-strong);
+  border-radius:var(--r-m);box-shadow:var(--shadow-pop);padding:5px;
+  animation:ctx-in 0.16s var(--ease);
+  /* 菜单过长时允许滚轮滚动，避免底部项（如“在线获取标签”）超出视口被挡住 */
+  max-height:min(52vh, 460px, calc(100vh - 20px));
+  overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.22) transparent;
+}
+.ctx-menu::-webkit-scrollbar{width:8px}
+.ctx-menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.22);border-radius:4px}
+.ctx-menu::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35)}
+.ctx-menu.removing{animation:ctx-out 0.12s ease forwards}
+.ctx-item{
+  display:flex;align-items:center;gap:9px;padding:7px 12px;
+  cursor:pointer;font-size:12.5px;color:var(--text-2);
+  border-radius:var(--r-s);transition:background var(--t-fast),color var(--t-fast);
+  white-space:nowrap;overflow:hidden;
+}
+.ctx-item:hover{background:var(--bg-3);color:var(--text)}
+.ctx-item.danger{color:#ff6b6b}
+.ctx-item.danger:hover{background:rgba(255,107,107,0.12)}
+.ctx-item.checked{color:var(--accent)}
+.ctx-item .ctx-check{width:14px;flex-shrink:0;font-size:11px;color:var(--accent);text-align:center}
+.ctx-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ctx-item .ctx-stars{color:var(--accent);letter-spacing:1px;font-size:11px}
+.ctx-divider{height:1px;background:var(--border);margin:5px 8px}
+.ctx-label{padding:6px 12px 3px;font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--text-3)}
+.ctx-info-label{color:var(--text-3);margin-right:auto}
+.ctx-info-value{color:var(--text-2);font-weight:500;text-align:right}
+@keyframes ctx-in{from{transform:scale(0.94) translateY(-3px);opacity:0}to{transform:none;opacity:1}}
+@keyframes ctx-out{to{opacity:0;transform:scale(0.96)}}
+
+/* ============ Modal ============ */
+.modal-mask{
+  position:fixed;inset:0;z-index:2500;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,8,10,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  opacity:0;pointer-events:none;visibility:hidden;transition:opacity var(--t-mid),visibility var(--t-mid);
+}
+.modal-mask.open{opacity:1;pointer-events:auto;visibility:visible}
+.modal{
+  width:380px;max-width:88vw;background:var(--bg-2);
+  border:1px solid var(--border-strong);border-radius:var(--r-xl);
+  box-shadow:var(--shadow-pop);padding:24px;
+  transform:translateY(14px) scale(0.97);transition:transform var(--t-mid);
+}
+.modal-mask.open .modal{transform:none}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:6px}
+.modal-desc{font-size:12px;color:var(--text-3);margin-bottom:16px}
+.modal-input{
+  width:100%;height:38px;background:var(--bg-1);
+  border:1px solid var(--border-strong);border-radius:var(--r-m);
+  padding:0 14px;font-size:13px;color:var(--text);
+  transition:border-color var(--t-fast);
+}
+.modal-input:focus{border-color:var(--accent-glow)}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.modal-btn{
+  padding:8px 20px;border-radius:18px;font-size:12.5px;font-weight:600;
+  transition:background var(--t-fast),transform var(--t-fast),filter var(--t-fast);
+}
+.modal-btn:active{transform:scale(0.96)}
+.modal-btn.primary{background:var(--accent);color:var(--on-accent)}
+.modal-btn.primary:hover{background:hsla(var(--accent-h),var(--accent-s),calc(var(--accent-l) + 6%),1)}
+.modal-btn.ghost{background:var(--bg-3);color:var(--text-2)}
+.modal-btn.ghost:hover{background:var(--bg-4);color:var(--text)}
+.modal-btn.danger{background:rgba(255,107,107,0.14);color:#ff6b6b}
+.modal-btn.danger:hover{background:rgba(255,107,107,0.22)}
+
+/* ============ Drop Overlay ============ */
+.drop-overlay{
+  position:fixed;inset:0;z-index:3000;
+  background:hsla(var(--accent-h),var(--accent-s),20%,0.72);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  display:none;align-items:center;justify-content:center;pointer-events:none;
+}
+.drop-overlay.active{display:flex}
+.drop-overlay-inner{
+  display:flex;flex-direction:column;align-items:center;gap:16px;
+  padding:44px 64px;border:2px dashed hsla(var(--accent-h),var(--accent-s),70%,0.8);
+  border-radius:var(--r-xl);color:#fff;
+}
+.drop-overlay-inner svg{width:52px;height:52px;stroke:#fff;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.drop-overlay-text{font-size:17px;font-weight:700;letter-spacing:0.02em}
+.drop-overlay-sub{font-size:12px;opacity:0.7}
+
+/* ============ Loading & Error ============ */
+.loading-spinner{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:44px;gap:14px;color:var(--text-3);font-size:12.5px;min-height:130px;
+}
+.spinner{
+  width:26px;height:26px;border:3px solid var(--border-strong);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin 0.75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.section-error{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:44px;gap:12px;color:var(--text-3);font-size:12.5px;text-align:center;min-height:130px;
+}
+.section-error svg{width:34px;height:34px;stroke:var(--text-4);fill:none;stroke-width:1.5}
+.retry-btn{
+  padding:7px 22px;background:var(--bg-2);border:1px solid var(--border-strong);
+  border-radius:18px;color:var(--text-2);font-size:12px;font-weight:600;
+  transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);
+}
+.retry-btn:hover{background:var(--bg-3);color:var(--text);border-color:var(--accent-glow)}
+
+/* 加载更多按钮（媒体库歌曲分页） */
+.lib-load-more{
+  display:block;margin:16px auto;padding:8px 28px;background:var(--bg-2);
+  border:1px solid var(--border);border-radius:20px;color:var(--text-2);
+  font-size:12.5px;font-weight:600;cursor:pointer;transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);
+}
+.lib-load-more:hover:not(:disabled){background:var(--bg-3);color:var(--text);border-color:var(--accent-glow)}
+.lib-load-more:disabled{opacity:0.6;cursor:default}
+
+/* ============ 通用徽标 ============ */
+.count-badge{
+  position:absolute;top:-2px;right:-4px;min-width:15px;height:15px;
+  padding:0 4px;border-radius:8px;background:var(--accent);color:var(--on-accent);
+  font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;
+  font-variant-numeric:tabular-nums;box-shadow:0 0 0 2px var(--bg-1);
+  pointer-events:none;
+}
+
+/* 列表淡入 */
+.fade-in{animation:fade-in var(--t-mid)}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+
+/* 空状态插画 */
+.empty-illustration{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:60px 40px;color:var(--text-3);font-size:13px;text-align:center;
+}
+.empty-illustration svg{width:48px;height:48px;stroke:var(--text-4);fill:none;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+
+/* ============ 媒体库浮动分页栏 ============ */
+.lib-pager{
+  position:sticky;top:8px;z-index:6;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:9px 12px 9px 14px;margin:0 0 14px;
+  background:color-mix(in srgb, var(--bg-1) 74%, transparent);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border);
+  border-radius:var(--r-l);
+  box-shadow:0 8px 24px rgba(0,0,0,0.22);
+}
+.lib-page-title{
+  display:flex;align-items:center;gap:8px;
+  font-size:13px;font-weight:700;color:var(--text);
+  letter-spacing:0.01em;
+}
+.lib-page-title::before{
+  content:'';width:3px;height:15px;border-radius:2px;
+  background:linear-gradient(180deg,var(--accent),var(--accent-glow));
+  flex-shrink:0;
+}
+.lib-page-count{
+  font-size:11px;font-weight:600;color:var(--accent);
+  background:var(--accent-soft);padding:2px 9px;border-radius:10px;
+  letter-spacing:0.02em;font-variant-numeric:tabular-nums;
+}
+.lib-pager-controls{
+  margin-left:auto;display:flex;align-items:center;gap:8px;
+}
+.lib-pager-label{font-size:12px;color:var(--text-3);white-space:nowrap}
+.lib-page-size{
+  background:var(--bg-3);color:var(--text-2);border:1px solid var(--border);
+  border-radius:8px;padding:5px 8px;font-size:12px;outline:none;cursor:pointer;
+  transition:border-color var(--t-fast),color var(--t-fast),background var(--t-fast);
+}
+.lib-page-size:hover{border-color:var(--accent-glow);color:var(--text)}
+.lib-page-size:focus{border-color:var(--accent)}
+.lib-page-info{
+  font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;
+  min-width:46px;text-align:center;letter-spacing:0.02em;
+  border-left:1px solid var(--border);border-right:1px solid var(--border);
+}
+.lib-page-nav{
+  display:inline-flex;align-items:center;height:28px;padding:0 4px;
+  background:var(--bg-3);border:1px solid var(--border);border-radius:14px;
+}
+.lib-page-btn{
+  display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
+  background:transparent;border:none;border-radius:12px;
+  color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;
+  transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
+}
+.lib-page-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.lib-page-btn:hover:not(:disabled){background:var(--accent);color:var(--on-accent)}
+.lib-page-btn:active:not(:disabled){transform:scale(0.92)}
+.lib-page-btn:disabled{color:var(--text-4);cursor:not-allowed}

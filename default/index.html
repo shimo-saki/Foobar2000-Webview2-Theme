@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CloudMusic</title>
+<link rel="stylesheet" href="css/variables.css?v=22">
+<link rel="stylesheet" href="css/layout.css?v=22">
+<link rel="stylesheet" href="css/components.css?v=22">
+<link rel="stylesheet" href="css/utilities.css?v=22">
+</head>
+<body>
+<div class="app lyrics-hidden" id="app">
+
+  <!-- ============ Titlebar ============ -->
+  <div class="titlebar" id="titlebar">
+    <div class="titlebar-left">
+      <div class="titlebar-logo">
+        <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </div>
+      <span class="titlebar-title">CloudMusic</span>
+    </div>
+    <div class="titlebar-drag" id="titlebarDrag"></div>
+    <div class="titlebar-controls" id="titlebarControls"></div>
+  </div>
+
+  <!-- ============ Sidebar ============ -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-search" id="sidebarSearchWrap">
+      <svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="sidebarSearch" placeholder="搜索音乐..." spellcheck="false" />
+      <button class="clear-btn" id="sidebarSearchClear" title="清空">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="sidebar-nav" id="sidebarNav">
+      <div class="nav-item active" data-tab="discover" tabindex="0">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        <span>发现音乐</span>
+      </div>
+      <div class="nav-item" data-tab="playlist" tabindex="0">
+        <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span>播放列表</span>
+      </div>
+      <div class="nav-item" data-tab="library" tabindex="0">
+        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span>媒体库</span>
+      </div>
+      <div class="nav-item" data-tab="search" tabindex="0">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>搜索</span>
+      </div>
+    </div>
+    <div class="sidebar-section-title">
+      <span>我的歌单</span>
+      <button class="add-btn" id="addPlaylistBtn" title="新建歌单">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+    <div class="sidebar-playlists" id="playlistList"></div>
+  </div>
+
+  <!-- ============ Main Content ============ -->
+  <div class="main-content" id="mainContent">
+    <div class="main-tabs" id="mainTabs">
+      <div class="main-tab active" data-tab="discover">推荐</div>
+      <div class="main-tab" data-tab="playlist">播放列表</div>
+      <div class="main-tab" data-tab="library">媒体库</div>
+      <div class="main-tab" data-tab="search">搜索</div>
+    </div>
+    <div class="main-body" id="mainBody">
+
+      <!-- Discover -->
+      <div class="tab-content active" id="tabDiscover">
+        <div class="discover-wrap">
+          <div class="dc-hero">
+          <div class="hero-wave-bg"><img src="static/img/hero-wave.svg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1;opacity:0.6;pointer-events:none;" /></div>
+            <div class="dc-hero-date" id="heroDate"></div>
+            <div class="dc-hero-title" id="heroTitle">每日推荐</div>
+            <div class="dc-hero-sub" id="heroSub">根据你的媒体库，为你随机挑选 30 首歌曲</div>
+            <div class="dc-hero-actions">
+              <button class="dc-btn dc-btn-primary" id="btnPlayDaily">
+                <svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                <span>播放全部</span>
+              </button>
+              <button class="dc-btn dc-btn-ghost" id="btnRefreshDiscover">
+                <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                <span>换一批</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="dc-section">
+            <div class="dc-section-title">推荐专辑</div>
+            <div class="dc-section-more" id="moreAlbums">更多<svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          </div>
+          <div class="album-grid" id="discoverAlbums"></div>
+
+          <div class="dc-section">
+            <div class="dc-section-title">随机推荐</div>
+            <div class="dc-section-more" id="refreshRandom">换一批<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></div>
+          </div>
+          <div class="dc-tracklist" id="discoverRandom"></div>
+
+          <div class="dc-section">
+            <div class="dc-section-title">最近添加</div>
+            <div class="dc-section-more" id="moreRecent">更多<svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          </div>
+          <div class="dc-tracklist" id="discoverRecent"></div>
+        </div>
+      </div>
+
+      <!-- Playlist -->
+      <div class="tab-content" id="tabPlaylist">
+        <div class="playlist-view">
+          <div class="playlist-header" id="playlistHeader">
+            <div class="pl-cover ph" id="plCoverWrap">
+              <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              <img class="pl-cover" id="plCover" src="" alt="" style="position:absolute;inset:0" />
+            </div>
+            <div class="pl-header-info">
+              <div class="pl-header-tag" id="playlistHeaderTag">PLAYLIST</div>
+              <div class="pl-header-name" id="playlistHeaderName">播放列表</div>
+              <div class="pl-header-meta" id="playlistHeaderMeta"></div>
+            </div>
+            <div class="pl-header-actions">
+              <button class="pl-btn pl-btn-primary" id="btnPlayAll">
+                <svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                <span>播放全部</span>
+              </button>
+              <button class="pl-btn pl-btn-ghost" id="btnPlaylistMore" title="更多操作">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="track-table-wrap" id="trackTableWrap">
+            <table class="track-table" id="trackTable">
+              <colgroup>
+                <col class="c-num"><col><col><col><col class="c-dur"><col class="c-bit">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th data-sort="title">标题<span class="sort-arrow"></span></th>
+                  <th data-sort="artist">艺术家<span class="sort-arrow"></span></th>
+                  <th data-sort="album">专辑<span class="sort-arrow"></span></th>
+                  <th data-sort="duration">时长<span class="sort-arrow"></span></th>
+                  <th data-sort="bitrate">比特率<span class="sort-arrow"></span></th>
+                </tr>
+              </thead>
+              <tbody id="trackTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Library -->
+      <div class="tab-content" id="tabLibrary">
+        <div class="library-view">
+          <div class="library-tree" id="libraryTree"></div>
+          <div class="library-detail" id="libraryDetail"></div>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div class="tab-content" id="tabSearch">
+        <div class="search-view">
+          <div class="search-bar">
+            <div class="search-bar-inner">
+              <svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="searchInput" placeholder="搜索歌曲、艺术家、专辑..." spellcheck="false" />
+            </div>
+          </div>
+          <div class="search-results" id="searchResults">
+            <div class="empty-illustration">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>输入关键词搜索媒体库</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue Drawer -->
+    <div class="queue-drawer" id="queueDrawer">
+      <div class="queue-header">
+        <div>
+          <span class="queue-title">播放队列</span><span class="queue-count num" id="queueCount"></span>
+        </div>
+        <div class="queue-actions">
+          <button class="queue-clear-btn" id="queueClear">清空</button>
+          <button class="icon-btn" id="queueClose" title="关闭">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="queue-list" id="queueList"></div>
+    </div>
+  </div>
+
+  <!-- ============ Right Panel (Lyrics) ============ -->
+<div class="right-panel" id="rightPanel">
+  <button class="rp-immersive-btn" id="rpImmersiveBtn" title="进入沉浸模式">
+    <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+  </button>
+  <div class="lyrics-blur-bg" id="lyricsBlurBg"></div>
+    <div class="rp-art-wrap">
+      <img class="rp-art" id="lyricsArt" src="" alt="" />
+    </div>
+    <div class="rp-track-info">
+      <div class="rp-track-title" id="lyricsTrackTitle">未在播放</div>
+      <div class="rp-track-artist" id="lyricsTrackArtist">--</div>
+    </div>
+    <div class="rp-divider"></div>
+    <div class="lyrics-scroll" id="lyricsScroll">
+      <div class="lyrics-empty" id="lyricsEmpty">
+        <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>暂无歌词</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Bottom Bar ============ -->
+  <div class="bottom-bar" id="bottomBar">
+    <div class="bottom-left">
+      <div class="bottom-art-wrap" id="bottomArtWrap" title="展开歌词面板">
+        <img class="bottom-art" id="bottomArt" src="" alt="" />
+        <div class="bottom-art-expand">
+          <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        </div>
+      </div>
+      <div class="bottom-track-info">
+        <div class="bottom-track-title" id="bottomTitle">未在播放</div>
+        <div class="bottom-track-artist" id="bottomArtist">--</div>
+      </div>
+      <button class="bottom-like" id="likeBtn" title="喜欢（评级 5 星）">
+        <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      </button>
+    </div>
+
+    <div class="bottom-center">
+      <div class="bottom-controls">
+        <button class="ctrl-btn" id="btnOrder" title="播放顺序">
+          <svg viewBox="0 0 24 24" id="iconOrderSeq"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <svg viewBox="0 0 24 24" id="iconOrderLoop" style="display:none"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          <svg viewBox="0 0 24 24" id="iconOrderOne" style="display:none"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="15.5" text-anchor="middle" fill="currentColor" stroke="none" font-size="9" font-weight="800">1</text></svg>
+          <svg viewBox="0 0 24 24" id="iconOrderShuffle" style="display:none"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        </button>
+        <button class="ctrl-btn" id="btnPrev" title="上一首">
+          <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor" stroke="none"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+        </button>
+        <button class="ctrl-btn play-btn" id="btnPlayPause" title="播放/暂停">
+          <svg viewBox="0 0 24 24" id="iconPlay"><polygon points="7 4 20 12 7 20 7 4"/></svg>
+          <svg viewBox="0 0 24 24" id="iconPause" style="display:none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+        </button>
+        <button class="ctrl-btn" id="btnNext" title="下一首">
+          <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor" stroke="none"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+        </button>
+        <button class="ctrl-btn" id="btnStopAfter" title="播完当前曲目后停止">
+          <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        </button>
+      </div>
+      <div class="seek-bar-wrap">
+        <span class="seek-time num" id="seekCurrent">0:00</span>
+        <div class="seek-rail">
+          <input type="range" class="seek-bar" id="seekBar" min="0" max="1000" value="0" />
+        </div>
+        <span class="seek-time num" id="seekTotal">0:00</span>
+      </div>
+    </div>
+
+    <div class="bottom-right">
+      <div class="mini-spectrum" id="miniSpectrum"></div>
+      <button class="icon-btn" id="btnVisualizer" title="迷你频谱">
+        <svg viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="6" width="4" height="14" rx="1"/><rect x="17" y="9" width="4" height="11" rx="1"/></svg>
+      </button>
+      <div class="vol-wrap">
+        <button class="icon-btn" id="volBtn" title="音量/静音">
+          <svg viewBox="0 0 24 24" id="volIcon"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        </button>
+        <div class="vol-slider-wrap">
+          <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="100" />
+        </div>
+      </div>
+      <button class="icon-btn" id="btnQueue" title="播放队列">
+        <svg viewBox="0 0 24 24"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>
+        <span class="count-badge hidden" id="queueBadge">0</span>
+      </button>
+      <button class="icon-btn active" id="btnLyricsToggle" title="歌词面板">
+        <svg viewBox="0 0 24 24"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+      </button>
+      <button class="icon-btn" id="btnMore" title="更多">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- More Popover -->
+<div class="popover" id="morePopover"></div>
+  <div class="popover rg-popover" id="rgPopover"></div>
+
+<!-- ============ Immersive NowPlaying Overlay ============ -->
+<div class="np-overlay" id="npOverlay">
+  <div class="np-drag-handle" id="npDragHandle" title="拖动窗口"></div>
+  <div class="np-bg-layer">
+    <div class="np-bg-blur" id="npBgBlur"></div>
+    <div class="np-bg-mask"></div>
+  </div>
+  <div class="np-close-btn" id="npCloseBtn" title="退出沉浸模式">
+    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+  </div>
+  <div class="np-mode-btn" id="npModeBtn" title="切换显示模式">
+    <svg viewBox="0 0 24 24" class="np-mode-vinyl"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="5"/></svg>
+    <svg viewBox="0 0 24 24" class="np-mode-lyrics"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </div>
+  <div class="np-container" id="npContainer">
+    <!-- Vinyl / Artwork Side -->
+    <div class="np-vinyl-side" id="npVinylSide">
+      <div class="np-vinyl-wrap">
+        <div class="np-vinyl-disc" id="npVinylDisc">
+          <div class="np-vinyl-art">
+            <img id="npArtwork" src="" alt="" />
+          </div>
+          <div class="np-vinyl-grooves"></div>
+          <div class="np-vinyl-hole"></div>
+        </div>
+        <div class="np-tonearm" id="npTonearm">
+          <div class="np-tonearm-base"></div>
+          <div class="np-tonearm-arm"></div>
+          <div class="np-tonearm-head"></div>
+        </div>
+      </div>
+      <div class="np-track-info">
+        <div class="np-track-title" id="npTrackTitle">未在播放</div>
+        <div class="np-track-artist" id="npTrackArtist">--</div>
+        <div class="np-track-format" id="npTrackFormat"></div>
+      </div>
+      <div class="np-controls">
+        <button class="np-ctrl-btn" id="npBtnPrev" title="上一首">
+          <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><rect x="4" y="5" width="3" height="14" rx="1"/></svg>
+        </button>
+        <button class="np-ctrl-btn np-ctrl-play" id="npBtnPlay" title="播放/暂停">
+          <svg viewBox="0 0 24 24" class="np-icon-play"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <svg viewBox="0 0 24 24" class="np-icon-pause"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
+        </button>
+        <button class="np-ctrl-btn" id="npBtnNext" title="下一首">
+          <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="5" width="3" height="14" rx="1"/></svg>
+        </button>
+      </div>
+      <div class="np-spectrum" id="npSpectrum"></div>
+    </div>
+    <!-- Lyrics Side -->
+    <div class="np-lyrics-side" id="npLyricsSide">
+      <div class="np-lyrics-controls" id="npLyricsControls">
+        <button class="np-ctrl-btn" id="npLcPrev" title="上一首">
+          <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><rect x="4" y="5" width="3" height="14" rx="1"/></svg>
+        </button>
+        <button class="np-ctrl-btn np-ctrl-play" id="npLcPlay" title="播放/暂停">
+          <svg viewBox="0 0 24 24" class="np-icon-play"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <svg viewBox="0 0 24 24" class="np-icon-pause"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
+        </button>
+        <button class="np-ctrl-btn" id="npLcNext" title="下一首">
+          <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="5" width="3" height="14" rx="1"/></svg>
+        </button>
+      </div>
+      <div class="np-lyrics" id="npLyrics">
+        <div class="lyrics-empty">
+          <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          <span>暂无歌词</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Progress Bar -->
+  <div class="np-progress" id="npProgress">
+    <span class="np-time" id="npTimeCurrent">0:00</span>
+    <div class="np-seek-rail">
+      <div class="np-waveform hide" id="npWaveform"></div>
+      <input type="range" class="np-seek-bar" id="npSeekBar" min="0" max="1000" value="0" />
+    </div>
+    <span class="np-time" id="npTimeTotal">0:00</span>
+  </div>
+</div>
+</div>
+
+<!-- Modal -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">标题</div>
+    <div class="modal-desc" id="modalDesc"></div>
+    <input type="text" class="modal-input" id="modalInput" spellcheck="false" />
+    <div class="modal-actions">
+      <button class="modal-btn ghost" id="modalCancel">取消</button>
+      <button class="modal-btn primary" id="modalOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tag Editor -->
+<div class="tag-editor-overlay" id="tagEditorOverlay">
+  <div class="tag-editor">
+    <div class="tag-editor-header">
+      <div class="tag-editor-title" id="tagEditorTitle">编辑标签</div>
+      <button class="tag-editor-close" id="tagEditorClose">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="tag-editor-track" id="tagEditorTrack"></div>
+    <div class="tag-editor-body" id="tagEditorBody"></div>
+    <div class="tag-editor-footer">
+      <span class="tag-editor-hint" id="tagEditorHint"></span>
+      <div class="tag-editor-btns">
+        <button class="modal-btn ghost" id="tagEditorCancel">取消</button>
+        <button class="modal-btn primary" id="tagEditorSave">保存</button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="tagCoverFile" accept="image/*" style="display:none">
+</div>
+
+<!-- Batch Action Bar -->
+<div class="batch-bar hidden" id="batchBar">
+  <span class="batch-bar-text"><b id="batchBarCount">0</b> 首已选</span>
+  <button class="batch-btn primary" id="batchEditTags">批量编辑标签</button>
+  <button class="batch-btn" id="batchClear">取消选择</button>
+</div>
+
+<!-- Toast / ContextMenu / DropOverlay -->
+<div class="toast-container" id="toastContainer"></div>
+<div class="ctx-menu hidden" id="ctxMenu"></div>
+<div class="drop-overlay" id="dropOverlay">
+  <div class="drop-overlay-inner">
+    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    <div class="drop-overlay-text">松开以添加到当前播放列表</div>
+    <div class="drop-overlay-sub">支持音频文件与文件夹</div>
+  </div>
+</div>
+
+<!-- foo_ui_webview2 SDK v1.12.0 -->
+<script src="sdk/bridge.global.js?v=1120"></script>
+<script src="sdk/components.global.js?v=1120"></script>
+<script src="sdk/smp-compat.global.js?v=1120"></script>
+<!-- CloudMusic Theme -->
+<script src="js/core.js?v=22"></script>
+<script src="js/ui.js?v=22"></script>
+<script src="js/controls.js?v=22"></script>
+<script src="js/app.js?v=22"></script>
+</body>
+</html>

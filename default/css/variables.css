@@ -1,0 +1,105 @@
+/* ==========================================
+   CloudMusic Theme · Design Tokens & Reset
+   ========================================== */
+
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  /* 动态强调色（由封面提取，JS 写入） */
+  --accent:#EC4141;
+  --accent-h:0;
+  --accent-s:81%;
+  --accent-l:59%;
+  --accent-soft:hsla(var(--accent-h),var(--accent-s),var(--accent-l),0.14);
+  --accent-soft-2:hsla(var(--accent-h),var(--accent-s),var(--accent-l),0.24);
+  --accent-glow:hsla(var(--accent-h),var(--accent-s),var(--accent-l),0.45);
+  --on-accent:#fff;
+
+  /* 层级背景 */
+  --bg-0:#101013;   /* 最深：标题栏/侧栏 */
+  --bg-1:#16161b;   /* 主区域 */
+  --bg-2:#1e1e25;   /* 卡片/输入框 */
+  --bg-3:#26262f;   /* 悬停 */
+  --bg-4:#2f2f3a;   /* 激活 */
+  --glass:rgba(22,22,27,0.92);
+
+  /* 文字 */
+  --text:#f4f4f6;
+  --text-2:rgba(244,244,246,0.64);
+  --text-3:rgba(244,244,246,0.38);
+  --text-4:rgba(244,244,246,0.22);
+
+  /* 线条 */
+  --border:rgba(255,255,255,0.065);
+  --border-strong:rgba(255,255,255,0.12);
+
+  /* 圆角 */
+  --r-s:6px;
+  --r-m:10px;
+  --r-l:14px;
+  --r-xl:20px;
+
+  /* 阴影 */
+  --shadow-1:0 1px 2px rgba(0,0,0,0.3),0 2px 8px rgba(0,0,0,0.22);
+  --shadow-2:0 6px 16px rgba(0,0,0,0.32),0 16px 40px rgba(0,0,0,0.4);
+  --shadow-pop:0 4px 14px rgba(0,0,0,0.36),0 12px 44px rgba(0,0,0,0.5);
+
+  /* 动效 */
+  --ease:cubic-bezier(0.22,1,0.36,1);
+  --t-fast:0.14s var(--ease);
+  --t-mid:0.24s var(--ease);
+  --t-slow:0.42s var(--ease);
+
+  /* 尺寸 */
+  --titlebar-h:40px;
+  --bottom-h:84px;
+  --sidebar-w:232px;
+  --right-w:320px;
+  --scrollbar-w:8px;
+
+  /* 播放列表头图渐变（JS 可覆写） */
+  --pl-banner:linear-gradient(135deg,hsla(var(--accent-h),var(--accent-s),calc(var(--accent-l) - 18%),0.9),hsla(var(--accent-h),calc(var(--accent-s) - 30%),calc(var(--accent-l) - 38%),0.55));
+}
+
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  font-family:'Segoe UI Variable Text','Segoe UI','Microsoft YaHei UI','Microsoft YaHei','PingFang SC',sans-serif;
+  background:var(--bg-0);color:var(--text);font-size:13px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+body{user-select:none}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:var(--scrollbar-w);height:var(--scrollbar-w)}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:4px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.24);border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-corner{background:transparent}
+
+/* Base elements */
+button{background:none;border:none;color:inherit;cursor:pointer;font:inherit;outline:none;-webkit-tap-highlight-color:transparent}
+input{background:none;border:none;color:inherit;font:inherit;outline:none}
+img{user-select:none;-webkit-user-drag:none}
+a{color:var(--accent);text-decoration:none}
+::selection{background:var(--accent-soft-2)}
+
+/* Focus ring */
+:focus-visible{outline:2px solid var(--accent-glow);outline-offset:2px;border-radius:var(--r-s)}
+
+/* Utility */
+.text-ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hidden{display:none!important}
+.num{font-variant-numeric:tabular-nums;letter-spacing:0.01em}
+
+/* 通用图标按钮 */
+.icon-btn{
+  position:relative;
+  width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:var(--r-s);color:var(--text-2);flex-shrink:0;
+  transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
+}
+.icon-btn:hover{background:var(--bg-3);color:var(--text)}
+.icon-btn:active{transform:scale(0.92)}
+.icon-btn.active{color:var(--accent)}
+.icon-btn.active:hover{background:var(--accent-soft)}
+.icon-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
