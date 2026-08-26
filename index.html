@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CloudMusic 主题功能指南</title>
+<style>
+  :root{
+    --accent:#EC4141; --accent-soft:hsla(0,81%,59%,0.14); --accent-glow:hsla(0,81%,59%,0.45);
+    --bg-0:#101013; --bg-1:#16161b; --bg-2:#1e1e25; --bg-3:#26262f; --bg-4:#2f2f3a;
+    --text:#f4f4f6; --text-2:rgba(244,244,246,0.64); --text-3:rgba(244,244,246,0.38);
+    --border:rgba(255,255,255,0.065); --border-strong:rgba(255,255,255,0.12);
+    --r-s:6px; --r-m:10px; --r-l:14px; --r-xl:20px;
+    --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:var(--bg-0);color:var(--text);line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* Hero */
+  .hero{
+    position:relative;overflow:hidden;
+    background:linear-gradient(135deg,#1a1a22 0%,#16161b 50%,#1e1e25 100%);
+    border-bottom:1px solid var(--border-strong);
+    padding:64px 48px 48px;
+  }
+  .hero::before{
+    content:'';position:absolute;top:-40%;right:-10%;width:500px;height:500px;
+    background:radial-gradient(circle,var(--accent-soft) 0%,transparent 70%);
+    pointer-events:none;
+  }
+  .hero-badge{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;
+    background:var(--accent-soft);color:var(--accent);
+    margin-bottom:16px;
+  }
+  .hero h1{font-size:32px;font-weight:700;letter-spacing:-0.5px;margin-bottom:8px}
+  .hero p{font-size:15px;color:var(--text-2);max-width:600px}
+  .hero-meta{display:flex;gap:24px;margin-top:20px;flex-wrap:wrap}
+  .hero-meta-item{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-3)}
+  .hero-meta-item b{color:var(--text-2);font-weight:500}
+
+  /* Layout */
+  .container{max-width:900px;margin:0 auto;padding:0 48px}
+  
+  /* TOC */
+  .toc{
+    background:var(--bg-1);border:1px solid var(--border);
+    border-radius:var(--r-l);padding:24px 28px;margin:32px auto;
+    max-width:804px;
+  }
+  .toc-title{font-size:13px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px}
+  .toc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
+  .toc-grid a{
+    display:flex;align-items:center;gap:8px;
+    font-size:13px;color:var(--text-2);text-decoration:none;
+    padding:5px 0;transition:color 0.15s;
+  }
+  .toc-grid a:hover{color:var(--accent)}
+  .toc-grid a .num{
+    font-size:11px;color:var(--text-3);
+    background:var(--bg-3);border-radius:4px;padding:1px 6px;min-width:22px;text-align:center;
+  }
+
+  /* Section */
+  .section{padding:40px 0;border-top:1px solid var(--border)}
+  .section:first-of-type{border-top:none}
+  .section-header{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  .section-icon{
+    width:40px;height:40px;border-radius:var(--r-m);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--accent-soft);color:var(--accent);
+  }
+  .section-icon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .section-title{font-size:20px;font-weight:600}
+  .section-desc{font-size:14px;color:var(--text-3);margin-top:2px}
+  .section-body{font-size:14px;color:var(--text-2);line-height:1.8}
+  .section-body p{margin-bottom:12px}
+  .section-body strong{color:var(--text);font-weight:500}
+  .section-body ul{list-style:none;padding-left:0;margin:12px 0}
+  .section-body li{
+    position:relative;padding-left:20px;margin-bottom:8px;
+  }
+  .section-body li::before{
+    content:'';position:absolute;left:4px;top:10px;
+    width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:0.7;
+  }
+
+  /* Feature cards */
+  .feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+  .feature-card{
+    background:var(--bg-1);border:1px solid var(--border);
+    border-radius:var(--r-m);padding:16px 18px;
+    transition:border-color 0.2s;
+  }
+  .feature-card:hover{border-color:var(--border-strong)}
+  .feature-card-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px}
+  .feature-card-desc{font-size:13px;color:var(--text-3);line-height:1.6}
+
+  /* Shortcut table */
+  .shortcut-table{
+    width:100%;border-collapse:collapse;margin:16px 0;
+    background:var(--bg-1);border-radius:var(--r-m);overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .shortcut-table th{
+    background:var(--bg-2);font-size:12px;font-weight:600;color:var(--text-3);
+    text-transform:uppercase;letter-spacing:0.5px;
+    padding:10px 16px;text-align:left;border-bottom:1px solid var(--border);
+  }
+  .shortcut-table td{
+    padding:10px 16px;font-size:13px;color:var(--text-2);
+    border-bottom:1px solid var(--border);
+  }
+  .shortcut-table tr:last-child td{border-bottom:none}
+  .shortcut-table td:first-child{width:140px}
+  kbd{
+    display:inline-block;padding:2px 8px;font-size:12px;
+    font-family:'Consolas','SF Mono',monospace;font-weight:500;
+    background:var(--bg-3);border:1px solid var(--border-strong);
+    border-radius:4px;color:var(--text);box-shadow:0 1px 0 var(--bg-0);
+  }
+
+  /* Callout */
+  .callout{
+    display:flex;gap:12px;padding:14px 18px;margin:16px 0;
+    background:var(--accent-soft);border-left:3px solid var(--accent);
+    border-radius:0 var(--r-s) var(--r-s) 0;
+  }
+  .callout svg{width:18px;height:18px;flex-shrink:0;margin-top:2px;color:var(--accent)}
+  .callout-text{font-size:13px;color:var(--text-2);line-height:1.6}
+  .callout-text b{color:var(--text)}
+
+  /* Step list */
+  .steps{counter-reset:step;margin:16px 0;padding:0;list-style:none}
+  .steps li{
+    position:relative;padding-left:36px;margin-bottom:14px;
+    font-size:14px;color:var(--text-2);line-height:1.7;
+  }
+  .steps li::before{
+    counter-increment:step;content:counter(step);
+    position:absolute;left:0;top:0;
+    width:24px;height:24px;border-radius:50%;
+    background:var(--accent);color:#fff;
+    font-size:12px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;
+  }
+
+  /* Footer */
+  .footer{
+    text-align:center;padding:48px 48px 32px;
+    border-top:1px solid var(--border);margin-top:40px;
+  }
+  .footer p{font-size:13px;color:var(--text-3);margin-bottom:6px}
+  .footer .footer-author{color:var(--text-2);font-weight:500}
+
+  @media(max-width:680px){
+    .hero{padding:40px 24px 32px}
+    .container{padding:0 24px}
+    .feature-grid{grid-template-columns:1fr}
+    .toc{margin:24px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-badge">foobar2000 v2 · WebView2 UI</div>
+  <h1>CloudMusic 主题功能指南</h1>
+  <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
+  <div class="hero-meta">
+    <div class="hero-meta-item">版本 <b>v2.2</b></div>
+    <div class="hero-meta-item">作者 <b>灵芝含</b></div>
+    <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.12.0</b></div>
+  </div>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <div class="toc-title">目录</div>
+  <div class="toc-grid">
+    <a href="#changelog"><span class="num">00</span>更新日志</a>
+    <a href="#s1"><span class="num">01</span>界面导览</a>
+    <a href="#s2"><span class="num">02</span>播放控制</a>
+    <a href="#s3"><span class="num">03</span>播放列表</a>
+    <a href="#s4"><span class="num">04</span>媒体库浏览</a>
+    <a href="#s5"><span class="num">05</span>搜索</a>
+    <a href="#s6"><span class="num">06</span>歌词</a>
+    <a href="#s7"><span class="num">07</span>沉浸式播放</a>
+    <a href="#s8"><span class="num">08</span>频谱可视化</a>
+    <a href="#s9"><span class="num">09</span>播放队列</a>
+    <a href="#s10"><span class="num">10</span>标签编辑</a>
+    <a href="#s11"><span class="num">11</span>批量标签编辑</a>
+    <a href="#s12"><span class="num">12</span>封面管理</a>
+    <a href="#s13"><span class="num">13</span>在线标签获取</a>
+    <a href="#s14"><span class="num">14</span>星级评分</a>
+    <a href="#s15"><span class="num">15</span>EQ 均衡器</a>
+    <a href="#s16"><span class="num">16</span>输出设备</a>
+    <a href="#s17"><span class="num">17</span>桌面歌词</a>
+    <a href="#s18"><span class="num">18</span>拖放添加</a>
+    <a href="#s19"><span class="num">19</span>键盘快捷键</a>
+    <a href="#s20"><span class="num">20</span>更多菜单</a>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- 00 更新日志 v2.2 -->
+<div class="section" id="changelog">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
+    </div>
+    <div>
+      <div class="section-title">更新日志 · v2.2</div>
+      <div class="section-desc">自 v2.1 以来的功能优化与问题修复，重点覆盖媒体库分页、歌词显示、封面占位与歌单恢复</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <strong>功能优化</strong>
+    <ul>
+      <li><strong>媒体库全面分页</strong>：专辑 / 艺术家 / 流派 / 歌曲 / 文件夹全部解除数量上限，改为客户端分页（每页 50 / 100 / 300 / 500，页码自动记忆）。</li>
+      <li><strong>浮动分页栏</strong>：分页按钮改为毛玻璃吸顶样式，滚动到列表任意位置都可直接翻页，无需回到顶部。</li>
+      <li><strong>歌曲列表分页</strong>：媒体库"全部歌曲"启用分页，跨页行号连续。</li>
+      <li><strong>文件夹浏览增强</strong>：面包屑导航 + "播放全部" + "添加到歌单"。</li>
+      <li><strong>启动恢复上次歌单</strong>：记住上次打开的歌单并按名称自动恢复，启动后播放列表不再空白。</li>
+      <li><strong>无封面占位图</strong>：无封面或封面加载失败时自动显示占位图，避免空框 / 闪空（底栏、歌词、沉浸式通用）。</li>
+      <li><strong>长歌词完整显示</strong>：沉浸式与歌词面板支持长句自动换行；当前句改用字号放大（重排布局），长句放大后完整可见、不被上下遮罩或相邻行遮挡。</li>
+      <li><strong>右键菜单可滚动</strong>：菜单过长时可滚轮滚动、在视口内自适应定位，"在线获取标签"等底部项不再被挡住。</li>
+    </ul>
+    <strong>问题修复</strong>
+    <ul>
+      <li>专辑列表被 <code>limit:200</code> 硬上限截断 → 改为全量拉取 + 客户端分页。</li>
+      <li>添加歌曲到歌单时菜单被 110ms 定时器提前隐藏、"界面闪退" → 修复第二层菜单隐藏时机。</li>
+      <li>切换歌曲时歌单 UI 出现两行同时高亮 → 仅当前行保持播放状态。</li>
+      <li>歌单表格启动为空（活跃歌单异步获取后未触发渲染）→ 启动自动渲染。</li>
+      <li>锁定 / 自动歌单误显示"清空 / 删除 / 重命名 / 添加 / 排序"等无效操作 → 自动隐藏，仅保留播放。</li>
+      <li>播放状态标记在含反斜杠 / 引号的路径上失效 → 改为按路径逐项比对。</li>
+      <li>ESLyric 桌面歌词启动失败（命令 GUID 失效后不再重探）→ 失败自动重新探测 + 提升命令命中率。</li>
+      <li>动态频谱在接入解码器后失效 → 切换输出设备会中断宿主侧频谱流，现监听输出设备变更并自动重订阅频谱。</li>
+      <li>不支持文件夹拖入 / 添加 → 宿主会把文件夹路径当单个音轨加入而报"格式不支持"，现自行递归枚举文件夹内的音频文件后再添加；拖放与"添加本地文件夹"菜单入口均支持，且去除重复添加。</li>
+      <li>沉浸式页面无法移动窗口 → 新增顶部拖拽条，按住可拖动窗口、双击可最大化 / 还原。</li>
+    </ul>
+    <strong>性能与体验</strong>
+    <ul>
+      <li>任务栏进度在高频播放事件中每次再到宿主 API → 仅在可见 1% 变化时推送，显著降低桥接开销。</li>
+      <li>封面 / 分页 / 歌词等交互均采用事件驱动与 DOM 引用缓存，减少重复渲染与查询。</li>
+    </ul>
+    <strong>优化思路与借鉴</strong>
+    <ul>
+      <li>参考优化版作者 <a href="https://tieba.baidu.com/home/main?id=tb.1.fc51415b.tT_5zaX0wiDCwoOEM3wc5Q&fr=personpage" target="_blank" rel="noopener">贴吧用户_0DJXK1A</a> 的优化版思路与设计，持续打磨媒体库、歌词与沉浸式体验。</li>
+      <li>依据官方文档 <a href="https://nereafantasia.github.io/foo_ui_webview2/zh/guide/quickstart.html" target="_blank" rel="noopener">foo_ui_webview2 快速开始</a> 及音频 / 拖放 / 窗口相关 API 说明，调整频谱重订阅、路径拖放与窗口拖拽的调用方式，确保与 SDK v1.12.0 兼容。</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 01 界面导览 -->
+<div class="section" id="s1">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="12" x2="9" y2="12"/></svg>
+    </div>
+    <div>
+      <div class="section-title">界面导览</div>
+      <div class="section-desc">了解 CloudMusic 主题的四大区域布局</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-card-title">侧边栏</div>
+        <div class="feature-card-desc">搜索框、导航入口（发现/播放列表/搜索/媒体库）、歌单列表</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">主内容区</div>
+        <div class="feature-card-desc">4 个标签页切换显示不同内容，播放列表含封面、曲目表格、排序</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">歌词面板</div>
+        <div class="feature-card-desc">右侧面板，显示封面、曲目信息和同步歌词，可点击歌词行跳转</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">底栏</div>
+        <div class="feature-card-desc">曲目信息、播放控制、进度条、音量、频谱、队列按钮</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 02 播放控制 -->
+<div class="section" id="s2">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></svg>
+    </div>
+    <div>
+      <div class="section-title">播放控制</div>
+      <div class="section-desc">播放/暂停、快进快退、音量调节、播放顺序</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>播放/暂停</strong>：点击底栏中央播放按钮，或按 <kbd>空格</kbd></li>
+      <li><strong>上一首/下一首</strong>：点击底栏切换按钮，或按 <kbd>Ctrl</kbd>+<kbd>&larr;</kbd> / <kbd>Ctrl</kbd>+<kbd>&rarr;</kbd></li>
+      <li><strong>快进快退</strong>：按 <kbd>&larr;</kbd> 后退 5 秒，<kbd>&rarr;</kbd> 前进 5 秒；也可拖动进度条</li>
+      <li><strong>音量</strong>：拖动音量滑块，或按 <kbd>&uarr;</kbd> / <kbd>&darr;</kbd> 调节；按 <kbd>M</kbd> 静音</li>
+      <li><strong>播放顺序</strong>：点击底栏播放顺序图标，支持顺序播放、列表循环、单曲循环、随机播放</li>
+      <li><strong>播放后停止</strong>：在播放顺序菜单中可设置"播完当前曲目后停止"</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 03 播放列表 -->
+<div class="section" id="s3">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>
+    </div>
+    <div>
+      <div class="section-title">播放列表</div>
+      <div class="section-desc">歌单管理、曲目排序、右键操作</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <p>播放列表是你的"收藏夹"，在侧边栏管理多个歌单，点击切换后在主区域查看曲目。</p>
+    <ul>
+      <li><strong>新建歌单</strong>：侧边栏右键空白处或点击"+"按钮</li>
+      <li><strong>重命名/删除/清空</strong>：右键侧边栏歌单项</li>
+      <li><strong>排序</strong>：点击表头（标题/艺术家/专辑/时长/比特率）切换升序、降序、取消排序</li>
+      <li><strong>更多操作</strong>：点击歌单封面旁"..."按钮 — 随机排列、按标题/艺术家排序、撤销</li>
+      <li><strong>添加曲目到歌单</strong>：右键曲目 → "添加到歌单"；右键歌单 → "添加本地文件 / 添加文件夹"（文件夹会自动递归展开其中的音频文件）；或将音频文件 / 文件夹拖放到窗口任意位置</li>
+      <li><strong>从歌单删除</strong>：右键曲目 → "从歌单中删除"</li>
+    </ul>
+    <div class="callout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="callout-text"><b>三概念区分</b>：媒体库是"仓库"（所有音频文件），播放列表是"收藏夹"（自定义分组），播放队列是"工作台"（即将播放的曲目）。</div>
+    </div>
+  </div>
+</div>
+
+<!-- 04 媒体库 -->
+<div class="section" id="s4">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    </div>
+    <div>
+      <div class="section-title">媒体库浏览</div>
+      <div class="section-desc">按歌曲、艺术家、专辑、流派多维度浏览</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <p>媒体库是 foobar2000 扫描的所有音频文件的集合，支持 5 种视图维度：</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-card-title">概览</div>
+        <div class="feature-card-desc">显示媒体库统计数据：总曲目数、艺术家数、专辑数等</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">歌曲</div>
+        <div class="feature-card-desc">按歌曲维度列表浏览，支持增量加载更多</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">艺术家</div>
+        <div class="feature-card-desc">网格卡片展示，点击进入艺术家详情页查看其所有专辑和曲目</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">专辑</div>
+        <div class="feature-card-desc">网格卡片展示，点击进入专辑详情页查看曲目列表</div>
+      </div>
+    </div>
+    <ul>
+      <li><strong>进入详情</strong>：点击艺术家/专辑/流派卡片，进入后显示曲目列表和"播放全部"按钮</li>
+      <li><strong>返回列表</strong>：点击返回按钮，滚动位置会自动恢复到之前的位置</li>
+      <li><strong>刷新媒体库</strong>：更多菜单 → "刷新媒体库缓存"，重新扫描文件</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 05 搜索 -->
+<div class="section" id="s5">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+    <div>
+      <div class="section-title">搜索</div>
+      <div class="section-desc">在媒体库中快速查找曲目</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>搜索入口</strong>：侧边栏搜索框（回车跳转搜索页）或切换到"搜索"标签页直接输入</li>
+      <li><strong>实时搜索</strong>：在搜索页输入框中输入，350ms 防抖后自动触发搜索</li>
+      <li><strong>搜索结果</strong>：显示匹配总数、封面、标题、艺术家·专辑、时长</li>
+      <li><strong>添加全部</strong>：搜索结果页提供"添加全部到歌单"按钮</li>
+      <li><strong>右键操作</strong>：搜索结果支持与播放列表相同的右键菜单（播放、加入队列、添加到歌单等）</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 06 歌词 -->
+<div class="section" id="s6">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    </div>
+    <div>
+      <div class="section-title">歌词</div>
+      <div class="section-desc">同步歌词、纯文本歌词、点击跳转</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>显示/隐藏</strong>：点击底栏歌词按钮或按 <kbd>L</kbd> 切换歌词面板，状态自动记忆</li>
+      <li><strong>同步歌词</strong>：带时间轴的 LRC 歌词会逐行高亮、平滑滚动居中，支持逐字高亮</li>
+      <li><strong>纯文本歌词</strong>：无时间轴的歌词以静态文本展示</li>
+      <li><strong>点击跳转</strong>：点击任意歌词行可跳转到对应时间点播放</li>
+      <li><strong>歌词来源</strong>：通过 ESLyric 组件获取，需安装 foo_uie_eslyric</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 07 沉浸式 -->
+<div class="section" id="s7">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+    </div>
+    <div>
+      <div class="section-title">沉浸式播放</div>
+      <div class="section-desc">全屏沉浸体验，黑胶唱片与歌词两种模式</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>进入沉浸模式</strong>：双击右侧面板的封面图，或点击封面左上角沉浸按钮</li>
+      <li><strong>黑胶唱片模式</strong>：封面以黑胶唱片形式旋转，唱针动画随播放状态启停</li>
+      <li><strong>纯歌词模式</strong>：点击模式切换按钮，全屏显示歌词，适合跟唱</li>
+      <li><strong>内置控制</strong>：沉浸模式内含播放控制、进度条、频谱可视化</li>
+      <li><strong>轻松移动窗口</strong>：顶部新增拖拽条，按住可拖动窗口；双击拖拽条可最大化 / 还原</li>
+      <li><strong>退出</strong>：点击关闭按钮或按 <kbd>Esc</kbd></li>
+    </ul>
+  </div>
+</div>
+
+<!-- 08 频谱 -->
+<div class="section" id="s8">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><path d="M3 12h2l2-8 4 16 3-10 2 4h5"/></svg>
+    </div>
+    <div>
+      <div class="section-title">频谱可视化</div>
+      <div class="section-desc">实时音频频谱柱状图</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>迷你频谱</strong>：显示在底栏，播放时实时跳动</li>
+      <li><strong>沉浸式频谱</strong>：沉浸模式下显示 32 条频谱柱</li>
+      <li><strong>开关</strong>：点击底栏频谱按钮切换显示/隐藏，状态自动记忆</li>
+      <li><strong>设备切换自动恢复</strong>：接入音频解码器等切换输出设备时，频谱会在设备变更后自动重新订阅，无需重启主题</li>
+      <li>使用对数压缩算法使频谱视觉更平滑，用 CSS transform 代替 height 重排以保证性能</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 09 播放队列 -->
+<div class="section" id="s9">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    </div>
+    <div>
+      <div class="section-title">播放队列</div>
+      <div class="section-desc">管理即将播放的曲目</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>打开队列</strong>：点击底栏队列按钮或按 <kbd>Q</kbd>，右侧抽屉滑出</li>
+      <li><strong>加入队列</strong>：右键任意曲目 → "下一首播放"，曲目插入队列顶部</li>
+      <li><strong>队列徽章</strong>：底栏队列按钮上显示数字徽章，超过 99 显示"99+"</li>
+      <li><strong>从队列移除</strong>：点击队列中曲目旁的删除按钮</li>
+      <li><strong>清空队列</strong>：点击队列抽屉顶部的清空按钮</li>
+      <li><strong>状态标记</strong>：队列中正在播放的曲目有高亮标记，已播放的曲目有标记</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 10 标签编辑 -->
+<div class="section" id="s10">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    </div>
+    <div>
+      <div class="section-title">标签编辑</div>
+      <div class="section-desc">查看和修改单首曲目的元数据标签</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ol class="steps">
+      <li>右键任意曲目（播放列表、搜索结果、媒体库均可）</li>
+      <li>选择「编辑标签」，弹出标签编辑面板</li>
+      <li>面板自动读取并显示当前所有标签字段</li>
+      <li>修改需要更改的字段，清空内容表示删除该标签</li>
+      <li>点击「保存」写入文件，自动刷新播放列表显示</li>
+    </ol>
+    <p>支持编辑的标签字段：</p>
+    <div class="feature-grid">
+      <div class="feature-card"><div class="feature-card-title">基本信息</div><div class="feature-card-desc">标题、艺术家、专辑、专辑艺术家</div></div>
+      <div class="feature-card"><div class="feature-card-title">分类信息</div><div class="feature-card-desc">流派、年份、音轨号、CD 号</div></div>
+      <div class="feature-card"><div class="feature-card-title">扩展信息</div><div class="feature-card-desc">作曲、备注</div></div>
+      <div class="feature-card"><div class="feature-card-title">封面管理</div><div class="feature-card-desc">查看、更换、移除嵌入封面（见封面管理章节）</div></div>
+    </div>
+    <div class="callout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="callout-text">标签写入为异步操作，保存后面板会自动关闭并在写入完成后刷新播放列表。只有实际修改的字段才会被写入文件。</div>
+    </div>
+  </div>
+</div>
+
+<!-- 11 批量标签编辑 -->
+<div class="section" id="s11">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    </div>
+    <div>
+      <div class="section-title">批量标签编辑</div>
+      <div class="section-desc">多选曲目后统一修改标签</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ol class="steps">
+      <li>在播放列表中按住 <kbd>Ctrl</kbd> 点击多首曲目，选中行高亮显示</li>
+      <li>选中 2 首及以上时，底部浮出批量操作栏（显示已选数量）</li>
+      <li>点击「批量编辑标签」打开批量编辑面板</li>
+      <li>勾选需要修改的字段前方的复选框，填写新值</li>
+      <li>未勾选的字段保持原值不变，点击「保存」批量写入</li>
+    </ol>
+    <ul>
+      <li><strong>取消选择</strong>：点击批量操作栏的"取消选择"，或按 <kbd>Esc</kbd></li>
+      <li><strong>右键菜单入口</strong>：有多选时，右键菜单也会显示"批量编辑标签"选项</li>
+      <li><strong>写入结果</strong>：保存后显示成功/失败计数，部分失败时会提示</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 12 封面管理 -->
+<div class="section" id="s12">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    </div>
+    <div>
+      <div class="section-title">封面管理</div>
+      <div class="section-desc">查看、更换、移除嵌入封面</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <p>封面管理集成在单曲标签编辑面板中，打开标签编辑器后可在顶部看到封面区域。</p>
+    <ul>
+      <li><strong>查看封面</strong>：打开编辑面板时自动加载当前嵌入封面预览</li>
+      <li><strong>更换封面</strong>：点击"更换封面"按钮，选择本地图片文件，自动嵌入为 front 封面</li>
+      <li><strong>移除封面</strong>：点击"移除封面"按钮，确认后移除所有嵌入封面</li>
+    </ul>
+    <div class="callout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="callout-text">封面嵌入支持 FLAC、MP3 等主流格式。部分格式可能不支持嵌入封面操作，失败时会弹出提示。</div>
+    </div>
+  </div>
+</div>
+
+<!-- 13 在线标签获取 -->
+<div class="section" id="s13">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </div>
+    <div>
+      <div class="section-title">在线标签获取</div>
+      <div class="section-desc">通过 foo_freedb2 从在线数据库自动补全标签</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ol class="steps">
+      <li>右键任意曲目</li>
+      <li>选择「在线获取标签」</li>
+      <li>系统自动搜索并调用 freedb 在线数据库</li>
+      <li>在弹出的窗口中完成标签匹配和写入</li>
+    </ol>
+    <div class="callout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="callout-text"><b>需要安装组件</b>：此功能依赖「在线标签获取器」(foo_freedb2) 组件。未安装时点击会弹出提示弹窗。首次调用后命令会缓存，后续使用无延迟。</div>
+    </div>
+  </div>
+</div>
+
+<!-- 14 星级评分 -->
+<div class="section" id="s14">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    </div>
+    <div>
+      <div class="section-title">星级评分</div>
+      <div class="section-desc">1-5 星评分与"喜欢"功能</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>评分</strong>：右键曲目 → "评分"区域，点击 1-5 星</li>
+      <li><strong>清除评分</strong>：右键曲目 → "清除评分"</li>
+      <li><strong>喜欢按钮</strong>：底栏爱心按钮，点击=评 5 星，再次点击=清除评分（评分 ≥ 4 星视为"喜欢"）</li>
+      <li><strong>评分存储</strong>：优先存储在 foo_playcount 统计中，回退写入文件 RATING 标签</li>
+    </ul>
+    <div class="callout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="callout-text"><b>需要安装组件</b>：评分功能依赖 foo_playcount 组件。未安装时会弹出提示。</div>
+    </div>
+  </div>
+</div>
+
+<!-- 15 EQ -->
+<div class="section" id="s15">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><path d="M3 12h2l2-8 4 16 3-10 2 4h5"/></svg>
+    </div>
+    <div>
+      <div class="section-title">EQ 均衡器</div>
+      <div class="section-desc">内置均衡器调节</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>打开</strong>：更多菜单 → "均衡器"</li>
+      <li><strong>开关</strong>：在弹出的菜单中切换 EQ 开启/关闭</li>
+      <li>通过 foo_dsp_eq 组件实现，状态自动同步</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 16 输出设备 -->
+<div class="section" id="s16">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+    </div>
+    <div>
+      <div class="section-title">输出设备</div>
+      <div class="section-desc">切换音频输出设备和模式</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>打开</strong>：更多菜单 → "输出设备"</li>
+      <li>显示当前输出模式、设备名称、位深、缓冲长度</li>
+      <li>支持 ASIO、DSD 等输出模式（取决于已安装组件）</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 17 桌面歌词 -->
+<div class="section" id="s17">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </div>
+    <div>
+      <div class="section-title">桌面歌词</div>
+      <div class="section-desc">独立悬浮窗口显示歌词</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>开关</strong>：更多菜单 → "桌面歌词"，再次点击关闭</li>
+      <li>调用 ESLyric 原生桌面歌词功能，独立悬浮窗口显示</li>
+      <li>首次使用时自动搜索并缓存命令，后续无延迟</li>
+    </ul>
+    <div class="callout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="callout-text"><b>需要安装组件</b>：桌面歌词依赖 ESLyric (foo_uie_eslyric) 组件。未安装时会弹出提示弹窗。</div>
+    </div>
+  </div>
+</div>
+
+<!-- 18 拖放 -->
+<div class="section" id="s18">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <div>
+      <div class="section-title">拖放添加文件</div>
+      <div class="section-desc">拖拽音频文件或文件夹到窗口</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul>
+      <li><strong>添加文件</strong>：将音频文件拖拽到窗口任意位置</li>
+      <li><strong>添加文件夹</strong>：将文件夹拖入后自动递归枚举其中的音频文件再添加，不再把整个文件夹当作单曲导致播放失败</li>
+      <li><strong>窗口悬浮遮罩</strong>：拖入时显示半透明提示"松开以添加到当前播放列表"</li>
+      <li>支持所有 foobar2000 支持的音频格式；文件添加到当前正在查看的播放列表，并去除同一批文件的重复添加</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 19 键盘快捷键 -->
+<div class="section" id="s19">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 16h10"/></svg>
+    </div>
+    <div>
+      <div class="section-title">键盘快捷键</div>
+      <div class="section-desc">输入框内不触发</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <table class="shortcut-table">
+      <thead><tr><th>快捷键</th><th>功能</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>空格</kbd></td><td>播放 / 暂停</td></tr>
+        <tr><td><kbd>&larr;</kbd></td><td>后退 5 秒</td></tr>
+        <tr><td><kbd>&rarr;</kbd></td><td>前进 5 秒</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>&larr;</kbd></td><td>上一首</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>&rarr;</kbd></td><td>下一首</td></tr>
+        <tr><td><kbd>&uarr;</kbd></td><td>音量增加</td></tr>
+        <tr><td><kbd>&darr;</kbd></td><td>音量减小</td></tr>
+        <tr><td><kbd>M</kbd></td><td>静音切换</td></tr>
+        <tr><td><kbd>L</kbd></td><td>歌词面板显示 / 隐藏</td></tr>
+        <tr><td><kbd>Q</kbd></td><td>播放队列抽屉开关</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + 点击</td><td>播放列表多选曲目（批量编辑）</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>依次关闭：队列、菜单、标签编辑器、批量选择</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 20 更多菜单 -->
+<div class="section" id="s20">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+    </div>
+    <div>
+      <div class="section-title">更多菜单</div>
+      <div class="section-desc">点击右上角"..."按钮打开</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <table class="shortcut-table">
+      <thead><tr><th>分类</th><th>功能</th></tr></thead>
+      <tbody>
+        <tr><td>窗口</td><td>桌面歌词（ESLyric）、刷新界面</td></tr>
+        <tr><td>音频</td><td>均衡器（EQ）、输出设备切换</td></tr>
+        <tr><td>foobar2000</td><td>打开控制台、首选项、刷新媒体库缓存</td></tr>
+        <tr><td>关于</td><td>版本信息、作者、媒体库统计、输出信息、音频流信息、已安装组件数</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <p class="footer-author">CloudMusic 主题 v2.2 · 作者：灵芝含</p>
+  <p>基于 foo_ui_webview2 SDK 1.12.0 · foobar2000 v2</p>
+  <p>感谢使用，享受音乐</p>
+</div>
+
+<script>
+  // TOC 平滑滚动
+  document.querySelectorAll('.toc-grid a').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      var target = document.querySelector(this.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+
+</body>
+</html>
