@@ -146,7 +146,12 @@
       var el = e.target.closest(lineSelector);
       if (!el) return;
       var t = parseFloat(el.dataset.time);
-      if (isFinite(t)) CM.api('playback.setPosition', { seconds: t });
+      if (isFinite(t)) {
+        CM.api('playback.setPosition', { seconds: t });
+        // 点击跳转时重置 index，避免时间回退时不会高亮当前行
+        // el.dataset.idx - 1 避免点击翻译行而不会高亮歌词行
+        CM.activeLyricIndex = CM.npActiveLyricIndex = el.dataset.idx - 1;
+      };
     });
   };
 
@@ -159,12 +164,15 @@
   CM._updateLyricHighlight = function(container, lineSelector, activeIdxField, force, pos, cacheKey, wordCacheKey) {
     var lines = CM.currentLyrics;
     if (!lines.length) return;
-    // 二分查找最后一个 time <= pos 的行（行按时间升序），超长歌词（播客/长音频）下避免每帧从头线性扫描
-    var idx = -1, lo = 0, hi = lines.length - 1;
-    while (lo <= hi) {
-      var mid = (lo + hi) >> 1;
-      if (lines[mid].time <= pos) { idx = mid; lo = mid + 1; }
-      else hi = mid - 1;
+    // 修复歌词存在翻译时，高亮翻译行的 bug
+    // 使用当前播放行索引，避免每次都从头查找
+    let idx = CM[activeIdxField], transIdx = idx;
+    for (let i = Math.max(0, idx); i < lines.length && lines[i].time <= pos; i++) {
+      if (idx == -1 || lines[i].time > lines[idx].time) {
+        idx = transIdx = i;
+      } else if (lines[i].time === lines[idx].time) {
+        transIdx = i;
+      }
     }
     var lineChanged = idx !== CM[activeIdxField];
     if (!lineChanged && !force) {
@@ -178,9 +186,7 @@
       nodes = container.querySelectorAll(lineSelector);
       if (cacheKey) CM[cacheKey] = nodes;
     }
-    for (var ni = 0; ni < nodes.length; ni++) {
-      nodes[ni].classList.toggle('active', ni === idx);
-    }
+    nodes.forEach((node, i) => node.classList.toggle('active', i === idx || i === transIdx));
     CM._updateWordHighlight(container, idx, pos, wordCacheKey);
     if (idx >= 0 && nodes[idx]) {
       var target = nodes[idx];
