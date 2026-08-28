@@ -150,10 +150,9 @@
     bar.addEventListener('change', function() {
       var pct = bar.value / 1000;
       var target = pct * state.duration;
-      var prev = state.position;
+      // 不在此处更新 state.position，交给 playback:seeked / timeHighRes 事件统一处理，
+      // 避免因 API 返回 undefined/null 时误把旧位置覆盖掉 seeked 事件已写入的正确位置。
       CM.api('playback.setPosition', { seconds: target }).then(function(r) {
-        if (r) state.position = target;
-        else state.position = prev;
         state[seekingKey] = false;
         updateFn();
       });

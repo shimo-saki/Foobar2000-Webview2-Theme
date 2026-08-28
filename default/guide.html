@@ -173,7 +173,7 @@
   <h1>CloudMusic 主题功能指南</h1>
   <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">版本 <b>v2.3</b></div>
+    <div class="hero-meta-item">版本 <b>v2.3.1</b></div>
     <div class="hero-meta-item">作者 <b>灵芝含</b></div>
     <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.12.0</b></div>
   </div>
@@ -216,8 +216,8 @@
       <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
     </div>
     <div>
-      <div class="section-title">更新日志 · v2.3</div>
-      <div class="section-desc">播放队列拖拽调序重做、无封面占位图矢量化与细节修复，附 v2.2 完整更新记录</div>
+      <div class="section-title">更新日志 · v2.3.1</div>
+      <div class="section-desc">代码结构精炼、性能全面优化、歌词面板开合流畅度修复，附 v2.3 / v2.2 完整更新记录</div>
     </div>
   </div>
   <div class="section-body">
@@ -233,6 +233,15 @@
       <li><strong>队列视觉打磨</strong>：空队列显示图标与引导文案；队列计数改为徽章样式。</li>
       <li><strong>无封面占位图矢量化</strong>：原 1.27MB PNG 替换为手绘级 SVG（仅 3.6KB），透明背景 + 黑胶唱片 + 红色标签 + "foobar 2000" 字样 + 中心轴孔 + 四周花纹散点，视觉一致，体积缩小 99.7%。</li>
       <li><strong>队列抽屉新增「正在播放」卡片</strong>：顶部固定展示当前曲目（封面 + 跳动均衡器，暂停时动画同步暂停），仅作展示、不参与排序也无法移除；列表回归纯"待播"语义，移除误把"下一首"标为播放中的伪状态与永不命中的"已播放"标记。</li>
+    </ul>
+    <strong>v2.3.1 · 代码精炼与性能优化</strong>
+    <ul>
+      <li><strong>消除冗余代码</strong>：8 处事件委托守卫统一为 <code>runOnce</code> 工厂、3 处延迟 loading 统一为 <code>delayedLoading</code>、3 处按钮 loading 统一为 <code>setBtnLoading</code>（自动恢复原文本）；6 处 API 响应直接解包全部替换为 <code>respTracks</code> / <code>respCount</code>；5 处统计卡片数据驱动化。</li>
+      <li><strong>批量封面并行加载</strong>：原串行分批 N 批延迟 ×N，改为 <code>Promise.all</code> 并行发起，>50 首时封面就位快约一倍。</li>
+      <li><strong>歌词解析缓存</strong>：以路径 + 长度 + 头部 64 字节为 key 缓存 <code>parseLRC</code> 结果，切回已播曲目时免重新解析。</li>
+      <li><strong>大表差量渲染</strong>：<code>renderTrackTable</code> 从全量 <code>innerHTML</code> 重写改为 keyed 差量（按 <code>data-index</code> 复用节点、行签名比对），排序场景 0 次 HTML 解析（仅节点移动 + 行号更新），单行元数据变化只重建该行。</li>
+      <li><strong>30fps 高频路径微优化</strong>：<code>formatTime</code> 加入 16 项 FIFO 缓存（同一秒值重复格式化命中率 ~100%）；频谱条 <code>Math.pow</code> 量化为 256 级查找表，消除每帧浮点运算。</li>
+      <li><strong>歌词面板开合流畅度修复</strong>：原 <code>grid-template-columns</code> 0.42s 过渡导致每帧整页重排（含 478 行表格 + 模糊背景重绘）→ 改为"内容冻结"技术：主内容一次性布局到目标宽度并冻结，面板以固定 320px 随轨道平移进出（内部零重排），全程每方向仅一次重排且时机自然。</li>
     </ul>
     <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:18px 0">
     <strong>历史更新 · v2.2</strong>
@@ -798,7 +807,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p class="footer-author">CloudMusic 主题 v2.3 · 作者：灵芝含</p>
+  <p class="footer-author">CloudMusic 主题 v2.3.1 · 作者：灵芝含</p>
   <p>基于 foo_ui_webview2 SDK 1.12.0 · foobar2000 v2</p>
   <p>感谢使用，享受音乐</p>
 </div>

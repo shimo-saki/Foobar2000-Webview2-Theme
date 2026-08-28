@@ -1,6 +1,8 @@
 
 # foobar2000 Web Theme
 
+> v2.3.1 — 代码精炼与性能优化 · 详见 [guide.html](default/guide.html#changelog)
+
 这是一个专为 foobar2000 设计的现代化网页风格主题（Theme）。它提供了一个基于 Web 技术构建的用户界面，包含了发现音乐、媒体库管理、强大的播放控制以及独特的视觉效果。
 
 ## 特性亮点

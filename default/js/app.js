@@ -114,7 +114,9 @@
 
     fb.on('playback:stateChanged', function(data) {
       if (!data) return;
-      if (data.duration != null) CM.state.duration = data.duration;
+      // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
+      var dur = data.duration || data.length;
+      if (dur != null) CM.state.duration = dur;
       if (data.position != null && !CM.state.seeking) CM.state.position = data.position;
       CM.updateSeekUI();
       if (data.state != null) setPlayingVisual(data.state === 'playing' || data.state === 1);
@@ -229,7 +231,7 @@
     CM.bindNpOverlay();
     CM.bindTagEditor();
 
-    CM.setLyricsVisible(CM.state.lyricsVisible);
+    CM.setLyricsVisible(CM.state.lyricsVisible, true);
     CM.setVisualizerActive(CM.state.visualizerActive);
     CM.updateOrderIcon();
     CM.updateVolumeIcon();

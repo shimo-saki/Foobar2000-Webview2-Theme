@@ -47,7 +47,8 @@
     var artist = Array.isArray(arRaw) ? arRaw.filter(Boolean).join(' / ') : (arRaw || '未知艺术家');
     var album = raw.album || raw.albumname || (raw.al && raw.al.name) || (raw.album && raw.album.name) || '';
     var dt = +raw.dt || +raw.duration || +raw.interval || 0;
-    var durSec = dt >= 100000 ? Math.round(dt / 1000) : Math.round(dt);
+    // 毫秒/秒区分：通常单曲不超过 24 小时（86400 秒），大于此值按毫秒处理
+    var durSec = dt > 86400 ? Math.round(dt / 1000) : Math.round(dt);
     var art = raw.picUrl || raw.pic || raw.albumPic || (raw.al && raw.al.picUrl) || (raw.album && raw.album.picUrl) || '';
     return { sourceId: null, id: id, title: title, artist: artist, album: album, duration: durSec, art: art };
   }

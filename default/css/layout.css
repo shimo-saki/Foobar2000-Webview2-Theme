@@ -8,7 +8,10 @@
   grid-template-rows:var(--titlebar-h) minmax(0,1fr) var(--bottom-h);
   grid-template-columns:var(--sidebar-w) minmax(0,1fr) var(--right-w);
   height:100vh;width:100vw;overflow:hidden;background:var(--bg-0);
-  transition:grid-template-columns var(--t-slow);
+  /* 列宽动画与 setLyricsVisible 的"内容冻结"配合：动画期间 .tab-content.active
+     被 JS 冻结在目标像素宽度（零重排），.right-panel 以 min-width 固定 320px
+     仅随轨道平移（零内部重排/零模糊背景重绘），全程只有首尾各一次布局。 */
+  transition:grid-template-columns .26s var(--ease);
 }
 .app.lyrics-hidden{grid-template-columns:var(--sidebar-w) minmax(0,1fr) 0px}
 
@@ -162,6 +165,9 @@
   grid-row:2;grid-column:3;background:var(--bg-0);position:relative;
   border-left:1px solid var(--border);
   display:flex;flex-direction:column;overflow:hidden;
+  /* 固定 320px：列轨道做 0↔320 动画时面板只被"移动"不被"缩放"，
+     内容零重排、模糊背景零重绘；轨道为 0 时面板整体溢到屏外被 .app 裁剪 */
+  min-width:var(--right-w);
 }
 /* 歌词渐隐遮罩（用 overlay 代替 mask-image，避免滚动时重绘） */
 .right-panel::before,.right-panel::after{

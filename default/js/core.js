@@ -168,6 +168,21 @@
     return m + ':' + (s < 10 ? '0' : '') + s;
   };
 
+  // formatTime 的小容量缓存：timeHighRes ~30fps 对同一秒值重复格式化，
+  // position 每秒才变一次、duration 恒定，16 项 FIFO 命中率接近 100%
+  var _ftCache = {}, _ftKeys = [];
+  CM.formatTimeCached = function(sec) {
+    if (!sec || sec <= 0 || !isFinite(sec)) return '0:00';
+    var k = Math.floor(sec);
+    var hit = _ftCache[k];
+    if (hit !== undefined) return hit;
+    var s = CM.formatTime(k);
+    _ftCache[k] = s;
+    _ftKeys.push(k);
+    if (_ftKeys.length > 16) delete _ftCache[_ftKeys.shift()];
+    return s;
+  };
+
   CM.formatSize = function(bytes) {
     bytes = +bytes || 0;
     if (bytes < 1024) return bytes + ' B';
@@ -206,15 +221,51 @@
     };
   };
 
+  // 一次性执行工厂：统一各模块"事件委托只绑一次"的守卫模式
+  // 用法：CM.runOnce('ctxMenuDelegation', function() { ...addEventListener... });
+  var _runOnceKeys = {};
+  CM.runOnce = function(key, setupFn) {
+    if (_runOnceKeys[key]) return false;
+    _runOnceKeys[key] = true;
+    setupFn();
+    return true;
+  };
+
+  // 延迟加载指示器：API 快速返回（<ms）时不闪烁，保留旧内容
+  // 返回 cancel 函数，在 API 回调中调用以取消转圈
+  CM.delayedLoading = function(showFn, ms) {
+    var timer = setTimeout(showFn, ms == null ? 150 : ms);
+    return function() { clearTimeout(timer); };
+  };
+
+  // 按钮 loading 状态：禁用并替换文本，返回恢复函数（自动还原原文本）
+  // 用法：var resetBtn = CM.setBtnLoading(btn, '加载中...'); ... resetBtn();
+  CM.setBtnLoading = function(btn, loadingText) {
+    if (!btn) return function() {};
+    var span = btn.querySelector('span');
+    var prevText = span ? span.textContent : null;
+    btn.disabled = true;
+    if (span) span.textContent = loadingText;
+    return function() {
+      btn.disabled = false;
+      if (span) span.textContent = prevText;
+    };
+  };
+
   // 通用频谱条更新（迷你频谱 + 沉浸式频谱共用）
   // 对数压缩 (pow 0.7) 使视觉更平滑；maxH/mult 由调用方按频谱条尺寸传入
   // 使用 transform:scaleY 代替 height，避免每帧 layout 重排（composite-only）
+  // Math.pow(v, 0.7) 每帧每条都调用，量化为 256 级查找表（频谱值为 0..1 归一化）
+  var _powLut = new Float32Array(256);
+  for (var _pi = 0; _pi < 256; _pi++) _powLut[_pi] = Math.pow(_pi / 255, 0.7);
   CM.updateSpectrumBars = function(barEls, spec, count, maxH, mult) {
     if (!barEls || !barEls.length || !spec || !spec.length) return;
     var step = spec.length / count;
     for (var i = 0; i < count; i++) {
       var v = spec[Math.floor(i * step)] || 0;
-      var h = Math.max(2, Math.min(maxH, Math.pow(v, 0.7) * mult));
+      var q = (v * 255 + 0.5) | 0; // 四舍五入量化到 0..255
+      if (q < 0) q = 0; else if (q > 255) q = 255;
+      var h = Math.max(2, Math.min(maxH, _powLut[q] * mult));
       barEls[i].style.transform = 'scaleY(' + (h / maxH).toFixed(3) + ')';
     }
   };
@@ -385,6 +436,23 @@
       }
     }
     return result.sort(function(a, b) { return a.time - b.time; });
+  };
+
+  // parseLRC 缓存：同一曲目重复解析（切换歌词视图/重新进入）时直接命中。
+  // key 由调用方给出（通常为 "path:length:head64"，可区分同路径下内容变更）
+  var _lrcCache = {}, _lrcKeys = [];
+  CM.parseLRCCached = function(key, lrcText) {
+    if (!lrcText) return [];
+    var hit = _lrcCache[key];
+    if (hit) return hit;
+    var parsed = CM.parseLRC(lrcText);
+    _lrcCache[key] = parsed;
+    _lrcKeys.push(key);
+    if (_lrcKeys.length > 8) delete _lrcCache[_lrcKeys.shift()];
+    return parsed;
+  };
+  CM.makeLRCCacheKey = function(path, lrcText) {
+    return (path || '') + ':' + lrcText.length + ':' + lrcText.slice(0, 64);
   };
 
   /* ============================================
