@@ -170,6 +170,8 @@
 .track-title{color:var(--text);font-weight:500}
 .track-artist-cell{color:var(--text-3)}
 .track-duration,.track-bitrate{text-align:right;color:var(--text-3);font-size:11.5px;font-variant-numeric:tabular-nums}
+/* 曲目行分隔线（极淡，增强长列表可读性） */
+.track-table tbody tr:not(:last-child) td{border-bottom:1px solid rgba(255,255,255,0.028)}
 /* 播放中的跳动均衡器 */
 .eq-bars{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
 .eq-bars i{width:2.5px;background:var(--accent);border-radius:1px;animation:eq 0.9s ease-in-out infinite}
@@ -373,7 +375,7 @@ body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
 
 /* ============ Queue Drawer ============ */
 .queue-drawer{
-  position:absolute;top:0;right:0;bottom:0;width:360px;max-width:88vw;z-index:70;
+  position:absolute;top:0;right:0;bottom:0;width:320px;max-width:88vw;z-index:70;
   background:var(--bg-1);border-left:1px solid var(--border-strong);
   box-shadow:-16px 0 48px rgba(0,0,0,0.45);
   display:flex;flex-direction:column;
@@ -385,7 +387,11 @@ body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
   padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0;
 }
 .queue-title{font-size:15px;font-weight:700}
-.queue-count{font-size:11.5px;color:var(--text-3);margin-left:8px}
+.queue-count{
+  font-size:11px;color:var(--text-2);background:var(--bg-3);margin-left:8px;
+  padding:2px 8px;border-radius:9px;font-variant-numeric:tabular-nums;
+}
+.queue-count:empty{display:none}
 .queue-actions{display:flex;align-items:center;gap:4px}
 .queue-clear-btn{
   font-size:11.5px;color:var(--text-3);padding:5px 10px;border-radius:var(--r-s);
@@ -400,17 +406,25 @@ body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
 }
 .queue-item:hover{background:var(--bg-2)}
 
-/* 状态指示器 */
-.queue-item-status{
-  width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
-  font-size:10px;border-radius:50%;
+/* ---- 顶部"正在播放"卡片（不属于队列，不参与排序/删除） ---- */
+.queue-now{
+  display:flex;align-items:center;gap:11px;margin:12px 14px 4px;padding:10px 12px;
+  background:var(--accent-soft);border:1px solid var(--accent-soft-2);border-radius:var(--r-m);
+  flex-shrink:0;
 }
-.queue-item.playing .queue-item-status{color:var(--accent);animation:q-pulse 1.8s ease-in-out infinite}
-.queue-item.playing .queue-item-title{color:var(--accent);font-weight:600}
-.queue-item.played .queue-item-status{color:var(--text-3)}
-.queue-item.played .queue-item-title{color:var(--text-3)}
-.queue-item.played .queue-item-artist{color:var(--text-3);opacity:0.7}
-@keyframes q-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.85)}}
+.queue-now-art{
+  width:40px;height:40px;border-radius:var(--r-s);flex-shrink:0;
+  background-color:var(--bg-3);background-size:cover;background-position:center;
+  display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-1);
+}
+.queue-now-art.ph svg{width:18px;height:18px;stroke:var(--text-4);fill:none}
+.queue-now-info{flex:1;min-width:0}
+.queue-now-label{
+  display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;
+  letter-spacing:0.12em;color:var(--accent);margin-bottom:3px;
+}
+.queue-now-title{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.queue-now-artist{font-size:11px;color:var(--text-2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .queue-item-idx{font-size:11px;color:var(--text-3);width:18px;text-align:center;flex-shrink:0;font-variant-numeric:tabular-nums}
 .queue-item-info{flex:1;min-width:0}
@@ -423,7 +437,30 @@ body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
 .queue-item:hover .queue-item-del{opacity:1}
 .queue-item-del:hover{background:var(--bg-4);color:#ff6b6b}
 .queue-item-del svg{width:11px;height:11px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round}
-.queue-empty{padding:56px 30px;text-align:center;color:var(--text-3);font-size:13px}
+/* ---- 队列拖拽调整顺序 ---- */
+.queue-grip{
+  visibility:hidden;width:13px;height:13px;margin-right:-4px;flex-shrink:0;
+  color:var(--text-4);cursor:grab;transition:color var(--t-fast),visibility var(--t-fast);
+}
+.queue-grip svg{width:13px;height:13px;display:block}
+.queue-item.can-drag{cursor:grab}
+.queue-item.can-drag:hover .queue-grip{visibility:visible}
+.queue-item.can-drag:hover .queue-grip:hover{color:var(--text-2)}
+/* 拖拽中的队列项：半透明幽灵态 + 轻微缩小浮起 */
+.queue-item.dragging{opacity:0.4;background:var(--accent-soft);transform:scale(0.98)}
+/* 插入位置指示线（强调色细线 + 外侧柔光） */
+.queue-item.drop-before{box-shadow:inset 0 2px 0 var(--accent),0 -8px 16px -8px var(--accent-glow)}
+.queue-item.drop-after{box-shadow:inset 0 -2px 0 var(--accent),0 8px 16px -8px var(--accent-glow)}
+/* 拖拽进行中：全局抓取光标 */
+body.is-reordering,body.is-reordering *{cursor:grabbing!important}
+
+.queue-empty{
+  padding:64px 30px;display:flex;flex-direction:column;align-items:center;gap:10px;
+  text-align:center;color:var(--text-3);font-size:13px;
+}
+.queue-empty>svg{width:40px;height:40px;stroke:var(--text-4);fill:none;stroke-width:1.5}
+.queue-empty-title{font-size:13px;font-weight:600;color:var(--text-2)}
+.queue-empty-sub{font-size:11.5px;color:var(--text-3)}
 
 /* ============ Popover (更多菜单/音效) ============ */
 .popover{

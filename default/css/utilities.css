@@ -56,6 +56,7 @@
 .ctx-item.danger{color:#ff6b6b}
 .ctx-item.danger:hover{background:rgba(255,107,107,0.12)}
 .ctx-item.checked{color:var(--accent)}
+.ctx-item.disabled{opacity:0.35;pointer-events:none}
 .ctx-item .ctx-check{width:14px;flex-shrink:0;font-size:11px;color:var(--accent);text-align:center}
 .ctx-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .ctx-item .ctx-stars{color:var(--accent);letter-spacing:1px;font-size:11px}

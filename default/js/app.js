@@ -29,6 +29,7 @@
     CM.loadCurrentArtwork();
     CM.loadLyrics();
     CM.refreshLikeState();
+    CM._renderQueueNow(); // 队列抽屉"正在播放"卡片
     // 如果沉浸式页面打开，重新渲染
     if (CM.state.npOpen) {
       setTimeout(function() { CM.renderNpOverlay(); }, 200);
@@ -50,6 +51,7 @@
 
   function onStopped() {
     CM.currentTrack = null;
+    CM._renderQueueNow(); // 隐藏队列抽屉"正在播放"卡片
     CM.state.playingTrackIndex = -1;
     CM.state.position = 0;
     CM.state.duration = 0;

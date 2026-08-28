@@ -8,6 +8,7 @@
   var CM = window.CloudMusic;
   var els = CM.els, state = CM.state;
 
+
   /* ============================================
    * 导航 / Tab
    * ============================================ */
@@ -108,6 +109,11 @@
         } });
         items.push({ label: '按艺术家排序', action: function() {
           CM.api('playlist.sort', { playlist: idx, pattern: '%artist% | %album% | %tracknumber%' });
+        } });
+        items.push({ label: '反转列表', icon: CM.icons.reverse, action: function() {
+          CM.api('playlist.reverse', { playlist: idx }).then(function(r) {
+            if (r && r.success !== false) CM.showToast('已反转列表顺序', null, 'success');
+          });
         } });
         items.push({ divider: true });
         items.push({ label: '撤销上一步', action: function() {
@@ -567,18 +573,33 @@
       });
     });
     // 视觉反馈（WebView2 内 dragover 依然会触发）
+    // 仅处理"外部文件拖入"（dataTransfer 含 Files）
+    function isFileDrag(e) {
+      var t = e.dataTransfer && e.dataTransfer.types;
+      if (!t) return false;
+      for (var i = 0; i < t.length; i++) {
+        if (t[i] === 'Files' || t[i] === 'files') return true;
+      }
+      return false;
+    }
     var dragDepth = 0;
     window.addEventListener('dragenter', function(e) {
+      if (!isFileDrag(e)) return;
       e.preventDefault();
       dragDepth++;
       els.dropOverlay.classList.add('active');
     });
     window.addEventListener('dragleave', function(e) {
+      if (!isFileDrag(e)) return;
       e.preventDefault();
       if (--dragDepth <= 0) { dragDepth = 0; els.dropOverlay.classList.remove('active'); }
     });
-    window.addEventListener('dragover', function(e) { e.preventDefault(); });
+    window.addEventListener('dragover', function(e) {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+    });
     window.addEventListener('drop', function(e) {
+      if (!isFileDrag(e)) return;
       e.preventDefault();
       dragDepth = 0;
       els.dropOverlay.classList.remove('active');
@@ -616,11 +637,13 @@
           break;
         case 'ArrowUp':
           e.preventDefault();
-          CM.api('playback.volumeUp');
+          if (e.altKey) { CM.keyboardMoveTracks(-1); }  // Alt+↑ 上移选中/聚焦曲目
+          else { CM.api('playback.volumeUp'); }
           break;
         case 'ArrowDown':
           e.preventDefault();
-          CM.api('playback.volumeDown');
+          if (e.altKey) { CM.keyboardMoveTracks(1); }   // Alt+↓ 下移选中/聚焦曲目
+          else { CM.api('playback.volumeDown'); }
           break;
         case 'm': case 'M':
           CM.api('playback.toggleMute');

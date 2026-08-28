@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1246 1246">
+  <defs>
+    <!-- 黑胶唱片刻槽遮罩 -->
+    <mask id="discMask">
+      <circle cx="623" cy="623" r="530" fill="#fff"/>
+      <circle cx="623" cy="623" r="355" fill="none" stroke="#000" stroke-width="16"
+              stroke-dasharray="500 1727" transform="rotate(135 623 623)"/>
+      <circle cx="623" cy="623" r="362" fill="none" stroke="#000" stroke-width="12"
+              stroke-dasharray="110 2164" transform="rotate(-25 623 623)"/>
+      <circle cx="623" cy="623" r="292" fill="none" stroke="#000" stroke-width="14"
+              stroke-dasharray="300 1535" transform="rotate(-28 623 623)"/>
+    </mask>
+
+    <!-- 四分音符 -->
+    <g id="quarter-note" transform="scale(0.068)">
+      <path d="M977.92 697.344q-7.168 38.912-27.648 69.632-17.408 26.624-52.224 48.128t-94.208 21.504q-38.912 0-73.728-5.12t-61.44-17.408-43.52-32.256-19.968-48.64 8.192-59.904 33.792-56.832 54.784-41.984 70.144-16.384q64.512 0 112.64 22.528l0-428.032-464.896 67.584 4.096 570.368 0 25.6q0 30.72-12.288 59.904t-34.304 51.712-53.248 35.84-69.12 13.312q-40.96 0-75.776-7.68t-61.44-22.528-43.008-36.864-19.456-50.688 8.192-55.808 34.304-48.64 55.296-36.352 70.144-18.944q28.672-4.096 56.32-0.512t52.224 11.776l0-571.392 646.144-93.184 0 651.264z" fill="#414042"/>
+    </g>
+
+    <!-- 八分音符 A -->
+    <g id="eighth-note-a" transform="scale(0.068)">
+      <path d="M644.870244 591.022829c-37.66322-82.119805-105.69678-70.631024-105.696781-70.631024L523.588683 437.572683s53.547707-43.157854 73.128585-119.58322c19.68078-76.525268 10.889366-113.589073 6.493659-152.950634s-34.965854-87.414634-48.053073-100.501853c-43.657366 34.965854-67.733854 74.227512-78.62322 102.699707-39.361561 85.21678 8.691512 235.969561 8.691512 235.969561s-74.327415 63.338146-80.821073 74.227512c-6.593561 10.889366-59.042341 61.140293-21.878634 190.014439S559.453659 767.950049 559.453659 767.950049s4.395707 45.85522 8.691512 63.338146c13.08722 72.029659-8.691512 93.908293-30.570147 102.699707-34.965854 8.691512-37.163707-2.197854-45.855219-4.395707 32.768-26.174439 32.768-48.053073 34.965854-69.931707 2.097951-21.878634-37.163707-54.646634-63.338147-50.250927-26.174439 4.395707-50.250927 43.657366-48.053073 61.140293 6.593561 45.85522 21.878634 63.338146 48.053073 78.623219 26.274341 15.285073 50.250927 10.889366 67.733854 4.395707 32.768-13.08722 61.44-43.757268 58.942439-83.018926-2.697366-43.157854-8.192-88.713366-10.889366-106.995513 18.581854-5.494634 49.651512-36.364488 60.041366-53.547707 22.078439-35.864976 17.482927-93.109073 5.694439-118.983805zM531.780683 140.06322c30.570146-30.570146 36.264585-13.386927 47.253854-0.299708s10.889366 52.44878 6.593561 87.414634c-8.691512 102.699707-76.425366 150.75278-76.425366 150.752781-17.582829-17.482927-14.286049-41.159805-17.58283-74.327415 2.197854-93.908293 9.490732-132.870244 40.160781-163.540292z m-77.024781 579.833756c-21.878634-15.285073-74.327415-74.227512-34.965853-161.642147 39.361561-87.314732 81.620293-97.704585 81.620292-97.704585 7.39278 34.366439 11.48878 65.536 11.488781 65.536s-11.688585 1.098927-36.364488 23.477073c-30.070634 27.273366-41.459512 107.095415 6.593561 150.752781s26.174439-6.593561 17.482927-13.08722c-8.791415-6.593561-24.076488-21.878634-19.680781-45.855219 3.29678-56.245073 37.163707-61.140293 43.657366-65.536 6.593561-4.395707 28.372293 148.554927 30.570147 166.037853-52.348878 12.987317-78.523317-6.693463-100.401952-21.978536z m120.182635 17.582829s-24.076488-157.346341-26.174439-170.333659c21.878634-8.791415 48.252878 11.089171 53.547707 18.881561 11.089171 16.384 22.977561 48.852293 22.977561 61.939513-1.798244 83.718244-50.350829 89.512585-50.350829 89.512585z" fill="#414042"/>
+    </g>
+
+    <!-- 八分音符 B -->
+    <g id="eighth-note-b" transform="scale(0.068)">
+      <path d="M774.971358 398.698511L765.58597 362.781352c-46.746453-139.968626-186.263858-184.639464-199.800476-196.732176-19.673218-17.687847-21.387856-35.556182-21.387856-35.556182v-16.42443c0-1.624394-0.721953-3.248788-2.075615-4.512205-1.353662-1.173174-3.158544-1.895126-4.873182-1.895127h-14.439059c-1.804882 0-3.519521 0.631709-4.873182 1.895127-1.353662 1.173174-2.075615 2.887812-2.075615 4.512205v642.899093c-32.307394-21.4781-87.175817-28.697629-144.841808-15.702477-82.392879 18.500044-138.885697 71.383097-126.161276 117.949062 12.724421 46.565965 89.702653 69.217238 172.185776 50.62695 79.866044-18.048823 135.45642-68.314797 127.153961-113.888077V420.176611s12.363444 2.165859 51.529391 22.200052c122.461267 62.809906 172.27602 128.236891 139.788138 335.617873-0.812197 5.685379 4.151229 5.956112 5.956112 0.180488 25.268353-79.414823 29.690315-144.932053 21.4781-198.80779 19.763462-71.563585 21.387856-131.214947 11.821979-180.668723z m-18.139068 149.354014c-39.075703-148.451573-177.510179-195.829735-191.227284-208.283423-19.402485-17.778091-21.207368-35.556182-21.207368-35.556182v-57.756235s12.092712 2.165859 51.980612 22.200052c112.985635 56.673306 173.268705 114.610029 160.45404 279.395788z" fill="#414042"/>
+    </g>
+  </defs>
+
+  <!-- 背景散点 -->
+  <g fill="#414042">
+    <rect x="286" y="170" width="18" height="5.3" rx="2.65" opacity="0.37" transform="rotate(20 286 170)"/>
+    <circle cx="521" cy="1120" r="2.2" opacity="0.73"/>
+    <rect x="864" y="1173" width="10" height="4.2" rx="2.1" opacity="0.36" transform="rotate(80 864 1173)"/>
+    <circle cx="346" cy="1198" r="2" opacity="0.67"/>
+    <circle cx="1190" cy="587" r="1.6" opacity="0.53"/>
+    <rect x="1185" y="750" width="7" height="2.9" rx="1.45" opacity="0.66" transform="rotate(13 1185 750)"/>
+    <circle cx="1128" cy="494" r="4.2" opacity="0.78"/>
+    <circle cx="197" cy="801" r="4.1" opacity="0.37"/>
+    <rect x="720" y="44" width="6" height="2" rx="1" opacity="0.48" transform="rotate(15 720 44)"/>
+    <circle cx="485" cy="158" r="4.8" opacity="0.8"/>
+    <rect x="1036" y="448" width="19" height="1.6" rx="0.8" opacity="0.68" transform="rotate(116 1036 448)"/>
+    <circle cx="1088" cy="582" r="3.6" opacity="0.56"/>
+    <rect x="456" y="174" width="12" height="3.7" rx="1.85" opacity="0.72" transform="rotate(81 456 174)"/>
+    <circle cx="826" cy="1011" r="3.4" opacity="0.77"/>
+    <circle cx="257" cy="861" r="4.4" opacity="0.38"/>
+    <rect x="1039" y="144" width="13" height="4" rx="2" opacity="0.37" transform="rotate(113 1039 144)"/>
+    <rect x="1041" y="354" width="14" height="4" rx="2" opacity="0.49" transform="rotate(42 1041 354)"/>
+    <rect x="48" y="627" width="19" height="2.5" rx="1.25" opacity="0.57" transform="rotate(107 48 627)"/>
+    <circle cx="595" cy="31" r="2.6" opacity="0.55"/>
+  </g>
+
+  <!-- 黑胶盘面 -->
+  <circle cx="623" cy="623" r="530" fill="#231E1F" mask="url(#discMask)"/>
+
+  <!-- 擦痕弧 -->
+  <g fill="none" stroke="#413F42">
+    <circle cx="623" cy="623" r="420" stroke-width="5" opacity="0.5" stroke-dasharray="400 2239" transform="rotate(200 623 623)"/>
+    <circle cx="623" cy="623" r="475" stroke-width="4" opacity="0.45" stroke-dasharray="550 2434" transform="rotate(20 623 623)"/>
+    <circle cx="623" cy="623" r="510" stroke-width="6" opacity="0.4" stroke-dasharray="260 2944" transform="rotate(310 623 623)"/>
+  </g>
+
+  <!-- 标签 -->
+  <circle cx="623" cy="623" r="282" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="7 13" opacity="0.28"/>
+  <circle cx="623" cy="623" r="189" fill="#AB130E"/>
+  <circle cx="623" cy="623" r="179" fill="#B2241F"/>
+  <circle cx="623" cy="623" r="172" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="6 9" opacity="0.8"/>
+
+  <!-- 文字 -->
+  <text x="623" y="518" text-anchor="middle" font-family="Georgia, serif" font-size="72" font-style="italic" fill="#fff">Best</text>
+  <text x="623" y="736" text-anchor="middle" font-family="Georgia, serif" font-size="52" fill="#fff" letter-spacing="1">foobar 2000</text>
+
+  <!-- 中央轴孔 -->
+  <circle cx="623" cy="623" r="63" fill="#231E1F"/>
+
+  <!-- ========== 内层音符 半径595 ========== -->
+  <g transform="translate(623 623)">
+    <use href="#eighth-note-a" transform="rotate(0) translate(595 0) rotate(91) scale(1.0)" opacity="0.92"/>
+    <use href="#quarter-note" transform="rotate(13.3) translate(595 0) rotate(101) scale(1.05)" opacity="0.88"/>
+    <use href="#eighth-note-b" transform="rotate(26.6) translate(595 0) rotate(111) scale(0.95)" opacity="0.90"/>
+    <use href="#eighth-note-a" transform="rotate(39.9) translate(595 0) rotate(121) scale(1.0)" opacity="0.93"/>
+    <use href="#quarter-note" transform="rotate(53.2) translate(595 0) rotate(130) scale(1.02)" opacity="0.87"/>
+    <use href="#eighth-note-b" transform="rotate(66.5) translate(595 0) rotate(139) scale(0.98)" opacity="0.91"/>
+    <use href="#eighth-note-a" transform="rotate(79.8) translate(595 0) rotate(147) scale(1.05)" opacity="0.89"/>
+    <use href="#quarter-note" transform="rotate(93.1) translate(595 0) rotate(154) scale(0.95)" opacity="0.92"/>
+    <use href="#eighth-note-b" transform="rotate(106.4) translate(595 0) rotate(160) scale(1.0)" opacity="0.88"/>
+    <use href="#eighth-note-a" transform="rotate(119.7) translate(595 0) rotate(166) scale(1.02)" opacity="0.90"/>
+    <use href="#quarter-note" transform="rotate(133.0) translate(595 0) rotate(171) scale(0.98)" opacity="0.93"/>
+    <use href="#eighth-note-b" transform="rotate(146.3) translate(595 0) rotate(176) scale(1.05)" opacity="0.87"/>
+    <use href="#eighth-note-a" transform="rotate(159.6) translate(595 0) rotate(181) scale(0.95)" opacity="0.91"/>
+    <use href="#quarter-note" transform="rotate(172.9) translate(595 0) rotate(186) scale(1.0)" opacity="0.89"/>
+    <use href="#eighth-note-b" transform="rotate(186.2) translate(595 0) rotate(191) scale(1.02)" opacity="0.92"/>
+    <use href="#eighth-note-a" transform="rotate(199.5) translate(595 0) rotate(196) scale(0.98)" opacity="0.88"/>
+    <use href="#quarter-note" transform="rotate(212.8) translate(595 0) rotate(202) scale(1.05)" opacity="0.90"/>
+    <use href="#eighth-note-b" transform="rotate(226.1) translate(595 0) rotate(208) scale(0.95)" opacity="0.93"/>
+    <use href="#eighth-note-a" transform="rotate(239.4) translate(595 0) rotate(215) scale(1.0)" opacity="0.87"/>
+    <use href="#quarter-note" transform="rotate(252.7) translate(595 0) rotate(222) scale(1.02)" opacity="0.91"/>
+    <use href="#eighth-note-b" transform="rotate(266.0) translate(595 0) rotate(229) scale(0.98)" opacity="0.89"/>
+    <use href="#eighth-note-a" transform="rotate(279.3) translate(595 0) rotate(236) scale(1.05)" opacity="0.92"/>
+    <use href="#quarter-note" transform="rotate(292.6) translate(595 0) rotate(243) scale(0.95)" opacity="0.88"/>
+    <use href="#eighth-note-b" transform="rotate(305.9) translate(595 0) rotate(250) scale(1.0)" opacity="0.90"/>
+    <use href="#eighth-note-a" transform="rotate(319.2) translate(595 0) rotate(256) scale(1.02)" opacity="0.93"/>
+    <use href="#quarter-note" transform="rotate(332.5) translate(595 0) rotate(263) scale(0.98)" opacity="0.87"/>
+    <use href="#eighth-note-b" transform="rotate(345.8) translate(595 0) rotate(270) scale(1.05)" opacity="0.91"/>
+  </g>
+
+  <!-- ========== 外层音符 半径615 ========== -->
+  <g transform="translate(623 623)">
+    <use href="#quarter-note" transform="rotate(6.6) translate(615 0) rotate(96) scale(1.12)" opacity="0.78"/>
+    <use href="#eighth-note-b" transform="rotate(19.9) translate(615 0) rotate(106) scale(0.88)" opacity="0.72"/>
+    <use href="#eighth-note-a" transform="rotate(33.2) translate(615 0) rotate(116) scale(1.08)" opacity="0.76"/>
+    <use href="#quarter-note" transform="rotate(46.5) translate(615 0) rotate(125) scale(0.92)" opacity="0.70"/>
+    <use href="#eighth-note-b" transform="rotate(59.8) translate(615 0) rotate(134) scale(1.18)" opacity="0.74"/>
+    <use href="#eighth-note-a" transform="rotate(73.1) translate(615 0) rotate(143) scale(0.85)" opacity="0.78"/>
+    <use href="#quarter-note" transform="rotate(86.4) translate(615 0) rotate(151) scale(1.05)" opacity="0.72"/>
+    <use href="#eighth-note-b" transform="rotate(99.7) translate(615 0) rotate(158) scale(0.90)" opacity="0.76"/>
+    <use href="#eighth-note-a" transform="rotate(113.0) translate(615 0) rotate(164) scale(1.0)" opacity="0.70"/>
+    <use href="#quarter-note" transform="rotate(126.3) translate(615 0) rotate(170) scale(1.15)" opacity="0.74"/>
+    <use href="#eighth-note-b" transform="rotate(139.6) translate(615 0) rotate(175) scale(0.88)" opacity="0.78"/>
+    <use href="#eighth-note-a" transform="rotate(152.9) translate(615 0) rotate(180) scale(1.10)" opacity="0.72"/>
+    <use href="#quarter-note" transform="rotate(166.2) translate(615 0) rotate(184) scale(0.92)" opacity="0.76"/>
+    <use href="#eighth-note-b" transform="rotate(179.5) translate(615 0) rotate(189) scale(1.20)" opacity="0.70"/>
+    <use href="#eighth-note-a" transform="rotate(192.8) translate(615 0) rotate(194) scale(0.85)" opacity="0.74"/>
+    <use href="#quarter-note" transform="rotate(206.1) translate(615 0) rotate(199) scale(1.05)" opacity="0.78"/>
+    <use href="#eighth-note-b" transform="rotate(219.4) translate(615 0) rotate(205) scale(0.90)" opacity="0.72"/>
+    <use href="#eighth-note-a" transform="rotate(232.7) translate(615 0) rotate(211) scale(1.0)" opacity="0.76"/>
+    <use href="#quarter-note" transform="rotate(246.0) translate(615 0) rotate(218) scale(1.15)" opacity="0.70"/>
+    <use href="#eighth-note-b" transform="rotate(259.3) translate(615 0) rotate(225) scale(0.88)" opacity="0.74"/>
+    <use href="#eighth-note-a" transform="rotate(272.6) translate(615 0) rotate(231) scale(1.10)" opacity="0.78"/>
+    <use href="#quarter-note" transform="rotate(285.9) translate(615 0) rotate(238) scale(0.92)" opacity="0.72"/>
+    <use href="#eighth-note-b" transform="rotate(299.2) translate(615 0) rotate(245) scale(1.20)" opacity="0.76"/>
+    <use href="#eighth-note-a" transform="rotate(312.5) translate(615 0) rotate(252) scale(0.85)" opacity="0.70"/>
+    <use href="#quarter-note" transform="rotate(325.8) translate(615 0) rotate(258) scale(1.05)" opacity="0.74"/>
+    <use href="#eighth-note-b" transform="rotate(339.1) translate(615 0) rotate(265) scale(0.90)" opacity="0.78"/>
+    <use href="#eighth-note-a" transform="rotate(352.4) translate(615 0) rotate(272) scale(1.10)" opacity="0.72"/>
+  </g>
+
+  <!-- 最外层星环 -->
+  <circle cx="623" cy="623" r="537" fill="none" stroke="#414042" stroke-width="29" opacity="0.95"/>
+  <circle cx="623" cy="623" r="550" fill="none" stroke="#414042" stroke-width="4" stroke-dasharray="10 14" opacity="0.8"/>
+</svg>

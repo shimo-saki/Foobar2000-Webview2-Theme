@@ -173,7 +173,7 @@
   <h1>CloudMusic 主题功能指南</h1>
   <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">版本 <b>v2.2</b></div>
+    <div class="hero-meta-item">版本 <b>v2.3</b></div>
     <div class="hero-meta-item">作者 <b>灵芝含</b></div>
     <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.12.0</b></div>
   </div>
@@ -209,20 +209,41 @@
 
 <div class="container">
 
-<!-- 00 更新日志 v2.2 -->
+<!-- 00 更新日志 -->
 <div class="section" id="changelog">
   <div class="section-header">
     <div class="section-icon">
       <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
     </div>
     <div>
-      <div class="section-title">更新日志 · v2.2</div>
-      <div class="section-desc">自 v2.1 以来的功能优化与问题修复，重点覆盖媒体库分页、歌词显示、封面占位与歌单恢复</div>
+      <div class="section-title">更新日志 · v2.3</div>
+      <div class="section-desc">播放队列拖拽调序重做、无封面占位图矢量化与细节修复，附 v2.2 完整更新记录</div>
     </div>
   </div>
   <div class="section-body">
+    <strong>v2.3 · 问题修复</strong>
+    <ul>
+      <li><strong>播放队列拖拽调序无响应</strong>（拖动时鼠标呈"禁止"样式、松手不生效）→ 根因：宿主持有本窗口的原生放置目标（v1.12.0 起拖放改为主机原生观察），页面内 HTML5 拖拽的 dragover / drop 不会回投到页面，且宿主对非文件拖拽一律返回"禁止"光标。队列调序重写为指针事件（Pointer Events）实现，不再经过系统级拖放，彻底绕开该限制。</li>
+      <li><strong>切换歌单后 <kbd>Alt</kbd>+<kbd>&uarr;</kbd>/<kbd>&darr;</kbd> 可能移动错误曲目</strong> → 聚焦曲目索引未校验所属歌单，现记录聚焦行所属歌单并在移动前校验、钳制范围。</li>
+    </ul>
+    <strong>v2.3 · 体验优化</strong>
+    <ul>
+      <li><strong>拖拽体验细节</strong>：拖动范围限制在队列列表内（出界松手视为取消）、支持 <kbd>Esc</kbd> 取消拖拽、拖至列表边缘自动滚动、越过 4px 阈值才进入拖拽避免误触。</li>
+      <li><strong>队列抽屉收窄</strong>：宽度由 360px 调整为 320px，与右侧歌词面板一致，更紧凑。</li>
+      <li><strong>队列视觉打磨</strong>：空队列显示图标与引导文案；队列计数改为徽章样式。</li>
+      <li><strong>无封面占位图矢量化</strong>：原 1.27MB PNG 替换为手绘级 SVG（仅 3.6KB），透明背景 + 黑胶唱片 + 红色标签 + "foobar 2000" 字样 + 中心轴孔 + 四周花纹散点，视觉一致，体积缩小 99.7%。</li>
+      <li><strong>队列抽屉新增「正在播放」卡片</strong>：顶部固定展示当前曲目（封面 + 跳动均衡器，暂停时动画同步暂停），仅作展示、不参与排序也无法移除；列表回归纯"待播"语义，移除误把"下一首"标为播放中的伪状态与永不命中的"已播放"标记。</li>
+    </ul>
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:18px 0">
+    <strong>历史更新 · v2.2</strong>
+    <div class="section-desc" style="margin:4px 0 10px">自 v2.1 以来的功能优化与问题修复，重点覆盖播放队列调序、曲目调序、媒体库分页、歌词显示、封面占位与歌单恢复</div>
     <strong>功能优化</strong>
     <ul>
+      <li><strong>播放队列拖拽调序</strong>：队列抽屉内直接拖动条目即可调整播放顺序（悬停显示抓手图标、红色指示线标示落点）；队列内部拖拽不会误触发外部文件导入遮罩。</li>
+      <li><strong>播放列表曲目调序</strong>：右键曲目新增「调整顺序」分组 — 上移 / 下移 / 移到顶部 / 移到底部，多选时整组移动，已到达边界的操作自动置灰；锁定 / 自动歌单不显示。</li>
+      <li><strong>快捷键移动曲目</strong>：<kbd>Alt</kbd>+<kbd>&uarr;</kbd> / <kbd>Alt</kbd>+<kbd>&darr;</kbd> 上移 / 下移聚焦曲目或已选中的多首曲目。</li>
+      <li><strong>反转列表</strong>：歌单「更多操作」菜单新增一键反转整张列表。</li>
+      <li><strong>表格视觉打磨</strong>：曲目行增加极淡分隔线，长列表可读性更好。</li>
       <li><strong>媒体库全面分页</strong>：专辑 / 艺术家 / 流派 / 歌曲 / 文件夹全部解除数量上限，改为客户端分页（每页 50 / 100 / 300 / 500，页码自动记忆）。</li>
       <li><strong>浮动分页栏</strong>：分页按钮改为毛玻璃吸顶样式，滚动到列表任意位置都可直接翻页，无需回到顶部。</li>
       <li><strong>歌曲列表分页</strong>：媒体库"全部歌曲"启用分页，跨页行号连续。</li>
@@ -331,7 +352,9 @@
       <li><strong>新建歌单</strong>：侧边栏右键空白处或点击"+"按钮</li>
       <li><strong>重命名/删除/清空</strong>：右键侧边栏歌单项</li>
       <li><strong>排序</strong>：点击表头（标题/艺术家/专辑/时长/比特率）切换升序、降序、取消排序</li>
-      <li><strong>更多操作</strong>：点击歌单封面旁"..."按钮 — 随机排列、按标题/艺术家排序、撤销</li>
+      <li><strong>右键调整顺序</strong>：右键曲目 →「调整顺序」— 上移 / 下移 / 移到顶部 / 移到底部；<kbd>Ctrl</kbd> 多选后可整组移动</li>
+      <li><strong>快捷键调整顺序</strong>：<kbd>Alt</kbd>+<kbd>&uarr;</kbd> / <kbd>Alt</kbd>+<kbd>&darr;</kbd> 移动聚焦或选中的曲目</li>
+      <li><strong>更多操作</strong>：点击歌单封面旁"..."按钮 — 随机排列、按标题/艺术家排序、反转列表、撤销</li>
       <li><strong>添加曲目到歌单</strong>：右键曲目 → "添加到歌单"；右键歌单 → "添加本地文件 / 添加文件夹"（文件夹会自动递归展开其中的音频文件）；或将音频文件 / 文件夹拖放到窗口任意位置</li>
       <li><strong>从歌单删除</strong>：右键曲目 → "从歌单中删除"</li>
     </ul>
@@ -486,9 +509,10 @@
       <li><strong>打开队列</strong>：点击底栏队列按钮或按 <kbd>Q</kbd>，右侧抽屉滑出</li>
       <li><strong>加入队列</strong>：右键任意曲目 → "下一首播放"，曲目插入队列顶部</li>
       <li><strong>队列徽章</strong>：底栏队列按钮上显示数字徽章，超过 99 显示"99+"</li>
+      <li><strong>调整队列顺序</strong>：直接按住队列条目拖动到目标位置（红色指示线标示落点），松手即按新顺序重建队列；悬停时条目左侧显示抓手图标；拖出列表区域松手视为取消，拖动中可按 <kbd>Esc</kbd> 取消，拖至列表上下边缘时自动滚动</li>
       <li><strong>从队列移除</strong>：点击队列中曲目旁的删除按钮</li>
       <li><strong>清空队列</strong>：点击队列抽屉顶部的清空按钮</li>
-      <li><strong>状态标记</strong>：队列中正在播放的曲目有高亮标记，已播放的曲目有标记</li>
+      <li><strong>正在播放卡片</strong>：抽屉顶部固定显示当前播放曲目（封面 + 跳动均衡器），仅作展示，不参与排序也无法移除；下方列表全部为待播曲目（正在播放的曲目出队即播，不会出现在列表中）</li>
     </ul>
   </div>
 </div>
@@ -739,7 +763,8 @@
         <tr><td><kbd>L</kbd></td><td>歌词面板显示 / 隐藏</td></tr>
         <tr><td><kbd>Q</kbd></td><td>播放队列抽屉开关</td></tr>
         <tr><td><kbd>Ctrl</kbd> + 点击</td><td>播放列表多选曲目（批量编辑）</td></tr>
-        <tr><td><kbd>Esc</kbd></td><td>依次关闭：队列、菜单、标签编辑器、批量选择</td></tr>
+        <tr><td><kbd>Alt</kbd> + <kbd>&uarr;</kbd> / <kbd>&darr;</kbd></td><td>上移 / 下移聚焦或选中的曲目（播放列表页）</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>优先取消进行中的队列拖拽；否则依次关闭：队列、菜单、标签编辑器、批量选择</td></tr>
       </tbody>
     </table>
   </div>
@@ -773,7 +798,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p class="footer-author">CloudMusic 主题 v2.2 · 作者：灵芝含</p>
+  <p class="footer-author">CloudMusic 主题 v2.3 · 作者：灵芝含</p>
   <p>基于 foo_ui_webview2 SDK 1.12.0 · foobar2000 v2</p>
   <p>感谢使用，享受音乐</p>
 </div>

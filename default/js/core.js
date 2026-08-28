@@ -57,7 +57,7 @@
     btnQueue: CM.$('btnQueue'), queueBadge: CM.$('queueBadge'),
     btnLyricsToggle: CM.$('btnLyricsToggle'), btnMore: CM.$('btnMore'),
     // Queue drawer
-    queueDrawer: CM.$('queueDrawer'), queueCount: CM.$('queueCount'), queueList: CM.$('queueList'),
+    queueDrawer: CM.$('queueDrawer'), queueCount: CM.$('queueCount'), queueList: CM.$('queueList'), queueNow: CM.$('queueNow'),
     queueClear: CM.$('queueClear'), queueClose: CM.$('queueClose'),
     // Overlays
     morePopover: CM.$('morePopover'), rgPopover: CM.$('rgPopover'),
@@ -131,7 +131,9 @@
     trackCache: [],             // 当前播放列表曲目缓存（排序/右键用）
     playlistTracksTotal: 0,
     searchTracks: [],            // 最近一次搜索结果缓存（添加到歌单用）
-    batchSelected: new Set()     // 批量选中的曲目索引集合（Ctrl+click 多选）
+    batchSelected: new Set(),    // 批量选中的曲目索引集合（Ctrl+click 多选）
+    focusedTrackIndex: -1,       // 播放列表中最后单击聚焦的曲目索引（Alt+↑/↓ 移动用）
+    focusedPlaylistIndex: -1     // 聚焦行所属歌单（仅在当前歌单内有效，防止跨歌单误移动）
   };
   CM.currentTrack = null;
   CM.currentLyrics = [];
@@ -479,6 +481,13 @@
     // 标签编辑/封面/下载
     tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
     download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
-    image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'
+    image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
+    // 曲目排序 / 调整顺序
+    up: '<svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
+    down: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
+    toTop: '<svg viewBox="0 0 24 24"><line x1="4" y1="4" x2="20" y2="4"/><line x1="12" y1="20" x2="12" y2="8"/><polyline points="7 13 12 8 17 13"/></svg>',
+    toBottom: '<svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="20"/><line x1="12" y1="4" x2="12" y2="16"/><polyline points="7 11 12 16 17 11"/></svg>',
+    reverse: '<svg viewBox="0 0 24 24"><polyline points="7 3 3 7 7 11"/><path d="M3 7h13a5 5 0 0 1 5 5v1"/><polyline points="17 21 21 17 17 13"/><path d="M21 17H8a5 5 0 0 1-5-5v-1"/></svg>',
+    grip: '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>'
   };
 })();
