@@ -211,6 +211,8 @@
       CM.renderTrackTable();
       // 预加载缺失元数据（foobar2000 延迟加载机制：异步添加文件时不立即读取标签）
       CM.preloadTrackMetadata(tracks);
+      // 滚动到当前播放曲目
+      els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center' });
     });
   };
 
@@ -524,6 +526,8 @@
       var tr = els.trackTbody.querySelector('tr[data-index="' + state.playingTrackIndex + '"]');
       if (tr) {
         tr.classList.add('playing');
+        // 自动滚动到当前播放项
+        tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
         var numCell = tr.querySelector('.track-num');
         if (numCell) numCell.innerHTML = '<span class="eq-bars"><i></i><i></i><i></i></span>';
         CM._lastPlayingTr = tr;
