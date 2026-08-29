@@ -341,6 +341,7 @@
     }
     if (els.bottomArt.getAttribute('src') !== next) els.bottomArt.src = next;
     if (els.lyricsArt.getAttribute('src') !== next) els.lyricsArt.src = next;
+    if (els.plCover.getAttribute('src') !== next) els.plCover.src = next;
     if (els.npArtwork && els.npArtwork.getAttribute('src') !== next) els.npArtwork.src = next;
     els.lyricsBlurBg.style.backgroundImage = 'url("' + next + '")';
     CM.extractColorFromImage(next);

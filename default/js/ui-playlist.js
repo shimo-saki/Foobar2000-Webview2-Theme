@@ -195,7 +195,7 @@
       els.playlistHeaderMeta.textContent = state.playlistTracksTotal + ' 首曲目 · ' + CM.formatTime(totalDur);
       // 歌单封面取第一首歌；无封面或空歌单回退占位图
       if (tracks.length) {
-        CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[0]), type: 'front', maxSize: 300 }).then(function(ar) {
+        CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[Math.max(state.playingTrackIndex, 0)]), type: 'front', maxSize: 300 }).then(function(ar) {
           if (loadId !== CM._playlistViewLoadId) return;
           els.plCover.onerror = ar && ar.dataUrl && ar.available !== false
             ? function() { els.plCover.onerror = null; els.plCover.src = CM.DEFAULT_TRACK_COVER; els.plCover.style.display = ''; }
