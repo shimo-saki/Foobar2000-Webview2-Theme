@@ -561,6 +561,9 @@
     if (!track) return;
     var path = CM.trackPath(track);
     var items = [
+      { label: '跳转到当前播放', action: () =>
+          els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      },
       { label: '播放', icon: CM.icons.play, action: function() {
         if (ctx && ctx.playlist != null) {
           CM.stopPreviewIfActive().then(function() {
