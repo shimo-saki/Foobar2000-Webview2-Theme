@@ -357,7 +357,7 @@
     els.lyricsTrackTitle.textContent = name;
     els.lyricsTrackArtist.textContent = artist;
     // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
-    var dur = track ? (track.duration || track.length) : null;
+    var dur = track?.duration || track?.length;
     if (track && dur != null) state.duration = dur;
     document.title = track ? (name + ' - ' + artist) : 'CloudMusic';
   };
