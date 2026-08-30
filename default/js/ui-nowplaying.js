@@ -157,7 +157,7 @@
 
   CM.updateNpLyricHighlight = function(force) {
     if (!state.npOpen) return;
-    CM._updateLyricHighlight(els.npLyrics, '.np-lyric-line', 'npActiveLyricIndex', force, state.position + 0.25, '_npLyricNodesCache', '_npWordCache');
+    CM._updateLyricHighlight(els.npLyrics, '.np-lyric-line', 'npActiveLyricIndex', force, state.position, '_npLyricNodesCache', '_npWordCache');
   };
 
   CM.updateNpSeekUI = function() {

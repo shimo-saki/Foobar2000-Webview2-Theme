@@ -119,22 +119,24 @@
   };
 
   // 通用歌词 HTML 生成（主歌词面板 + 沉浸式共用）
-  CM._renderLyricHTML = function(lines, lineClass, topPadPct) {
-    var parts = ['<div style="height:' + topPadPct + '%"></div>'];
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i];
-      parts.push('<div class="' + lineClass + (line.words ? ' has-words' : '') + '" data-idx="' + i + '" data-time="' + line.time + '">');
-      if (line.words) {
-        for (var w = 0; w < line.words.length; w++) {
-          parts.push('<span class="lyric-word" data-time="' + line.words[w].time + '">' + esc(line.words[w].text) + '</span>');
-        }
-      } else {
-        parts.push(esc(line.text));
-      }
-      parts.push('</div>');
-    }
-    parts.push('<div style="height:40%"></div>');
-    return parts.join('');
+  CM._renderLyricHTML = function (lines, lineClass) {
+    return lines.map((line, i, arr) => {
+      // 跳过与前一行时间重复的行（翻译行会被作为上一行的翻译内容）
+      if (line.time === arr[i - 1]?.time) return '';
+
+      const trans = arr[i + 1];
+      const hasTrans = trans?.time === line.time;
+      const words = line.words;
+
+      const wordsHTML = words
+        ? words.map(w => `<span class="lyric-word" data-start_time="${w.startTime}" data-end_time="${w.endTime}" style="--duration:${w.duration}s">${esc(w.text)}</span>`).join('')
+        : esc(line.text);
+
+      return `<div class="${lineClass}" data-idx="${i}" data-time="${line.time}">
+        <div class="lyric" ${words ? 'has-words' : ''} data-idx="${i}">${wordsHTML}</div>
+        ${hasTrans ? `<div class="translate" data-idx="${i + 1}">${esc(trans.text)}</div>` : ''}
+        </div>`;
+    }).filter(Boolean).join('');
   };
 
   // 通用歌词点击跳转：事件委托（一次性绑定在容器上，避免逐行 addEventListener）
@@ -149,8 +151,7 @@
       if (isFinite(t)) {
         CM.api('playback.setPosition', { seconds: t });
         // 点击跳转时重置 index，避免时间回退时不会高亮当前行
-        // el.dataset.idx - 1 避免点击翻译行而不会高亮歌词行
-        CM.activeLyricIndex = CM.npActiveLyricIndex = el.dataset.idx - 1;
+        CM.activeLyricIndex = CM.npActiveLyricIndex = el.dataset.idx;
       };
     });
   };
@@ -166,13 +167,9 @@
     if (!lines.length) return;
     // 修复歌词存在翻译时，高亮翻译行的 bug
     // 使用当前播放行索引，避免每次都从头查找
-    let idx = CM[activeIdxField], transIdx = idx;
-    for (let i = Math.max(0, idx); i < lines.length && lines[i].time <= pos; i++) {
-      if (idx == -1 || lines[i].time > lines[idx].time) {
-        idx = transIdx = i;
-      } else if (lines[i].time === lines[idx].time) {
-        transIdx = i;
-      }
+    let idx = CM[activeIdxField];
+    for (let i = idx; i < lines.length && (lines[i]?.time ?? 0) <= pos; i++) {
+      if (idx === -1 || lines[i]?.time > lines[idx]?.time) idx = i;
     }
     var lineChanged = idx !== CM[activeIdxField];
     if (!lineChanged && !force) {
@@ -181,18 +178,14 @@
     }
     CM[activeIdxField] = idx;
     // 使用缓存节点（渲染时已缓存），避免每次都 querySelectorAll
-    var nodes = cacheKey ? CM[cacheKey] : null;
-    if (!nodes || nodes.length !== lines.length) {
+    let nodes = CM?.[cacheKey] ?? null;
+    if (nodes?.length !== lines.length) {
       nodes = container.querySelectorAll(lineSelector);
       if (cacheKey) CM[cacheKey] = nodes;
     }
-    nodes.forEach((node, i) => node.classList.toggle('active', i === idx || i === transIdx));
+    nodes.forEach(node => node.classList.toggle('active', node.dataset.idx == idx));
+    container.querySelector(`[data-idx="${idx}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     CM._updateWordHighlight(container, idx, pos, wordCacheKey);
-    if (idx >= 0 && nodes[idx]) {
-      var target = nodes[idx];
-      var top = target.offsetTop - container.clientHeight / 2 + target.clientHeight / 2;
-      container.scrollTo({ top: top, behavior: force ? 'auto' : 'smooth' });
-    }
   };
 
   CM.renderSyncedLyrics = function(lines) {
@@ -216,34 +209,25 @@
 
   CM.updateLyricHighlight = function(force) {
     if (!state.lyricsVisible) return;
-    CM._updateLyricHighlight(els.lyricsScroll, '.lyric-line', 'activeLyricIndex', force, state.position + 0.25, '_lyricNodesCache', '_wordCache');
+    CM._updateLyricHighlight(els.lyricsScroll, '.lyric-line', 'activeLyricIndex', force, state.position, '_lyricNodesCache', '_wordCache');
   };
 
   // 逐字高亮：在活动行内标记已唱词（.sung）
   // 缓存每行的 .lyric-word NodeList，避免 30fps 每帧都 querySelector
   CM._updateWordHighlight = function(container, lineIdx, pos, wordCacheKey) {
     if (lineIdx < 0) return;
-    var line = CM.currentLyrics[lineIdx];
-    if (!line || !line.words) return;
-    var wordEls;
+    if (!CM.currentLyrics[lineIdx]?.words) return;
+    const lineEl = container.querySelector(`[data-idx="${lineIdx}"]`);
+    if (!lineEl) return;
+
+    let wordEls;
     if (wordCacheKey) {
-      if (!CM[wordCacheKey]) CM[wordCacheKey] = {};
-      wordEls = CM[wordCacheKey][lineIdx];
-      if (!wordEls) {
-        var lineEl = container.querySelector('[data-idx="' + lineIdx + '"]');
-        if (!lineEl) return;
-        wordEls = lineEl.querySelectorAll('.lyric-word');
-        CM[wordCacheKey][lineIdx] = wordEls;
-      }
+      CM[wordCacheKey] ??= {};
+      wordEls = CM[wordCacheKey][lineIdx] ?? (CM[wordCacheKey][lineIdx] = lineEl.querySelectorAll('.lyric-word'));
     } else {
-      var lineEl0 = container.querySelector('[data-idx="' + lineIdx + '"]');
-      if (!lineEl0) return;
-      wordEls = lineEl0.querySelectorAll('.lyric-word');
+      wordEls = lineEl.querySelectorAll('.lyric-word');
     }
-    for (var i = 0; i < wordEls.length; i++) {
-      var t = parseFloat(wordEls[i].dataset.time);
-      wordEls[i].classList.toggle('sung', t <= pos);
-    }
+    wordEls.forEach(el => el.classList.toggle('sung', parseFloat(el.dataset.start_time) < pos));
   };
 
   /* ============================================

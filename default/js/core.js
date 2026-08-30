@@ -388,16 +388,16 @@
       // 一律清除，避免与时间戳同行的元数据泄漏进歌词文字
       var text = line.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
       if (!text) continue;
-      var times = [];
-      for (var ti = 0; ti < tags.length; ti++) times.push(tags[ti].time);
+      const times = tags.map(tag => tag.time);
 
       // 增强型 LRC（精准歌词）：行内逐字时间戳 <mm:ss.xx>字<mm:ss.xx>字...
-      var wordRe = /<([^>]*)>([^<]*)/g;
-      var words = [], wMatch;
+      const wordRe = /(?=(?:<([^>]*)>)([^<]*)(?:<([^>]*)>))/g;
+      let words = [], wMatch;
       while ((wMatch = wordRe.exec(text)) !== null) {
-        var wTime = parseClock(wMatch[1]);
-        var wText = wMatch[2] || '';
-        if (wTime !== null && wText) words.push({ text: wText, time: wTime });
+        const startTime = parseClock(wMatch[1]), endTime = parseClock(wMatch[3]);
+        const wText = wMatch[2] || '', wDuration = parseFloat((endTime - startTime).toFixed(2));;
+        words.push({ text: wText, startTime, endTime, duration: wDuration });
+        wordRe.lastIndex++;
       }
 
       if (words.length) {
@@ -405,31 +405,28 @@
         // （不少工具/歌词站生成的逐字时间从 00:00 起算）。此时整体平移到与该行时间戳对齐；
         // 绝对时间戳文件（末字时间 >= 行时间）不受影响。
         if (times.length && words[words.length - 1].time < times[0] - 0.05) {
-          var shift = times[0] - words[0].time;
+          var shift = times[0] - words[0].startTime;
           if (Math.abs(shift) > 0.05) {
-            for (var wj = 0; wj < words.length; wj++) words[wj].time += shift;
+            words.forEach(w => {
+              w.startTime += shift;
+              w.endTime += shift;
+            });
           }
         }
         // 去除行内逐字时间戳，得到纯文本
-        var plainText = text.replace(/<[^>]*>/g, '').trim();
-        for (var j = 0; j < times.length; j++) {
-          result.push({ time: times[j], text: plainText, words: words });
-        }
+        const plainText = text.replace(/<[^>]*>/g, '').trim();
+        result.push(...times.map(time => ({ time, text: plainText, words })));
       } else {
         // 逐字歌词（word-level）：多个时间戳与文本片段交替出现。
         // 仅当存在多个"非空白文本片段"时才按逐字分组为显示行，
         // 否则把整行文本复制到每个时间戳下（卡拉OK重复行的正确行为）。
         var pairs = parseWordLevelPairs(line, tags);
-        if (pairs.length > 1) {
-          var grouped = groupWordLevelPairs(pairs);
-          if (grouped.length) {
-            for (var g = 0; g < grouped.length; g++) result.push(grouped[g]);
-            continue;
-          }
+        var grouped = pairs.length > 1 ? groupWordLevelPairs(pairs) : null;
+        if (grouped?.length) {
+          result.push(...grouped);
+          continue;
         }
-        for (var j = 0; j < times.length; j++) {
-          result.push({ time: times[j], text: text });
-        }
+        result.push(...times.map(time => ({ time, text })));
       }
     }
     // 应用全局时间偏移（正偏移 = 歌词延后）
@@ -438,7 +435,10 @@
       for (var k = 0; k < result.length; k++) {
         result[k].time += off;
         if (result[k].words) {
-          for (var wk = 0; wk < result[k].words.length; wk++) result[k].words[wk].time += off;
+          for (var wk = 0; wk < result[k].words.length; wk++) {
+            result[k].words[wk].startTime += off;
+            result[k].words[wk].endTime += off;
+          };
         }
       }
     }

@@ -146,6 +146,7 @@
       if (data && data.position != null) CM.state.position = data.position;
       CM.state.seeking = false;
       CM.state.npSeeking = false;
+      CM.activeLyricIndex = CM.npActiveLyricIndex = -1;
       CM.updateSeekUI();
       if (CM.state.npOpen) CM.updateNpSeekUI();
       CM.updateLyricHighlight(true);

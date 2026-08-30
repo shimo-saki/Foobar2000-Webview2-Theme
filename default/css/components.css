@@ -687,7 +687,7 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
   transition:color 0.3s ease,font-size 0.3s var(--ease),font-weight 0.3s ease;
   letter-spacing:0.02em;
   /* 长句强制换行：窄栏优先、任意位置可断词，避免横向裁切/长句改不完整 */
-  white-space:normal;word-break:break-word;overflow-wrap:anywhere;
+  white-space:normal;word-break:keep-all;overflow-wrap:anywhere;
   max-width:88%;margin:0 auto;
 }
 .np-lyric-line.active{
