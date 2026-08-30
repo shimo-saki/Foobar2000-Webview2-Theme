@@ -68,14 +68,12 @@
    * 初始状态同步（fb.ready 之后）
    * ============================================ */
   function syncInitialState() {
-    CM.api('playback.getState').then(function(r) {
-      if (!r) return;
-      var playing = r.isPlaying != null ? r.isPlaying : r.playing;
-      var paused = r.isPaused != null ? r.isPaused : r.paused;
-      CM.state.duration = r.duration || r.length || 0;
-      CM.state.position = r.position || 0;
+    CM.api('playback.getState').then(async function(r) {
+      const position = await fb2k.invoke('playback.getPosition');
+      CM.state.duration = position.duration || 0;
+      CM.state.position = position.position || 0;
       CM.updateSeekUI();
-      setPlayingVisual(!!playing && !paused);
+      setPlayingVisual(r.state === "playing");
     });
     CM.api('playback.getCurrentTrack').then(function(r) {
       var track = r && (r.track || (r.title || r.path ? r : null));
