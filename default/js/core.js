@@ -191,6 +191,13 @@
     return (bytes / 1073741824).toFixed(2) + ' GB';
   };
 
+  // foobar 查询引擎的字符串无任何转义机制（\"、/\"、双写引号、单引号包裹实测均不支持），
+  // 但 IS/HAS 支持 glob 通配符：含引号的标签值用 ? 逐位替换引号，构造等长近精确查询，
+  // 再由调用方按原值在客户端二次过滤
+  CM.wildValue = function(v) {
+    return typeof v === 'string' && v ? v.replace(/"/g, '?') : null;
+  };
+
   CM.trackName = function(t) {
     if (!t) return '未知曲目';
     return t.title || (t.path ? String(t.path).replace(/\\/g, '/').split('/').pop() : '未知曲目');

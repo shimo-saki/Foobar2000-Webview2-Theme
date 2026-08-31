@@ -1,7 +1,7 @@
 
 # foobar2000 Web Theme
 
-> v2.3.1 — 代码精炼与性能优化 · 详见 [guide.html](default/guide.html#changelog)
+> v2.4.0 — 全面审查修复 · 渲染层模块化 · 含引号标签查询修复 · SDK 1.13.0 · 详见 [guide.html](default/guide.html#changelog)
 
 这是一个专为 foobar2000 设计的现代化网页风格主题（Theme）。它提供了一个基于 Web 技术构建的用户界面，包含了发现音乐、媒体库管理、强大的播放控制以及独特的视觉效果。
 
@@ -33,8 +33,8 @@
 - `index.html`: 主题的主入口文件，负责构建整个应用界面结构。
 - `guide.html`: 包含详细的版本更新日志(Changelog)、功能特性说明以及键盘快捷键指南。
 - `css/`: 存放样式表文件 (`layout.css`, `components.css`, `utilities.css` 等)，负责页面的视觉呈现。
-- `js/`: 包含核心业务逻辑 (`app.js`, `core.js`)、用户交互 (`controls.js`) 以及网络/数据处理 (`netmusic.js`)。
-- `sdk/`: 存放与 foobar2000 核心交互的 API 桥接文件 (`bridge.global.js` 等)，用于实现播放控制、媒体库访问等功能。
+- `js/`: 核心业务逻辑与渲染模块 — `core.js` (API 封装 / 状态管理)、`ui.js` (渲染基础层) 加 7 个功能模块 (`ui-playlist.js` 歌单 / `ui-library.js` 媒体库 / `ui-lyrics.js` 歌词 / `ui-queue.js` 播放队列 / `ui-nowplaying.js` 沉浸式 / `ui-tags.js` 标签编辑 / `ui-discover.js` 发现页)，以及交互绑定 (`controls.js`) 与初始化编排 (`app.js`)。
+- `sdk/`: 存放与 foobar2000 核心交互的 API 桥接文件 (`bridge.global.js` 等，当前 v1.13.0)，需与已安装插件版本匹配；用于实现播放控制、媒体库访问等功能。
 - `static/`: 存放静态资源文件，如图片 (`img/`) 等。
 
 ## 使用指南

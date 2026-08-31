@@ -1250,6 +1250,13 @@ var __fbSmpCompat = (function (exports) {
 
   // src/smp/fbExtensions.ts
   var LOG_PREFIX3 = "[SMP-Compat]";
+  var QUERY_ITEM_FIELDS = [
+    "absolutePath",
+    "path",
+    "subsong",
+    "duration",
+    "fileSize"
+  ];
   function _warn2(...args) {
     try {
       console.warn(LOG_PREFIX3, ...args);
@@ -1471,24 +1478,24 @@ var __fbSmpCompat = (function (exports) {
       value: async (_handlesLike, query) => {
         const q = String(query ?? "");
         if (!q) return new FbMetadbHandleList();
+        const probe = await _invoke2("library.search", {
+          query: q,
+          offset: 0,
+          limit: 1
+        });
+        const probed = probe?.total;
+        const total = typeof probed === "number" && probed > 0 ? probed : 0;
+        if (total === 0) return new FbMetadbHandleList();
+        const res = await _invoke2("library.search", {
+          query: q,
+          offset: 0,
+          limit: total,
+          fields: QUERY_ITEM_FIELDS
+        });
+        const tracks = Array.isArray(res?.tracks) ? res.tracks : Array.isArray(res?.items) ? res.items : [];
         const list = new FbMetadbHandleList();
-        const chunk = 500;
-        let offset = 0;
-        let total = null;
-        while (total === null || offset < total) {
-          const res = await _invoke2("library.search", {
-            query: q,
-            offset,
-            limit: chunk
-          });
-          const tracks = Array.isArray(res?.tracks) ? res.tracks : Array.isArray(res?.items) ? res.items : [];
-          if (!Array.isArray(tracks) || tracks.length === 0) break;
-          for (const t of tracks) {
-            list.Add(new FbMetadbHandle(t));
-          }
-          if (typeof res?.total === "number") total = res.total;
-          offset += tracks.length;
-          if (tracks.length < chunk && (total === null || offset >= total)) break;
+        for (const t of tracks) {
+          list.Add(new FbMetadbHandle(t));
         }
         return list;
       }

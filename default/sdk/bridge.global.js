@@ -384,8 +384,9 @@ var fb = (function () {
     getSpectrum: (options = {}) => bridge.invoke("audio.getSpectrum", options),
     /**
      * Short-window waveform of the current playback stream. Accepts
-     * either `(opts)` (preferred) or `(path, opts)` (legacy; the path
-     * is ignored because the host always uses the active stream).
+     * either `(opts)` (preferred) or `(path, opts)` (deprecated form;
+     * the path is ignored because the host always uses the active
+     * stream).
      */
     getWaveform: (pathOrOpts, opts) => {
       if (typeof pathOrOpts === "string") {
@@ -555,7 +556,7 @@ var fb = (function () {
     /**
      * Full snapshot of the portable-config cache. Returns the
      * `{ success, items, configs, count }` envelope; `items` and
-     * `configs` reference the same map and are kept as legacy aliases.
+     * `configs` are interchangeable aliases of the same map.
      */
     getAll: () => bridge.invoke("config.getAll"),
     export: () => bridge.invoke("config.export"),
@@ -636,9 +637,26 @@ var fb = (function () {
 
   // src/bridge/namespaces/dialog.ts
   var dialog = {
+    /** Resolves with `{ canceled, filePaths }`; `filePaths` is empty when cancelled. */
     openFile: (opts) => bridge.invoke("dialog.openFile", opts),
+    /** Resolves with `{ canceled, filePath }`; `filePath` is empty when cancelled. */
     saveFile: (opts) => bridge.invoke("dialog.saveFile", opts),
+    /** Resolves with `{ canceled, folderPath }`; `folderPath` is empty when cancelled. */
     openFolder: (opts) => bridge.invoke("dialog.openFolder", opts),
+    /**
+     * Shows a modal confirmation dialog.
+     *
+     * Resolves with `{ response }`, the zero-based index of the clicked button
+     * in `buttons`. The default button set is `['OK', 'Cancel']`, so `0` means
+     * confirmed and `1` means cancelled - there is no `confirmed` flag.
+     * The task dialog is created without `TDF_ALLOW_DIALOG_CANCELLATION`, so
+     * Escape and the close button do not dismiss it and every result comes
+     * from an actual button click. `-1` appears only on the host's fallback
+     * path, when even a plain message box could not be shown.
+     *
+     * `response` is typed `unknown` because the host builds it arithmetically
+     * and the extractor cannot see the result type; narrow it at the call site.
+     */
     confirm: (opts) => bridge.invoke("dialog.confirm", opts)
   };
 
@@ -789,6 +807,49 @@ var fb = (function () {
       return snap ? snap.paths.slice() : [];
     },
     /**
+     * Shortcut targets for the current drag session, parallel to
+     * {@link dnd.getPaths}.
+     *
+     * Windows puts the `.lnk` file itself in a dropped file list, which
+     * foobar2000 cannot play, so the host reads each shortcut's target and
+     * publishes it at the same index. The two arrays are always the same
+     * length, and an entry is `null` whenever no target is available: the path
+     * is not a shortcut, the shortcut names a shell namespace object such as
+     * the recycle bin instead of a file, the recorded target is too long to
+     * come back intact (Windows caps it at `MAX_PATH`, and a truncated path
+     * would name a different file), COM was unavailable, or resolution was
+     * skipped to keep the drop responsive. Never an empty string, so a
+     * truthiness test is enough.
+     *
+     * A target says where the shortcut points, not that the file is there: a
+     * BROKEN shortcut reports the path its `.lnk` recorded rather than `null`,
+     * because Windows hands that path back whether or not the target still
+     * exists, and the host cannot afford a filesystem check on the thread the
+     * drag blocks. Expect a non-null entry to occasionally name nothing.
+     *
+     * Only `.lnk` is resolved. `.url`, `.library-ms` and virtual search results
+     * report `null`.
+     *
+     * Synchronous snapshot read, so it carries the same timing caveat as
+     * {@link dnd.getPaths} and returns an empty array in an iframe. The
+     * `resolvedPaths` field of {@link dnd.getPathsAsync} and of the `dnd:enter`
+     * / `dnd:drop` payloads is the reliable equivalent.
+     *
+     * ```js
+     * const paths = fb.dnd.getPaths();
+     * const targets = fb.dnd.getResolvedPaths();
+     * const playable = paths.map((p, i) => targets[i] ?? p);
+     * ```
+     */
+    getResolvedPaths: () => {
+      const snap = readSnapshot();
+      if (!snap) {
+        return [];
+      }
+      const resolved = snap.resolvedPaths;
+      return Array.isArray(resolved) ? snap.paths.map((_, i) => resolved[i] ?? null) : snap.paths.map(() => null);
+    },
+    /**
      * Whether the snapshot says the current drag carries a file list.
      *
      * Useful during `dragover`, where the browser withholds
@@ -810,14 +871,18 @@ var fb = (function () {
      * `await`, since it never touches `event.dataTransfer`.
      *
      * Paths come back in the same order as `DataTransfer.files`, so a page can
-     * pair them by index.
+     * pair them by index. `resolvedPaths` carries the `.lnk` target for each
+     * index, or `null`, and is always the same length as `paths`.
+     *
+     * Reads host memory only: the shortcut targets were resolved once when the
+     * drag arrived, so calling this repeatedly costs no filesystem access.
      *
      * @param sessionId Session to query, from a `dnd:*` payload. Omit to query
      *                  the session that is active or most recently ended for
      *                  this window.
-     * @returns Resolved session id and its paths. `paths` is empty when the
-     *          session expired, carried no file list, or the origin is not
-     *          trusted with paths.
+     * @returns Resolved session id, its paths, and the parallel shortcut
+     *          targets. Both arrays are empty when the session expired, carried
+     *          no file list, or the origin is not trusted with paths.
      */
     getPathsAsync: (sessionId) => bridge.invoke(
       "dnd.getPathsAsync",
@@ -1041,6 +1106,104 @@ var fb = (function () {
       { path, newName }
     ),
     getInfo: (path) => bridge.invoke("file.getInfo", { path }),
+    /**
+     * Cancellable, non-blocking batch copy. The work runs on a host worker
+     * thread, so copying a large album no longer freezes the UI the way
+     * `file.copy` does.
+     *
+     * Returns a `{ operationId, totalCount }` receipt immediately; the outcome
+     * arrives in batches on `file:opProgress`, followed by one
+     * `file:opComplete`. Two paths skip that closing event - the host shutting
+     * down mid-run, and an unexpected host-side failure - so a listener that
+     * must not leak state should carry its own timeout rather than wait on it
+     * forever.
+     *
+     * Both events go to the window that made the call while that window is
+     * alive. Once it is gone the host can no longer resolve it and falls back
+     * to the main instance, so a late event may surface in a window that did
+     * not start the operation.
+     *
+     * One result is reported per entry, not per file: a directory entry is
+     * reported once its whole tree has been walked. Copying a directory onto an
+     * existing directory merges into it, and files already present there are
+     * skipped without being reported individually, so the entry still reports
+     * `status: 'ok'`. A file entry whose destination already exists is reported
+     * as `skipped` / `already-exists` unless `overwrite` is set.
+     *
+     * Path validation is all-or-nothing: if any entry fails the host's read or
+     * write check, the whole call is rejected with `PERMISSION_DENIED` and no
+     * `operationId` is produced. At most 8 operations may be in flight
+     * process-wide.
+     *
+     * @param items Source/destination pairs; must not be empty.
+     * @param opts `overwrite` (default `false`) replaces existing destinations.
+     * @returns Dispatch receipt; the actual results arrive by event.
+     */
+    copyAsync: (items, opts) => bridge.invoke("file.copyAsync", {
+      items,
+      ...opts || {}
+    }),
+    /**
+     * Cancellable, non-blocking batch move, with the same receipt-plus-events
+     * contract as {@link file.copyAsync}.
+     *
+     * Within one volume a move is a rename and costs nothing regardless of
+     * size. Across volumes the host falls back to copy-then-delete-source; that
+     * entry still reports `status: 'ok'` but carries `reason: 'cross-volume'`
+     * so the extra cost is visible. Unlike {@link file.copyAsync}, a directory
+     * whose destination already exists is reported as `skipped` /
+     * `already-exists` rather than merged.
+     *
+     * `overwrite` covers file destinations only. An existing *directory*
+     * destination is never replaced, because Windows cannot swap a directory
+     * in place: on the same volume such an entry ends as `skipped` or `failed`
+     * instead of overwriting.
+     *
+     * @param items Source/destination pairs; must not be empty.
+     * @param opts `overwrite` (default `false`) replaces an existing file
+     *   destination. Note the synchronous `file.move` always replaces one.
+     * @returns Dispatch receipt; the actual results arrive by event.
+     */
+    moveAsync: (items, opts) => bridge.invoke("file.moveAsync", {
+      items,
+      ...opts || {}
+    }),
+    /**
+     * Cancellable, non-blocking batch delete, with the same receipt-plus-events
+     * contract as {@link file.copyAsync}. Results carry no `destination`.
+     *
+     * `moveToTrash: true` (the default) hands each path to the shell, which
+     * requires the host's main thread, so those deletes run there in batches of
+     * 16 and yield in between. `moveToTrash: false` deletes on a worker thread
+     * and removes non-empty directories, which the synchronous `file.delete`
+     * refuses to do in that mode.
+     *
+     * @param paths Paths to delete; must not be empty.
+     * @param opts `moveToTrash` (default `true`) keeps deletions recoverable.
+     * @returns Dispatch receipt; the actual results arrive by event.
+     */
+    deleteAsync: (paths, opts) => bridge.invoke("file.deleteAsync", {
+      paths,
+      ...opts || {}
+    }),
+    /**
+     * Stop an operation started by {@link file.copyAsync},
+     * {@link file.moveAsync} or {@link file.deleteAsync}.
+     *
+     * Cancellation takes effect part-way through a batch rather than at the end
+     * of it. A copy or move stops within one file - the file in flight is
+     * aborted and its partial copy removed; a delete stops at the next entry.
+     * Entries already done keep their results, every remaining entry is
+     * reported as `skipped` / `cancelled`, and the run still ends with a
+     * `file:opComplete` carrying `cancelled: true`. Closing a popup cancels the
+     * operations that popup started; a panel host has no such hook, so its
+     * operations run to the end unless this method stops them.
+     *
+     * @param operationId The id from the dispatch receipt.
+     * @returns `cancelled: false` when the operation had already finished or
+     *   never existed; the two cases are deliberately indistinguishable.
+     */
+    cancelOp: (operationId) => bridge.invoke("file.cancelOp", { operationId }),
     /** Read exact bytes; rejects on Host failure or malformed Base64. */
     readBinary: fileReadBinary,
     /** Write exact bytes using the host's `base64:` binary wire format. */
@@ -1284,6 +1447,16 @@ var fb = (function () {
   // src/bridge/namespaces/library.ts
   var library = {
     // ── Search / aggregation ────────────────────────────────────────────
+    /**
+     * Run a foobar2000 query expression against the media library.
+     *
+     * `options.offset` / `limit` page the hit list; `total` and `hasMore`
+     * report the full extent. `options.fields` projects each row down to
+     * the requested {@link TrackInfo} keys — runtime rows then hold only
+     * those keys while the declared type stays complete. An invalid
+     * `fields` selection resolves — never rejects — with
+     * `{ success: false, code: 'INVALID_PARAMS' }`.
+     */
     search: (query, limit, options) => bridge.invoke("library.search", {
       query,
       limit,
@@ -1375,7 +1548,7 @@ var fb = (function () {
       ...params.includeFiles != null ? { includeFiles: params.includeFiles } : {},
       ...params.recursiveFiles != null ? { recursiveFiles: params.recursiveFiles } : {}
     }),
-    // ── Filesystem-based directory listing (legacy entry point) ─────────
+    // ── Filesystem-based directory listing ──────────────────────────────
     browseDirectory: (path, includeFiles) => bridge.invoke(
       "library.browseDirectory",
       {
@@ -1477,7 +1650,7 @@ var fb = (function () {
     },
     /**
      * Async generator that walks library directories breadth- or
-     * depth-first via the legacy `library.browseDirectory` endpoint.
+     * depth-first via the `library.browseDirectory` endpoint.
      *
      * @deprecated Prefer {@link library.enumerateTree} for root-aware
      *             traversal.
@@ -1607,10 +1780,24 @@ var fb = (function () {
     }),
     invalidateCache: () => bridge.invoke("library.invalidateCache"),
     isEnabled: () => bridge.invoke("library.isEnabled"),
-    query: (query, sort, limit) => bridge.invoke("library.query", {
+    /**
+     * Run a foobar2000 query expression with an optional Title Formatting
+     * sort expression. Sorting is applied before `limit` truncation and
+     * `total` reports the untruncated hit count.
+     *
+     * `fields` narrows the projection exactly as documented on
+     * {@link library.search}: rows then hold only the requested keys out of
+     * the same 20-name case-sensitive whitelist, omitting the argument
+     * returns all 20, and a malformed list resolves with
+     * `{ success: false, code: 'INVALID_PARAMS' }` plus
+     * `details.unknownFields`. An explicit `null` is forwarded to the host
+     * and rejected there instead of being read as "every field".
+     */
+    query: (query, sort, limit, fields) => bridge.invoke("library.query", {
       query,
       ...sort ? { sort } : {},
-      ...limit != null ? { limit } : {}
+      ...limit != null ? { limit } : {},
+      ...fields !== void 0 ? { fields } : {}
     }),
     rescan: () => bridge.invoke("library.rescan")
   };
@@ -1900,6 +2087,53 @@ var fb = (function () {
     readRaw: (path, opts) => bridge.invoke("metadata.readRaw", {
       path,
       ...opts || {}
+    }),
+    /**
+     * Cancellable, non-blocking batch probe. Reads happen on a host worker
+     * thread, so a few hundred paths no longer stall the UI the way
+     * `readBatch` does.
+     *
+     * Returns a `{ operationId, totalCount }` receipt immediately; the results
+     * arrive in batches on `metadata:probeProgress` and are followed by
+     * exactly one `metadata:probeComplete`. Each result reports where its info
+     * came from (`infoSource: 'cached' | 'direct'`) and, on failure, which of
+     * `'not-found'` / `'unsupported-format'` / `'read-error'` applies - the
+     * distinction `readBatch` collapses into one generic error string.
+     *
+     * Paths may carry a `|subsong:N` suffix and are resolved independently;
+     * they are echoed back verbatim so they work as lookup keys. Unlike
+     * `metadata.read`, the batch surface does not honour the legacy `#N`
+     * subsong spelling, which would mis-split an extensionless filename that
+     * happens to end in `#<digits>`.
+     *
+     * Path validation is all-or-nothing: if any path fails the host's media
+     * read check the whole call is rejected with `PERMISSION_DENIED` and no
+     * `operationId` is produced. Per-path rejection is not available.
+     *
+     * @param paths Paths to probe; must not be empty.
+     * @param opts `includeTags` (default `true`) attaches the flat tag map to
+     *   each successful result. Pass `false` when only technical info is
+     *   wanted.
+     * @returns Dispatch receipt; the actual results arrive by event.
+     */
+    probeBatchAsync: (paths, opts) => bridge.invoke(
+      "metadata.probeBatchAsync",
+      { paths, ...opts || {} }
+    ),
+    /**
+     * Stop a probe started by {@link metadata.probeBatchAsync}.
+     *
+     * Cancellation interrupts the in-progress disk read rather than waiting
+     * for it, and the run always finishes with a `metadata:probeComplete`
+     * carrying `cancelled: true`. Paths not yet reached are never reported,
+     * and the interrupted path is reported as neither success nor failure.
+     *
+     * @param operationId The id from the `probeBatchAsync` receipt.
+     * @returns `cancelled: false` when the operation had already finished or
+     *   never existed.
+     */
+    cancelProbe: (operationId) => bridge.invoke("metadata.cancelProbe", {
+      operationId
     }),
     /**
      * Async write — dispatches immediately and signals completion via
@@ -2544,10 +2778,21 @@ var fb = (function () {
 
   // src/bridge/namespaces/titleformat.ts
   var titleformat = {
+    /**
+     * Evaluate a single pattern against one track.
+     *
+     * `infoAvailable: false` means the track's metadb info was not ready,
+     * so tag-derived output is untrustworthy. See the SDK docs for what
+     * the flag does not cover.
+     */
     eval: (pattern, path) => bridge.invoke("titleformat.eval", {
       pattern,
       ...path ? { path } : {}
     }),
+    /**
+     * Batch variant of `eval()`. Each row carries its own
+     * `infoAvailable` flag; rows that failed omit it.
+     */
     evalBatch: (pattern, paths) => bridge.invoke("titleformat.evalBatch", {
       pattern,
       paths
@@ -2556,6 +2801,12 @@ var fb = (function () {
      * Evaluate one or more named patterns against a single track. The
      * `fields` argument maps each output key to a titleformat pattern
      * string (e.g. `{ artist: '%artist%', year: '$year(%date%)' }`).
+     *
+     * `infoAvailable: false` means tag-derived values are untrustworthy.
+     * One flag covers the whole merged script and never covers
+     * foo_playcount virtual fields — see the SDK docs for the full
+     * limitation. A `fields` key named `infoAvailable` overwrites the
+     * flag, matching the existing behaviour of `path` and `success`.
      */
     evalFields: (path, fields) => bridge.invoke("titleformat.evalFields", {
       path,
@@ -2565,6 +2816,9 @@ var fb = (function () {
      * Batch variant of {@link evalFields}. Compiles the merged pattern
      * once and applies it to every path — host-side optimisation gives
      * roughly 10× speedup vs. calling {@link evalFields} per track.
+     *
+     * Each row carries its own `infoAvailable` flag with the same meaning
+     * and the same merged-script limitation as {@link evalFields}.
      */
     evalFieldsBatch: (paths, fields) => bridge.invoke(
       "titleformat.evalFieldsBatch",

@@ -907,7 +907,7 @@
 
       var items = [
         { label: 'CloudMusic 主题', isLabel: true },
-        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.2</span>' },
+        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.4.0</span>' },
         { html: '<span class="ctx-info-label">作者</span><span class="ctx-info-value">灵芝含</span>' },
         { html: '<span class="ctx-info-label">foobar2000</span><span class="ctx-info-value">' + CM.escHtml(ver.foobar2000 || '--') + '</span>' },
         { html: '<span class="ctx-info-label">WebView2 组件</span><span class="ctx-info-value">v' + CM.escHtml(pluginVer || '--') + '</span>' },

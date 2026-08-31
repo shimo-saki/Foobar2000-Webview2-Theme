@@ -236,6 +236,8 @@
     CM.updateOrderIcon();
     CM.updateVolumeIcon();
     CM.updateStopAfterIcon();
+    // 未播放启动：底栏 / 歌词 / 沉浸式封面先填占位图（有曲目时会被真实封面覆盖）
+    CM.setArtwork(null);
 
     // 首屏渲染（API 失败时各渲染函数自带空态/错误态）
     CM.renderDiscover();

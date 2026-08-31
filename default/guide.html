@@ -173,9 +173,9 @@
   <h1>CloudMusic 主题功能指南</h1>
   <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">版本 <b>v2.3.1</b></div>
+    <div class="hero-meta-item">版本 <b>v2.4.0</b></div>
     <div class="hero-meta-item">作者 <b>灵芝含</b></div>
-    <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.12.0</b></div>
+    <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.13.0</b></div>
   </div>
 </div>
 
@@ -216,11 +216,31 @@
       <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
     </div>
     <div>
-      <div class="section-title">更新日志 · v2.3.1</div>
-      <div class="section-desc">代码结构精炼、性能全面优化、歌词面板开合流畅度修复，附 v2.3 / v2.2 完整更新记录</div>
+      <div class="section-title">更新日志 · v2.4.0</div>
+      <div class="section-desc">全面代码审查修复、渲染层模块化重构、含引号标签查询修复、SDK 升级 v1.13.0，附 v2.3.1 / v2.3 / v2.2 完整更新记录</div>
     </div>
   </div>
   <div class="section-body">
+    <strong>v2.4.0 · 问题修复</strong>
+    <ul>
+      <li>停止播放时封面 / 歌词 / 进度条 / 播放图标不复位（空指针中断重置流程）→ 修复空值处理。</li>
+      <li>歌词接口异常返回时页面报错 → 增加判空保护。</li>
+      <li>锁定 / 自动歌单仍出现在「添加到歌单」菜单 → 修正锁定字段判定（<code>isLocked</code>）。</li>
+      <li>「专辑艺术家」标签写入后列表不更新（键名下划线与实际空格不符）→ 统一为 <code>ALBUM ARTIST</code>。</li>
+      <li>媒体库分页栏「每页」标签样式丢失（类名拼写不一致）→ 修正类名。</li>
+      <li>启动未播放时底栏 / 歌词面板封面空白 → 初始化即填充占位图并复位强调色。</li>
+      <li>歌单第一首无封面或空歌单时，歌单封面残留上一歌单画面 → 回退占位图。</li>
+      <li>专辑 / 艺术家 / 流派名含引号（如 <code>... "Alice Through The Looking Glass"</code>）时详情页显示"未找到曲目"、专辑卡片无封面 → 宿主查询引擎为 glob 语义、字符串无转义机制（实测 <code>\"</code>、<code>/\"</code>、双写引号、单引号包裹均不支持；<code>?</code> = 单字符、<code>*</code> = 多字符通配），现详情下钻与封面加载（首曲路径获取）均经 <code>CM.wildValue</code> 用 <code>?</code> 逐位替换引号构造等长精确查询，并在客户端按原值二次过滤。</li>
+    </ul>
+    <strong>v2.4.0 · 架构精炼</strong>
+    <ul>
+      <li><strong>渲染层模块化</strong>：3191 行单文件 ui.js 拆分为 8 个独立模块（基础 / 歌词 / 歌单 / 发现 / 媒体库 / 队列 / 沉浸式 / 标签编辑），拆分经 147 个函数定义前后一一对应、44 个局部变量归属核验、跨文件裸调用清零三重验证，零行为变化。</li>
+      <li><strong>清理无引用死代码</strong>：删除未接线的 netmusic.js（约 30KB 网络音源模块）与无调用者的 <code>CM.libLoading</code> / <code>CM.currentRating</code>。</li>
+    </ul>
+    <strong>v2.4.0 · SDK 升级</strong>
+    <ul>
+      <li><strong>SDK 同步升级 v1.12.0 → v1.13.0</strong>（缓存版本 <code>?v=1130</code>）：四个破坏性变更（<code>library.search</code> 移除 <code>items</code> 键、<code>dialog.confirm</code> 改返回 <code>{ response }</code>、<code>file.*</code> 错误信封、参数形状错误改报 <code>INVALID_PARAMS</code>）经逐一核查均不影响本主题。随升级获得：多值标签（艺术家 / 专辑艺术家 / 流派 / 作曲）不再截断为首个值、媒体库艺术家与流派聚合计数改为按参与人数统计；<code>components.global.js</code> 两版本字节一致，<code>bridge</code> / <code>smp-compat</code> 已更新。</li>
+    </ul>
     <strong>v2.3 · 问题修复</strong>
     <ul>
       <li><strong>播放队列拖拽调序无响应</strong>（拖动时鼠标呈"禁止"样式、松手不生效）→ 根因：宿主持有本窗口的原生放置目标（v1.12.0 起拖放改为主机原生观察），页面内 HTML5 拖拽的 dragover / drop 不会回投到页面，且宿主对非文件拖拽一律返回"禁止"光标。队列调序重写为指针事件（Pointer Events）实现，不再经过系统级拖放，彻底绕开该限制。</li>
@@ -258,7 +278,7 @@
       <li><strong>歌曲列表分页</strong>：媒体库"全部歌曲"启用分页，跨页行号连续。</li>
       <li><strong>文件夹浏览增强</strong>：面包屑导航 + "播放全部" + "添加到歌单"。</li>
       <li><strong>启动恢复上次歌单</strong>：记住上次打开的歌单并按名称自动恢复，启动后播放列表不再空白。</li>
-      <li><strong>无封面占位图</strong>：无封面或封面加载失败时自动显示占位图，避免空框 / 闪空（底栏、歌词、沉浸式通用）。</li>
+      <li><strong>无封面占位图</strong>：无封面或封面加载失败时自动显示占位图，避免空框 / 闪空（底栏、歌词、沉浸式、歌单封面通用）；启动未播放时同样填充。</li>
       <li><strong>长歌词完整显示</strong>：沉浸式与歌词面板支持长句自动换行；当前句改用字号放大（重排布局），长句放大后完整可见、不被上下遮罩或相邻行遮挡。</li>
       <li><strong>右键菜单可滚动</strong>：菜单过长时可滚轮滚动、在视口内自适应定位，"在线获取标签"等底部项不再被挡住。</li>
     </ul>
@@ -807,8 +827,8 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p class="footer-author">CloudMusic 主题 v2.3.1 · 作者：灵芝含</p>
-  <p>基于 foo_ui_webview2 SDK 1.12.0 · foobar2000 v2</p>
+  <p class="footer-author">CloudMusic 主题 v2.4.0 · 作者：灵芝含</p>
+  <p>基于 foo_ui_webview2 SDK 1.13.0 · foobar2000 v2</p>
   <p>感谢使用，享受音乐</p>
 </div>
 
