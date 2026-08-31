@@ -22,10 +22,8 @@
       '<div class="toast-info"><div class="toast-title">' + esc(title) + '</div>' +
       (sub ? '<div class="toast-sub">' + esc(sub) + '</div>' : '') + '</div>';
     els.toastContainer.appendChild(toast);
-    // 先触发进入动画，再定时退出
-    requestAnimationFrame(function() { toast.classList.add('show'); });
+    // 进场动画由 .toast 的 animation 自动播放；定时退出
     setTimeout(function() {
-      toast.classList.remove('show');
       toast.classList.add('removing');
       setTimeout(function() { toast.remove(); }, 320);
     }, 2600);
