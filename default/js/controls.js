@@ -308,7 +308,7 @@
       '</div>' +
       '<div class="popover-section">' +
       '<div class="popover-label">关于</div>' +
-      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.2</span></button>' +
+      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.4.0</span></button>' +
       '<button class="pop-item" id="popHelp">' + CM.icons.info + '<span>使用帮助</span><span class="pop-item-note">功能指南</span></button>' +
       '</div>';
     // 绑定一次，永久有效
