@@ -201,7 +201,8 @@
 .lyrics-scroll:not(:has(>.lyrics-empty)){&::after,&::before{content:'';display:block;height:35%}}
 .lyric-line{
   padding:10px 0;text-align:center;font-size:13.5px;line-height:1.6;
-  color:var(--text-3);transition:color, transform, filter 0.35s ease;
+  color:var(--text-3);
+  transition:color 520ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 520ms cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 280ms, transform 280ms;
   cursor:pointer;transform-origin:center;
   /* 长句强制换行，避免横向裁切/放大后看不到 */
   white-space:normal;word-break:keep-all;overflow-wrap:anywhere;max-width:100%;
@@ -210,14 +211,20 @@
 .lyric-line:hover{color:var(--text-2);background:#fff1}
 .lyric-line.active{
   color:var(--text);font-weight:700;
-  padding:15px 0;
+  padding:15px;
   transform:scale(1.18);filter:none;
 }
 .lyric-line.active + .lyric-line{filter:blur(1px)}
+.lyric-line.active .lyric:not([has-words]), .lyric-line.active .translate{color:var(--accent, --text-4)}
 /* 逐字歌词（精准歌词）卡拉OK高亮 */
-.lyric-word{transition:color 0.15s ease}
-.lyric-line.active .lyric-word{color:var(--text-4)}
-.lyric-line.active .lyric-word.sung{color:var(--text)}
+.lyric-word{display:inline-block;white-space:pre-wrap;transition:color 240ms linear,transform 240ms linear;background-position: 100% 0;}
+.lyric-line.active .lyric-word{
+  background-image:linear-gradient(to right, var(--accent, --text-4) 0%, var(--accent, --text-4) 50%, #888 50%, #888 100%);
+  background-size:200% 100%;background-position:100% 0;background-repeat:no-repeat;background-clip:text;
+  color:transparent;
+  transition:background-position var(--duration, 0.3s) linear;
+}
+.lyric-line.active .lyric-word.sung{background-position:0 0}
 .lyrics-empty{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   height:100%;min-height:160px;color:var(--text-3);gap:14px;padding:40px;
