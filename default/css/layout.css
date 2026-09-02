@@ -113,10 +113,10 @@
 .pl-item:hover{background:var(--bg-2);color:var(--text)}
 .pl-item.active{background:var(--bg-3);color:var(--text)}
 .pl-item.playing .pl-item-name{color:var(--accent)}
-.pl-item.playing::after{
-  content:'';position:absolute;right:30px;top:50%;transform:translateY(-50%);
-  width:4px;height:4px;border-radius:50%;background:var(--accent);
-  box-shadow:0 0 6px var(--accent-glow);
+.pl-item.playing .pl-item-name::before{
+  content: '';position: relative;display: inline-block;
+  margin-right: 5px;width: 4px;height: 4px;border-radius: 50%;
+  background: var(--accent);transform: translateY(-50%);box-shadow: 0 0 6px var(--accent-glow);
 }
 .pl-item>svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;opacity:0.75}
 .pl-item-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
