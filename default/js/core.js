@@ -391,13 +391,12 @@
       const times = tags.map(tag => tag.time);
 
       // 增强型 LRC（精准歌词）：行内逐字时间戳 <mm:ss.xx>字<mm:ss.xx>字...
-      const wordRe = /(?=(?:<([^>]*)>)([^<]*)(?:<([^>]*)>))/g;
+      const wordRe = /<([^>]*)>([^<]*)(?=<([^>]*)>)/g;
       let words = [], wMatch;
       while ((wMatch = wordRe.exec(text)) !== null) {
         const startTime = parseClock(wMatch[1]), endTime = parseClock(wMatch[3]);
-        const wText = wMatch[2] || '', wDuration = parseFloat((endTime - startTime).toFixed(2));;
+        const wText = wMatch[2] || '', wDuration = parseFloat((endTime - startTime).toFixed(2));
         words.push({ text: wText, startTime, endTime, duration: wDuration });
-        wordRe.lastIndex++;
       }
 
       if (words.length) {
