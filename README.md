@@ -22,7 +22,6 @@
         <img src="img/(12).png" alt="(12)" style="height: 280px; width: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); flex-shrink: 0;">
       </div>
       > [!tip]
-      >
       > 拖动滑块查看全部展示图片
 
       ## 特性亮点
