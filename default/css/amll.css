@@ -1,0 +1,16 @@
+:root {
+  --amll-lp-font-size: 1.5rem;
+  --amll-lp-color: var(--accent);
+}
+
+.np-container {
+  --amll-lp-font-size: 2.5rem;
+}
+
+.FmKaba_lyricLineWrapper{
+  padding: 1em 0.4em !important;
+}
+
+.FmKaba_lyricSubLine{
+  font-size: max(0.8em, 10px) !important;
+}

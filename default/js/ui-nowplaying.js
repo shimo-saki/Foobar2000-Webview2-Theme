@@ -6,25 +6,28 @@
 (function() {
   'use strict';
   var CM = window.CloudMusic;
-  var els = CM.els, state = CM.state, esc = CM.escHtml;
+  var els = CM.els, state = CM.state;
   var DEFAULT_TRACK_COVER = CM.DEFAULT_TRACK_COVER;
 
   /* ============================================
    * 沉浸式 NowPlaying
    * ============================================ */
   CM.toggleNpOverlay = function(open) {
-    state.npOpen = open !== undefined ? open : !state.npOpen;
+    state.npOpen = open ?? !state.npOpen;
     if (state.npOpen) {
       CM.renderNpOverlay();
       els.npOverlay.classList.add('open');
       document.body.style.overflow = 'hidden';
       // 关闭歌词面板节省资源
       if (state.lyricsVisible) CM.setLyricsVisible(false, true);
+      CM.npPlayer.resume();
+      CM.activePlayer = CM.npPlayer;
     } else {
       els.npOverlay.classList.remove('open');
       document.body.style.overflow = '';
       // 恢复歌词面板
       if (!state.lyricsVisible) CM.setLyricsVisible(true, true);
+      CM.npPlayer.pause();
     }
   };
 
@@ -49,8 +52,6 @@
     els.npLcPlay.classList.toggle('playing', playing);
     // 同步进度条
     CM.updateNpSeekUI();
-    // 渲染歌词
-    CM.renderNpLyrics();
     // 初始化频谱
     CM.initNpSpectrum();
     // 更新唱片动画
@@ -132,32 +133,12 @@
     state.npMode = state.npMode === 'vinyl' ? 'lyrics' : 'vinyl';
     els.npOverlay.classList.toggle('lyrics-only', state.npMode === 'lyrics');
     CM.updateNpModeIcon();
-    // 切换模式后重新高亮歌词
-    setTimeout(function() { CM.updateNpLyricHighlight(true); }, 400);
   };
 
   CM.updateNpVinylState = function() {
     var isPlaying = fb.state && fb.state.isPlaying;
     els.npVinylDisc.classList.toggle('playing', !!isPlaying);
     els.npTonearm.classList.toggle('playing', !!isPlaying);
-  };
-
-  CM.renderNpLyrics = function() {
-    var lines = CM.currentLyrics;
-    if (!lines.length) {
-      els.npLyrics.innerHTML = '<div class="lyrics-empty" style="padding:40px;text-align:center;color:var(--text-3)"><svg viewBox="0 0 24 24" style="width:40px;height:40px;margin:0 auto 12px;stroke:var(--text-4);fill:none"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>暂无歌词</span></div>';
-      return;
-    }
-    els.npLyrics.innerHTML = CM._renderLyricHTML(lines, 'np-lyric-line', 30);
-    CM._npLyricNodesCache = null;
-    CM._npWordCache = null;
-    CM._bindLyricClicks(els.npLyrics, '.np-lyric-line');
-    CM.updateNpLyricHighlight(true);
-  };
-
-  CM.updateNpLyricHighlight = function(force) {
-    if (!state.npOpen) return;
-    CM._updateLyricHighlight(els.npLyrics, '.np-lyric-line', 'npActiveLyricIndex', force, state.position, '_npLyricNodesCache', '_npWordCache');
   };
 
   CM.updateNpSeekUI = function() {
@@ -175,5 +156,4 @@
     CM.updateSpectrumBars(npSpecBarEls, data && data.spectrum, NP_SPEC_BARS, 36, 28);
   };
 
-  CM.npActiveLyricIndex = -1;
 })();

@@ -137,7 +137,6 @@
   };
   CM.currentTrack = null;
   CM.currentLyrics = [];
-  CM.activeLyricIndex = -1;
 
   /* ============================================
    * 设置持久化（localStorage）
@@ -277,23 +276,18 @@
     }
   };
 
-  // 把 [mm:ss(.xx)] / [h:mm:ss(.xx)] / [mm:ss:xx] 括号内时间文本解析成秒（浮点），无效返回 null
-  // LRC 分母：2位为厘秒、3位为毫秒；统一前补"0"到 3 位按毫秒算（"50"→0.5s、"05"→0.05s、"500"→0.5s）
-  function _clockFrac(p) { return p ? parseInt(p.padEnd(3, '0'), 10) / 1000 : 0; }
+  // 把时间文本解析成毫秒，无效返回 null
   function parseClock(s) {
-    var m;
-    // 含 "." 小数时可能是小时制 h:mm:ss.xx（如长音频/播客）
-    if (s.indexOf('.') !== -1) {
-      if ((m = /^(\d{1,2}):([0-5]?\d):([0-5]?\d)\.(\d{1,3})$/.exec(s)))
-        return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + _clockFrac(m[4]);
-    }
-    // 传统厘秒格式 mm:ss:cs（旧版LRC惯用，如 [00:12:50]）
-    if ((m = /^(\d{1,2}):(\d{1,2}):(\d{1,3})$/.exec(s)))
-      return (+m[1]) * 60 + (+m[2]) + _clockFrac(m[3]);
-    // 常规 mm:ss(.xx)
-    if ((m = /^(\d{1,2}):([0-5]?\d)(?:\.(\d{1,3}))?$/.exec(s)))
-      return (+m[1]) * 60 + (+m[2]) + _clockFrac(m[3]);
-    return null;
+    // 匹配以下格式：
+    // (HH:)mm:ss([.|:]SSS)
+    const match = s.match(/^(?:(\d{1,2}):)?([0-5]?\d):([0-5]?\d)(?:[:.](\d{1,3}))?$/);
+    if (!match) return null;
+
+    const [_, h, m, sec, ms] = match;
+    const hours = h ? +h : 0, minutes = +m,
+      seconds = +sec, millis = ms ? +ms.padEnd(3, '0') : 0;
+
+    return Math.round((hours * 3600 + minutes * 60 + seconds) * 1000 + millis);
   }
   // 提取行内全部 LRC 时间戳（含小时前缀），返回 [{ time, start, end }]（start/end 为行内下标）
   function collectTimeTags(line) {
@@ -372,38 +366,41 @@
     // 剥离首部 BOM（内嵌歌词可能残留 \uFEFF）
     if (lrcText.charCodeAt(0) === 0xFEFF) lrcText = lrcText.slice(1);
     // 提取全局时间偏移：[offset:±毫秒] 与 [ts:±毫秒] 同为全局偏移（正偏移 = 歌词整体延后，时间戳 + 偏移/1000），可叠加
-    var offsetMs = 0, mOff = /\[offset:([+-]?\d+)\]/i.exec(lrcText), mTs = /\[ts:([+-]?\d+)\]/i.exec(lrcText);
-    if (mOff) offsetMs += (parseInt(mOff[1], 10) || 0);
-    if (mTs) offsetMs += (parseInt(mTs[1], 10) || 0);
+    const off = /\[offset:([+-]?\d+)\]/i.exec(lrcText),
+      ts = /\[ts:([+-]?\d+)\]/i.exec(lrcText);
+    const offsetMs = (off ? +off[1] : 0) + (ts ? +ts[1] : 0);
+
     // 剥离元数据标签（ti/ar/al/by/re/ve/length/au/la/language/offset/ts 等），容忍冒号两侧空白，避免其泄漏进歌词文本
     var clean = lrcText.replace(/\[(?:ti|ar|al|by|re|ve|length|au|la|language|offset|ts)\s*:\s*[^\]]*\]/gi, '');
     var result = [], lines = clean.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].trim();
-      if (!line) continue;
+    // 增强型 LRC（精准歌词）：行内逐字时间戳 <mm:ss.xx>字<mm:ss.xx>字...
+    const wordReg = /<([^>]*)>([^<]*)(?=<([^>]*)>)/g;
+    lines.forEach(line => {
+      if (!line) return;
       // 用统一解析器收集行内全部时间戳（含 [h:mm:ss] 小时前缀），非时间括号（如（翻译））不计为时间
       var tags = collectTimeTags(line);
-      if (!tags.length) continue;
+      if (!tags.length) return;
       // 去掉全部方括号分组得到歌词文本：时间戳已单独捕获，其余 [ti:] [hash:] 等元数据/注释
       // 一律清除，避免与时间戳同行的元数据泄漏进歌词文字
       var text = line.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
-      if (!text) continue;
+      if (!text) return;
       const times = tags.map(tag => tag.time);
-
-      // 增强型 LRC（精准歌词）：行内逐字时间戳 <mm:ss.xx>字<mm:ss.xx>字...
-      const wordRe = /<([^>]*)>([^<]*)(?=<([^>]*)>)/g;
-      let words = [], wMatch;
-      while ((wMatch = wordRe.exec(text)) !== null) {
-        const startTime = parseClock(wMatch[1]), endTime = parseClock(wMatch[3]);
-        const wText = wMatch[2] || '', wDuration = parseFloat((endTime - startTime).toFixed(2));
-        words.push({ text: wText, startTime, endTime, duration: wDuration });
+      const preLine = result.at(-1);
+      if (times[0] === preLine?.startTime) {
+        preLine.translatedLyric = text;
+        return;
       }
+      if (preLine?.endTime === Infinity) {
+        preLine.endTime = preLine.words[0].endTime = times[0];
+      }
+      const words = Array.from(text.matchAll(wordReg), ([_, start, word, end]) =>
+      ({ word, startTime: parseClock(start), endTime: parseClock(end) }));
 
       if (words.length) {
         // 兼容"相对行起点的逐字时间戳"：整段逐字的最末时间早于该行时间，说明 <mm:ss> 是相对行首的
         // （不少工具/歌词站生成的逐字时间从 00:00 起算）。此时整体平移到与该行时间戳对齐；
         // 绝对时间戳文件（末字时间 >= 行时间）不受影响。
-        if (times.length && words[words.length - 1].time < times[0] - 0.05) {
+        if (times.length && words.at(-1).startTime < times[0] - 0.05) {
           var shift = times[0] - words[0].startTime;
           if (Math.abs(shift) > 0.05) {
             words.forEach(w => {
@@ -413,8 +410,9 @@
           }
         }
         // 去除行内逐字时间戳，得到纯文本
-        const plainText = text.replace(/<[^>]*>/g, '').trim();
-        result.push(...times.map(time => ({ time, text: plainText, words })));
+        text = text.replace(/<[^>]*>/g, '').trim();
+        const endTime = words.at(-1).endTime;
+        result.push(...times.map(startTime => ({ startTime, endTime, text, words })));
       } else {
         // 逐字歌词（word-level）：多个时间戳与文本片段交替出现。
         // 仅当存在多个"非空白文本片段"时才按逐字分组为显示行，
@@ -423,42 +421,24 @@
         var grouped = pairs.length > 1 ? groupWordLevelPairs(pairs) : null;
         if (grouped?.length) {
           result.push(...grouped);
-          continue;
+          return;
         }
-        result.push(...times.map(time => ({ time, text })));
+        result.push(...times.map(startTime => ({ startTime, endTime: Infinity, words: [{ startTime, endTime: Infinity, word: text }] })));
       }
-    }
+    });
     // 应用全局时间偏移（正偏移 = 歌词延后）
     if (offsetMs) {
-      var off = offsetMs / 1000;
-      for (var k = 0; k < result.length; k++) {
-        result[k].time += off;
-        if (result[k].words) {
-          for (var wk = 0; wk < result[k].words.length; wk++) {
-            result[k].words[wk].startTime += off;
-            result[k].words[wk].endTime += off;
-          };
-        }
-      }
+      const off = offsetMs / 1000;
+      result.forEach(item => {
+        item.startTime += off;
+        item.endTime += off;
+        item.words?.forEach(w => {
+          w.startTime += off;
+          w.endTime += off;
+        });
+      });
     }
-    return result.sort(function(a, b) { return a.time - b.time; });
-  };
-
-  // parseLRC 缓存：同一曲目重复解析（切换歌词视图/重新进入）时直接命中。
-  // key 由调用方给出（通常为 "path:length:head64"，可区分同路径下内容变更）
-  var _lrcCache = {}, _lrcKeys = [];
-  CM.parseLRCCached = function(key, lrcText) {
-    if (!lrcText) return [];
-    var hit = _lrcCache[key];
-    if (hit) return hit;
-    var parsed = CM.parseLRC(lrcText);
-    _lrcCache[key] = parsed;
-    _lrcKeys.push(key);
-    if (_lrcKeys.length > 8) delete _lrcCache[_lrcKeys.shift()];
-    return parsed;
-  };
-  CM.makeLRCCacheKey = function(path, lrcText) {
-    return (path || '') + ':' + lrcText.length + ':' + lrcText.slice(0, 64);
+    return result.sort((a, b) => a.startTime - b.startTime);
   };
 
   /* ============================================

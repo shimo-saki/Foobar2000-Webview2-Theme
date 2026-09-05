@@ -57,7 +57,6 @@
     CM.state.duration = 0;
     CM.updateTrackInfo(null);
     CM.setArtwork(null);
-    CM.renderLyricsEmpty('暂无播放曲目');
     CM.updateSeekUI();
     setPlayingVisual(false);
     CM.refreshPlayingMarks();
@@ -73,6 +72,7 @@
       CM.state.duration = position.duration || 0;
       CM.state.position = position.position || 0;
       CM.updateSeekUI();
+      [CM.player, CM.npPlayer].forEach(p => p?.[r.state === "playing" ? "resume" : "pause"]());
       setPlayingVisual(r.state === "playing");
     });
     CM.api('playback.getCurrentTrack').then(function(r) {
@@ -112,6 +112,7 @@
 
     fb.on('playback:stateChanged', function(data) {
       if (!data) return;
+      [CM.player, CM.npPlayer].forEach(p => p?.[data.state === "playing" ? "resume" : "pause"]());
       // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
       var dur = data.duration || data.length;
       if (dur != null) CM.state.duration = dur;
@@ -131,23 +132,17 @@
         CM.state.position = data.position;
         CM.updateSeekUI();
       }
-      CM.updateLyricHighlight();
       CM.updateTaskbarProgress();
-      // 同步更新沉浸式页面
-      if (CM.state.npOpen) {
-        if (!CM.state.npSeeking) CM.updateNpSeekUI();
-        CM.updateNpLyricHighlight();
-      }
+      if (CM.state.npOpen && !CM.state.npSeeking) CM.updateNpSeekUI();
     });
 
     fb.on('playback:seeked', function(data) {
       if (data && data.position != null) CM.state.position = data.position;
+      CM.activePlayer?.setCurrentTime(data.position * 1000, true);
       CM.state.seeking = false;
       CM.state.npSeeking = false;
-      CM.activeLyricIndex = CM.npActiveLyricIndex = -1;
       CM.updateSeekUI();
       if (CM.state.npOpen) CM.updateNpSeekUI();
-      CM.updateLyricHighlight(true);
     });
 
     fb.on('playback:volumeChanged', function(data) {
