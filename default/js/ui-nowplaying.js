@@ -20,14 +20,13 @@
       document.body.style.overflow = 'hidden';
       // 关闭歌词面板节省资源
       if (state.lyricsVisible) CM.setLyricsVisible(false, true);
-      CM.npPlayer.resume();
-      CM.activePlayer = CM.npPlayer;
+      els.npLyrics.replaceChildren(CM.player.getElement());
     } else {
       els.npOverlay.classList.remove('open');
       document.body.style.overflow = '';
       // 恢复歌词面板
       if (!state.lyricsVisible) CM.setLyricsVisible(true, true);
-      CM.npPlayer.pause();
+      els.lyricsScroll.replaceChildren(CM.player.getElement());
     }
   };
 

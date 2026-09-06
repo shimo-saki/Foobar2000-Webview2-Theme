@@ -72,7 +72,7 @@
       CM.state.duration = position.duration || 0;
       CM.state.position = position.position || 0;
       CM.updateSeekUI();
-      [CM.player, CM.npPlayer].forEach(p => p?.[r.state === "playing" ? "resume" : "pause"]());
+      CM.changePlayerState(r.state);
       setPlayingVisual(r.state === "playing");
     });
     CM.api('playback.getCurrentTrack').then(function(r) {
@@ -112,7 +112,7 @@
 
     fb.on('playback:stateChanged', function(data) {
       if (!data) return;
-      [CM.player, CM.npPlayer].forEach(p => p?.[data.state === "playing" ? "resume" : "pause"]());
+      CM.changePlayerState(data.state);
       // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
       var dur = data.duration || data.length;
       if (dur != null) CM.state.duration = dur;
@@ -138,7 +138,7 @@
 
     fb.on('playback:seeked', function(data) {
       if (data && data.position != null) CM.state.position = data.position;
-      CM.activePlayer?.setCurrentTime(data.position * 1000, true);
+      CM.player.setCurrentTime(data.position * 1000, true);
       CM.state.seeking = false;
       CM.state.npSeeking = false;
       CM.updateSeekUI();

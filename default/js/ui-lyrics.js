@@ -17,27 +17,25 @@
     var loadId = ++CM._lyricLoadId;
     CM.api('lyrics.get', path ? { path } : {}).then(function(r) {
       if (loadId !== CM._lyricLoadId) return; // 已被更新的切歌请求取代
-      CM._renderLyrics(r);
+      // 以"歌词对应歌曲的路径"为 key 缓存解析结果：切回已播过的曲目时免去重新解析
+      const parsed = CM.parseLRCCached(r.path, r.lyrics);
+      CM.currentLyrics = parsed;
+      CM.player.setLyricLines(parsed);
     });
-  };
-
-  CM._renderLyrics = function(r) {
-    // 以"歌词对应歌曲的路径"为 key 缓存解析结果：切回已播过的曲目时免去重新解析
-    var parsed = CM.parseLRCCached(r.path, r.lyrics);
-    CM.currentLyrics = parsed;
-    [CM.player, CM.npPlayer].forEach(p => p?.setLyricLines(parsed));
   };
 
   // parseLRC 缓存：同一曲目重复解析（切换歌词视图/重新进入）时直接命中。
   const lrcCache = new Map();
+  const MAX_CACHE_SIZE = 50;
+  const EMPTY_LYRIC = [{ startTime: 0, endTime: Infinity, words: [{ startTime: 0, endTime: Infinity, word: '暂无歌词' }] }];
   CM.parseLRCCached = function (key, lrcText) {
-    if (!lrcText) return [{ startTime: 0, endTime: Infinity, words: [{ startTime: 0, endTime: Infinity, word: '暂无歌词' }] }];
+    if (!lrcText) return EMPTY_LYRIC;
     if (lrcCache.has(key)) return lrcCache.get(key);
 
     const parsed = CM.parseLRC(lrcText);
     lrcCache.set(key, parsed);
 
-    if (lrcCache.size > 8) lrcCache.delete(lrcCache.keys().next().value);
+    if (lrcCache.size > MAX_CACHE_SIZE) lrcCache.delete(lrcCache.keys().next().value);
     return parsed;
   };
 
@@ -54,8 +52,6 @@
     state.lyricsVisible = visible;
     CM.settings.lyricsVisible = visible;
     CM.saveSettings();
-    CM.player[visible ? 'resume' : 'pause']();
-    CM.activePlayer = visible ? CM.player : null;
     els.btnLyricsToggle.classList.toggle('active', visible);
     // 平滑开合且零卡顿的"冻结"方案（详见下方非对称冻结注释）：
     //   列轨道 0.26s 动画驱动 320px 固定宽面板平移进出（内部零重排、模糊背景零重绘），
