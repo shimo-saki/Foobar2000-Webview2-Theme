@@ -39,6 +39,11 @@
     return parsed;
   };
 
+  CM.changePlayerState = function (state) {
+    CM.player?.[state === "playing" ? "resume" : "pause"]();
+    if (state === 'stopped') CM.player.setLyricLines(EMPTY_LYRIC);
+  }
+
   /* ============================================
    * 歌词面板显隐
    * ============================================ */

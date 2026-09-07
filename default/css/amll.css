@@ -7,10 +7,15 @@
   --amll-lp-font-size: 2.5rem;
 }
 
-.FmKaba_lyricLineWrapper{
-  padding: 1em 0.4em !important;
+.FmKaba_lyricLineWrapper {
+  padding: 0.8em 0.4em;
 }
 
-.FmKaba_lyricSubLine{
-  font-size: max(0.8em, 10px) !important;
+.FmKaba_lyricLineWrapper:has(.FmKaba_lyricSubLine:not(:empty)),
+.FmKaba_lyricLineWrapper:has(.FmKaba_lyricMainLine > br) {
+  padding: 1em 0.4em;
+}
+
+.FmKaba_lyricSubLine {
+  font-size: max(0.8em, 10px);
 }

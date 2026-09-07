@@ -6,7 +6,6 @@ const player = new LyricPlayer();
 player.setCurrentTime(0);
 player.update(0);
 container.replaceChildren(player.getElement());
-// document.querySelector('.np-lyrics').replaceChildren(player.getElement());
 CM.player = player;
 
 let lastFrameTime = 0;
