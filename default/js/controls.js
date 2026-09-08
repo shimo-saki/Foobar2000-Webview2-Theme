@@ -253,7 +253,7 @@
         artClickTimer = setTimeout(function() {
           artClickTimer = null;
           if (!state.lyricsVisible) CM.setLyricsVisible(true);
-        }, 200);
+        }, 250);
       }
     });
 
