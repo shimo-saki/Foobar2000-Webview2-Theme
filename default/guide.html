@@ -173,7 +173,7 @@
   <h1>CloudMusic 主题功能指南</h1>
   <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">版本 <b>v2.4.0</b></div>
+    <div class="hero-meta-item">版本 <b>v2.4.1</b></div>
     <div class="hero-meta-item">作者 <b>灵芝含</b></div>
     <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.13.0</b></div>
   </div>
@@ -216,11 +216,29 @@
       <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
     </div>
     <div>
-      <div class="section-title">更新日志 · v2.4.0</div>
-      <div class="section-desc">全面代码审查修复、渲染层模块化重构、含引号标签查询修复、SDK 升级 v1.13.0，附 v2.3.1 / v2.3 / v2.2 完整更新记录</div>
+      <div class="section-title">更新日志 · v2.4.1</div>
+      <div class="section-desc">ESLyric 桌面歌词增强、更多菜单重构、多项已有 bug 修复</div>
     </div>
   </div>
   <div class="section-body">
+    <strong>v2.4.1 · ESLyric 功能增强</strong>
+    <ul>
+      <li><strong>更多菜单重构</strong>：新增「歌词」折叠面板，桌面歌词扩展为 显示 / 置顶 / 锁定 / 重置位置 四项，ESLyric 工具新增 搜索歌词 / 重载歌词 / 脚本测试。</li>
+      <li><strong>智能禁用</strong>：桌面歌词显示关闭时，置顶与锁定按钮自动灰化不可用。</li>
+      <li><strong>状态自动同步</strong>：每次打开面板从 ESLyric 命令读取实际勾选状态，不再依赖本地变量猜测。</li>
+      <li><strong>点击不关闭面板</strong>：歌词子项点击后面板保持打开，方便连续操作多项开关。</li>
+    </ul>
+    <strong>v2.4.1 · 已有问题修复</strong>
+    <ul>
+      <li>ReplayGain 按钮激活态背景色写死红色（<code>--accent-rgb</code> 未定义）→ 改用已有变量 <code>--accent-soft</code>，随强调色联动。</li>
+      <li>NP 进度条初始渐变失效（<code>--np-seek-pct</code> 无 fallback）→ 添加 <code>0%</code> 默认值。</li>
+      <li>模态框重复调用时前一个 Promise 永久泄漏 → 新模态框打开时 resolve(null) 旧 Promise。</li>
+      <li><code>fillArtworkBatch</code> 无封面槽位时返回 <code>undefined</code> 而非 Promise → 统一返回 <code>Promise.resolve()</code>。</li>
+      <li><code>toggleEQ</code> 切换成功后 popover UI 不刷新 → 添加 <code>updateEQUI()</code> 调用。</li>
+      <li>批量标签编辑保存后本地缓存漏更新 <code>trackNumber</code> / <code>discNumber</code> → 补齐。</li>
+      <li><code>showAbout</code> / <code>onTrackChanged</code> 中 <code>Promise.all</code> 缺异常捕获 → 添加 <code>.catch()</code>。</li>
+      <li>CSS 变量 <code>--bottom-h</code> 多处使用无 fallback → 统一添加 <code>84px</code> 默认值。</li>
+    </ul>
     <strong>v2.4.0 · 问题修复</strong>
     <ul>
       <li>停止播放时封面 / 歌词 / 进度条 / 播放图标不复位（空指针中断重置流程）→ 修复空值处理。</li>
@@ -827,7 +845,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p class="footer-author">CloudMusic 主题 v2.4.0 · 作者：灵芝含</p>
+  <p class="footer-author">CloudMusic 主题 v2.4.1 · 作者：灵芝含</p>
   <p>基于 foo_ui_webview2 SDK 1.13.0 · foobar2000 v2</p>
   <p>感谢使用，享受音乐</p>
 </div>

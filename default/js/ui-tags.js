@@ -211,6 +211,8 @@
         if (tags['ALBUM ARTIST'] != null) track.albumArtist = tags['ALBUM ARTIST'];
         if (tags.GENRE != null) track.genre = tags.GENRE;
         if (tags.DATE != null) track.date = tags.DATE;
+        if (tags.TRACKNUMBER != null) track.trackNumber = parseInt(tags.TRACKNUMBER, 10) || 0;
+        if (tags.DISCNUMBER != null) track.discNumber = parseInt(tags.DISCNUMBER, 10) || 0;
       });
       CM.renderTrackTable();
       CM.hideTagEditor();

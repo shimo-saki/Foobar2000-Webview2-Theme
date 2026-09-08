@@ -46,7 +46,7 @@
       CM.state.playingTrackIndex = ti && ti.index != null ? ti.index : -1;
       CM.refreshPlayingMarks();
       if (changed) CM.loadPlaylists();
-    });
+    }).catch(function() { /* 静默忽略 */ });
   }
 
   function onStopped() {

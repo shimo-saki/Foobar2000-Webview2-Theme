@@ -118,6 +118,7 @@
   var modalResolve = null;
   CM.showModal = function(opts) {
     return new Promise(function(resolve) {
+      if (modalResolve) { modalResolve(null); modalResolve = null; }
       modalResolve = resolve;
       els.modalTitle.textContent = opts.title || '';
       els.modalDesc.textContent = opts.desc || '';
@@ -393,7 +394,7 @@
   // 各批并行发起（原串行递归 N 批延迟 ×N），全部完成后统一结束
   CM.fillArtworkBatch = function(container, maxSize) {
     var slots = container.querySelectorAll('[data-art-path]');
-    if (!slots.length) return;
+    if (!slots.length) return Promise.resolve();
     var CHUNK = 50;
     // 先收集未填充的 slot：跳过已有封面的（"加载更多"重渲染时避免重复请求）
     // 注意：IMG.src 属性在未设置时返回页面基址 URL（truthy），需用 getAttribute 判断

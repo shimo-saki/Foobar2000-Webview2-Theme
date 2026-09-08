@@ -290,8 +290,25 @@
     var pop = els.morePopover;
     pop.innerHTML =
       '<div class="popover-section">' +
+      '<div class="popover-label">歌词</div>' +
+      // 桌面歌词
+      '<button class="pop-sub-header" id="popSubDesktop">' + CM.icons.desktopLyric + '<span>桌面歌词</span><span class="pop-sub-arrow">▶</span></button>' +
+      '<div class="pop-sub-body" id="popSubDesktopBody">' +
+        '<button class="pop-sub-item" id="popDesktopLyricShow">' + CM.icons.desktopLyric + '<span>显示</span><span class="pop-item-note" id="popDesktopLyricNote"></span></button>' +
+        '<button class="pop-sub-item" id="popDesktopLyricPin" disabled>' + CM.icons.pin + '<span>置顶</span><span class="pop-item-note" id="popDesktopLyricPinNote"></span></button>' +
+        '<button class="pop-sub-item" id="popDesktopLyricLock" disabled>' + CM.icons.lock + '<span>锁定</span><span class="pop-item-note" id="popDesktopLyricLockNote"></span></button>' +
+        '<button class="pop-sub-item" id="popDesktopLyricReset">' + CM.icons.refresh + '<span>重置位置</span></button>' +
+      '</div>' +
+      // ESLyric
+      '<button class="pop-sub-header" id="popSubEslyric">' + CM.icons.console + '<span>ESLyric</span><span class="pop-sub-arrow">▶</span></button>' +
+      '<div class="pop-sub-body" id="popSubEslyricBody">' +
+        '<button class="pop-sub-item" id="popEslyricSearch">' + CM.icons.info + '<span>搜索歌词</span></button>' +
+        '<button class="pop-sub-item" id="popEslyricReload">' + CM.icons.refresh + '<span>重载歌词</span></button>' +
+        '<button class="pop-sub-item" id="popEslyricScript">' + CM.icons.console + '<span>脚本测试</span></button>' +
+      '</div>' +
+      '</div>' +
+      '<div class="popover-section">' +
       '<div class="popover-label">窗口</div>' +
-      '<button class="pop-item" id="popDesktopLyric">' + CM.icons.desktopLyric + '<span>桌面歌词</span><span class="pop-item-note" id="popDesktopLyricNote"></span></button>' +
       '<button class="pop-item" id="popRefresh">' + CM.icons.refresh + '<span>刷新界面</span></button>' +
       '</div>' +
       '<div class="popover-section">' +
@@ -308,13 +325,44 @@
       '</div>' +
       '<div class="popover-section">' +
       '<div class="popover-label">关于</div>' +
-      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.4.0</span></button>' +
+      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.4.1</span></button>' +
       '<button class="pop-item" id="popHelp">' + CM.icons.info + '<span>使用帮助</span><span class="pop-item-note">功能指南</span></button>' +
       '</div>';
     // 绑定一次，永久有效
-    CM.$('popDesktopLyric').addEventListener('click', function() {
+    // 子菜单折叠/展开
+    function toggleSubMenu(headerId, bodyId) {
+      var header = CM.$(headerId);
+      var body = CM.$(bodyId);
+      if (!header || !body) return;
+      var isOpen = header.classList.toggle('open');
+      body.classList.toggle('open', isOpen);
+    }
+    CM.$('popSubDesktop').addEventListener('click', function() { toggleSubMenu('popSubDesktop', 'popSubDesktopBody'); });
+    CM.$('popSubEslyric').addEventListener('click', function() { toggleSubMenu('popSubEslyric', 'popSubEslyricBody'); });
+
+    // 桌面歌词子项
+    CM.$('popDesktopLyricShow').addEventListener('click', function() {
       CM.toggleDesktopLyric();
-      pop.classList.remove('open');
+    });
+    CM.$('popDesktopLyricPin').addEventListener('click', function() {
+      CM.toggleDesktopLyricPin();
+    });
+    CM.$('popDesktopLyricLock').addEventListener('click', function() {
+      CM.toggleDesktopLyricLock();
+    });
+    CM.$('popDesktopLyricReset').addEventListener('click', function() {
+      CM.execDesktopLyricReset();
+    });
+
+    // ESLyric 子项
+    CM.$('popEslyricSearch').addEventListener('click', function() {
+      CM.execEslyricSearch();
+    });
+    CM.$('popEslyricReload').addEventListener('click', function() {
+      CM.execEslyricReload();
+    });
+    CM.$('popEslyricScript').addEventListener('click', function() {
+      CM.execEslyricScript();
     });
     CM.$('popEQ').addEventListener('click', function() {
       CM.toggleEQ();
@@ -354,11 +402,27 @@
     });
   }
   function updateMorePopoverState() {
-    // 桌面歌词开关状态
+    // 桌面歌词状态
     var dlNote = CM.$('popDesktopLyricNote');
-    var dlItem = CM.$('popDesktopLyric');
+    var dlItem = CM.$('popDesktopLyricShow');
     if (dlNote) dlNote.textContent = eslyricMode ? '开' : '关';
     if (dlItem) dlItem.classList.toggle('checked', eslyricMode);
+    // 桌面歌词置顶状态（显示关闭时禁用）
+    var dlPinNote = CM.$('popDesktopLyricPinNote');
+    var dlPinItem = CM.$('popDesktopLyricPin');
+    if (dlPinNote) dlPinNote.textContent = eslyricPinMode ? '开' : '关';
+    if (dlPinItem) {
+      dlPinItem.classList.toggle('checked', eslyricPinMode);
+      dlPinItem.disabled = !eslyricMode;
+    }
+    // 桌面歌词锁定状态（显示关闭时禁用）
+    var dlLockNote = CM.$('popDesktopLyricLockNote');
+    var dlLockItem = CM.$('popDesktopLyricLock');
+    if (dlLockNote) dlLockNote.textContent = eslyricLockMode ? '开' : '关';
+    if (dlLockItem) {
+      dlLockItem.classList.toggle('checked', eslyricLockMode);
+      dlLockItem.disabled = !eslyricMode;
+    }
     // 均衡器状态
     CM.syncEQState();
     // 输出设备名称
@@ -382,9 +446,37 @@
     var pop = els.morePopover;
     if (pop.classList.contains('open')) { pop.classList.remove('open'); return; }
     buildMorePopover();
-    updateMorePopoverState();
+    syncEslyricStates();  // 异步，完成后会调用 updateMorePopoverState
     pop.classList.add('open');
   };
+
+  /* ============================================
+   * 同步 ESLyric 命令的实际勾选状态
+   * ============================================ */
+  function syncEslyricStates() {
+    CM.api('discovery.searchCommands', { query: '桌面歌词', includeHidden: true }).then(function(r) {
+      if (r && r.results) {
+        for (var i = 0; i < r.results.length; i++) {
+          var c = r.results[i];
+          if (c.type && c.type !== 'mainmenu') continue;
+          var hay = (c.name || '') + (c.description || '');
+          // 桌面歌词：显示
+          if (hay.indexOf('显示桌面歌词') >= 0 || (hay.indexOf('桌面歌词') >= 0 && hay.indexOf('显示') >= 0)) {
+            eslyricMode = !!c.checked;
+          }
+          // 桌面歌词：置顶
+          if (hay.indexOf('窗口置顶') >= 0) {
+            eslyricPinMode = !!c.checked;
+          }
+          // 桌面歌词：锁定
+          if (hay.indexOf('锁定') >= 0 && hay.indexOf('桌面歌词') >= 0) {
+            eslyricLockMode = !!c.checked;
+          }
+        }
+      }
+      updateMorePopoverState();
+    });
+  }
 
   /* ============================================
    * 播放增益（ReplayGain）面板
@@ -804,6 +896,182 @@
   };
 
   /* ============================================
+   * 桌面歌词置顶 — 通过主菜单命令调用 ESLyric "窗口置顶"
+   * ============================================ */
+  var eslyricPinMode = false;
+  var eslyricPinCmd = null;
+  var _eslyricPinBusy = false;
+
+  CM.toggleDesktopLyricPin = function() {
+    if (_eslyricPinBusy) return;
+    var exec = function(cmd) {
+      _eslyricPinBusy = true;
+      var params = cmd.subGuid ? { guid: cmd.guid, subGuid: cmd.subGuid } : { guid: cmd.guid };
+      CM.api('discovery.executeMainMenuCommand', params).then(function(r) {
+        _eslyricPinBusy = false;
+        if (!r || r.success === false) {
+          eslyricPinCmd = null;
+          CM.showToast('操作失败', '命令执行失败，将重新检测组件', 'error');
+          return;
+        }
+        eslyricPinMode = !eslyricPinMode;
+        CM.showToast(eslyricPinMode ? '桌面歌词置顶已开启' : '桌面歌词置顶已关闭',
+          null, eslyricPinMode ? 'success' : null);
+        updateMorePopoverState();
+      });
+    };
+    var findPinCmd = function(r) {
+      if (!r || !r.results) return null;
+      for (var i = 0; i < r.results.length; i++) {
+        var c = r.results[i];
+        if (c.type && c.type !== 'mainmenu') continue;
+        var hay = (c.name || '') + (c.description || '');
+        if (hay.indexOf('窗口置顶') >= 0 || (hay.indexOf('置顶') >= 0 && hay.indexOf('歌词') >= 0)) {
+          return { guid: c.guid, subGuid: c.subGuid || null };
+        }
+      }
+      return null;
+    };
+    if (eslyricPinCmd) { exec(eslyricPinCmd); return; }
+    CM.api('discovery.searchCommands', { query: '窗口置顶', includeHidden: true }).then(function(r) {
+      var cmd = findPinCmd(r);
+      if (cmd) { eslyricPinCmd = cmd; exec(cmd); return; }
+      CM.api('discovery.searchCommands', { query: '置顶', includeHidden: true }).then(function(r2) {
+        var cmd2 = findPinCmd(r2);
+        if (cmd2) { eslyricPinCmd = cmd2; exec(cmd2); return; }
+        eslyricPinCmd = null;
+        CM.showToast('启动失败', '未找到置顶命令，请确认 ESLyric 已安装', 'error');
+      });
+    });
+  };
+
+  /* ============================================
+   * 桌面歌词锁定 — 通过主菜单命令调用 ESLyric "锁定"
+   * ============================================ */
+  var eslyricLockMode = false;
+  var eslyricLockCmd = null;
+  var _eslyricLockBusy = false;
+
+  CM.toggleDesktopLyricLock = function() {
+    if (_eslyricLockBusy) return;
+    var exec = function(cmd) {
+      _eslyricLockBusy = true;
+      var params = cmd.subGuid ? { guid: cmd.guid, subGuid: cmd.subGuid } : { guid: cmd.guid };
+      CM.api('discovery.executeMainMenuCommand', params).then(function(r) {
+        _eslyricLockBusy = false;
+        if (!r || r.success === false) {
+          eslyricLockCmd = null;
+          CM.showToast('操作失败', '命令执行失败，将重新检测组件', 'error');
+          return;
+        }
+        eslyricLockMode = !eslyricLockMode;
+        CM.showToast(eslyricLockMode ? '桌面歌词锁定已开启' : '桌面歌词锁定已关闭',
+          null, eslyricLockMode ? 'success' : null);
+        updateMorePopoverState();
+      });
+    };
+    var findLockCmd = function(r) {
+      if (!r || !r.results) return null;
+      for (var i = 0; i < r.results.length; i++) {
+        var c = r.results[i];
+        if (c.type && c.type !== 'mainmenu') continue;
+        var hay = (c.name || '') + (c.description || '');
+        if (hay.indexOf('锁定') >= 0 && (hay.indexOf('歌词') >= 0 || hay.indexOf('桌面') >= 0)) {
+          return { guid: c.guid, subGuid: c.subGuid || null };
+        }
+      }
+      return null;
+    };
+    if (eslyricLockCmd) { exec(eslyricLockCmd); return; }
+    CM.api('discovery.searchCommands', { query: '锁定桌面歌词', includeHidden: true }).then(function(r) {
+      var cmd = findLockCmd(r);
+      if (cmd) { eslyricLockCmd = cmd; exec(cmd); return; }
+      CM.api('discovery.searchCommands', { query: '锁定', includeHidden: true }).then(function(r2) {
+        var cmd2 = findLockCmd(r2);
+        if (cmd2) { eslyricLockCmd = cmd2; exec(cmd2); return; }
+        eslyricLockCmd = null;
+        CM.showToast('启动失败', '未找到锁定命令，请确认 ESLyric 已安装', 'error');
+      });
+    });
+  };
+
+  /* ============================================
+   * ESLyric 通用命令执行辅助
+   * ============================================ */
+  var _eslyricExecBusy = false;
+
+  function eslyricExecOne(query, matchFn, onOk, onErr) {
+    if (_eslyricExecBusy) return;
+    _eslyricExecBusy = true;
+    CM.api('discovery.searchCommands', { query: query, includeHidden: true }).then(function(r) {
+      if (!r || !r.results) { _eslyricExecBusy = false; onErr('未找到命令'); return; }
+      for (var i = 0; i < r.results.length; i++) {
+        var c = r.results[i];
+        if (c.type && c.type !== 'mainmenu') continue;
+        if (matchFn(c)) {
+          var params = c.subGuid ? { guid: c.guid, subGuid: c.subGuid } : { guid: c.guid };
+          CM.api('discovery.executeMainMenuCommand', params).then(function(r2) {
+            _eslyricExecBusy = false;
+            if (!r2 || r2.success === false) { onErr('命令执行失败'); return; }
+            onOk();
+          });
+          return;
+        }
+      }
+      _eslyricExecBusy = false;
+      onErr('未找到匹配命令');
+    });
+  }
+
+  // 桌面歌词：重置位置
+  CM.execDesktopLyricReset = function() {
+    eslyricExecOne('重置位置',
+      function(c) {
+        var hay = (c.name || '') + (c.description || '');
+        return hay.indexOf('重置位置') >= 0;
+      },
+      function() {
+        CM.showToast('桌面歌词位置已重置', null, 'success');
+      },
+      function(err) {
+        CM.showToast('启动失败', err === '未找到命令' ? '未找到重置位置命令' : err, 'error');
+      });
+  };
+
+  /* ============================================
+   * ESLyric 工具 — 搜索歌词 / 重载歌词 / 脚本测试
+   * ============================================ */
+  CM.execEslyricSearch = function() {
+    eslyricExecOne('搜索歌词',
+      function(c) {
+        var hay = (c.name || '') + (c.description || '');
+        return hay.indexOf('搜索歌词') >= 0;
+      },
+      function() { CM.showToast('搜索歌词已触发', null, 'success'); },
+      function(err) { CM.showToast('启动失败', err === '未找到命令' ? '未找到搜索歌词命令' : err, 'error'); });
+  };
+
+  CM.execEslyricReload = function() {
+    eslyricExecOne('重载歌词',
+      function(c) {
+        var hay = (c.name || '') + (c.description || '');
+        return hay.indexOf('重载歌词') >= 0;
+      },
+      function() { CM.showToast('重载歌词已触发', null, 'success'); },
+      function(err) { CM.showToast('启动失败', err === '未找到命令' ? '未找到重载歌词命令' : err, 'error'); });
+  };
+
+  CM.execEslyricScript = function() {
+    eslyricExecOne('脚本测试',
+      function(c) {
+        var hay = (c.name || '') + (c.description || '');
+        return hay.indexOf('脚本测试') >= 0;
+      },
+      function() { CM.showToast('脚本测试已触发', null, 'success'); },
+      function(err) { CM.showToast('启动失败', err === '未找到命令' ? '未找到脚本测试命令' : err, 'error'); });
+  };
+
+  /* ============================================
    * 均衡器 — 通过 DSP API 切换 EQ
    * 均衡器 GUID 来自 dsp.getAvailable
    * ============================================ */
@@ -840,12 +1108,12 @@
       var eqIndex = findEQInChain(r.dsps);
       if (eqIndex >= 0) {
         CM.api('dsp.removeDsp', { index: eqIndex }).then(function(res) {
-          if (res && res.success !== false) { eqMode = false; CM.showToast('均衡器已关闭', null); }
+          if (res && res.success !== false) { eqMode = false; updateEQUI(); CM.showToast('均衡器已关闭', null); }
           else { CM.showToast('操作失败', null, 'error'); }
         });
       } else {
         CM.api('dsp.addDsp', { guid: EQ_GUID }).then(function(res) {
-          if (res && res.success !== false) { eqMode = true; CM.showToast('均衡器已开启', null, 'success'); }
+          if (res && res.success !== false) { eqMode = true; updateEQUI(); CM.showToast('均衡器已开启', null, 'success'); }
           else { CM.showToast('操作失败', null, 'error'); }
         });
       }
@@ -907,7 +1175,7 @@
 
       var items = [
         { label: 'CloudMusic 主题', isLabel: true },
-        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.4.0</span>' },
+        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.4.1</span>' },
         { html: '<span class="ctx-info-label">作者</span><span class="ctx-info-value">灵芝含</span>' },
         { html: '<span class="ctx-info-label">foobar2000</span><span class="ctx-info-value">' + CM.escHtml(ver.foobar2000 || '--') + '</span>' },
         { html: '<span class="ctx-info-label">WebView2 组件</span><span class="ctx-info-value">v' + CM.escHtml(pluginVer || '--') + '</span>' },
@@ -940,6 +1208,8 @@
 
       var rect = els.btnMore.getBoundingClientRect();
       CM.showCtxMenu(rect.left, rect.bottom + 6, items);
+    }).catch(function() {
+      CM.showToast('获取信息失败', null, 'error');
     });
   };
 
