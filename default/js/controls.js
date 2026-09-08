@@ -252,8 +252,8 @@
       } else {
         artClickTimer = setTimeout(function() {
           artClickTimer = null;
-          CM.setLyricsVisible(true);
-        }, 250);
+          if (!state.lyricsVisible) CM.setLyricsVisible(true);
+        }, 200);
       }
     });
 
