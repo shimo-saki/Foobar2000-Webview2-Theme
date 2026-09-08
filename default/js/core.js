@@ -229,10 +229,10 @@
 
   // 一次性执行工厂：统一各模块"事件委托只绑一次"的守卫模式
   // 用法：CM.runOnce('ctxMenuDelegation', function() { ...addEventListener... });
-  var _runOnceKeys = {};
-  CM.runOnce = function(key, setupFn) {
-    if (_runOnceKeys[key]) return false;
-    _runOnceKeys[key] = true;
+  const _runOnceSet = new Set();
+  CM.runOnce = function (key, setupFn) {
+    if (_runOnceSet.has(key)) return false;
+    _runOnceSet.add(key);
     setupFn();
     return true;
   };
@@ -441,6 +441,29 @@
     return result.sort((a, b) => a.startTime - b.startTime);
   };
 
+  CM.GuidCache = new Map();
+  CM.getGuid = async function(query) {
+    if (!query) return;
+    if (CM.GuidCache.has(query)) return CM.GuidCache.get(query);
+
+    const { results } = await fb2k.invoke('discovery.searchCommands', { query, includeHidden: true });
+    const cmd = results.find(item => item.name.includes(query));
+    const guid = { name: cmd?.name, guid: cmd?.guid, subGuid: cmd?.subGuid };
+    CM.GuidCache.set(query, guid);
+    return guid;
+  }
+
+  // 获取所有组件
+  fb2k.invoke('discovery.getComponents').then(data => CM.components = data.components);
+
+  CM.checkCompCache = new Map();
+  CM.checkComponent = function (name) {
+    if (CM.checkCompCache.has(name)) return CM.checkCompCache.get(name);
+    const found = CM.components.some(c => c.filename === name);
+    CM.checkCompCache.set(name, found);
+    return found;
+  }
+
   /* ============================================
    * 动态配色 — 从封面提取活力色写入 HSL 令牌
    * ============================================ */
@@ -544,6 +567,9 @@
     toTop: '<svg viewBox="0 0 24 24"><line x1="4" y1="4" x2="20" y2="4"/><line x1="12" y1="20" x2="12" y2="8"/><polyline points="7 13 12 8 17 13"/></svg>',
     toBottom: '<svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="20"/><line x1="12" y1="4" x2="12" y2="16"/><polyline points="7 11 12 16 17 11"/></svg>',
     reverse: '<svg viewBox="0 0 24 24"><polyline points="7 3 3 7 7 11"/><path d="M3 7h13a5 5 0 0 1 5 5v1"/><polyline points="17 21 21 17 17 13"/><path d="M21 17H8a5 5 0 0 1-5-5v-1"/></svg>',
-    grip: '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>'
+    grip: '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>',
+    search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    copy: '<svg viewBox="0 0 24 24"><path d="M 7.2 7.2 L 7.2 5.28 A 2.88 2.88 0 0 1 10.08 2.4 L 16.32 2.4 A 2.88 2.88 0 0 1 19.2 5.28 L 19.2 11.52 A 2.88 2.88 0 0 1 16.32 14.4 L 14.4 14.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.28 7.2 L 11.52 7.2 A 2.88 2.88 0 0 1 14.4 10.08 L 14.4 16.32 A 2.88 2.88 0 0 1 11.52 19.2 L 5.28 19.2 A 2.88 2.88 0 0 1 2.4 16.32 L 2.4 10.08 A 2.88 2.88 0 0 1 5.28 7.2 Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    position: '<svg viewBox="0 0 24 24"><path d="M11.09 1.66h1.5c.11 0 .19.08.19.19v1.81c3.98.44 7.14 3.6 7.58 7.58h1.81c.11 0 .19.08.19.19v1.5c0 .11-.08.19-.19.19h-1.81c-.44 3.98-3.6 7.14-7.58 7.58v1.81c0 .11-.08.19-.19.19h-1.5c-.11 0-.19-.08-.19-.19v-1.81c-3.98-.44-7.14-3.6-7.58-7.58H1.69c-.11 0-.19-.08-.19-.19v-1.5c0-.11.08-.19.19-.19H3.5C3.94 7.1 7.1 3.94 11.08 3.5V1.85c0-.11.08-.19.19-.19z M18.72 12c0-3.7-3.02-6.72-6.72-6.72S5.28 8.3 5.28 12s3.02 6.72 6.72 6.72 6.72-3.02 6.72-6.72z M12 13.4c.77 0 1.4-.63 1.4-1.4s-.63-1.4-1.4-1.4-1.4.63-1.4 1.4.63 1.4 1.4 1.4z" fill="currentColor"/></svg>',
   };
 })();

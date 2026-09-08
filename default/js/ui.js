@@ -146,72 +146,133 @@
   });
   els.modalInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') CM.closeModal(els.modalInput.value.trim());
-    if (e.key === 'Escape') CM.closeModal(null);
+    else if (e.key === 'Escape') CM.closeModal(null);
   });
 
   /* ============================================
    * 右键菜单
-   * items: [{label, icon?, html?, danger?, checked?, action?} | {divider:true} | {label:..., isLabel:true}]
+   * items: [{label, icon?, html?, danger?, checked?, disabled?, hidden?, action?, submenu?:[items]}
+   * {divider:true, hidden?}
+   * {label:..., isLabel:true, hidden?}]
    * ============================================ */
-  // 事件委托：一次性绑定在 ctxMenu 上，避免每次 showCtxMenu 都逐项 addEventListener
-  var _ctxMenuItems = null; // 当前菜单项引用（供委托回调使用）
-  function ensureCtxMenuDelegation() {
-    CM.runOnce('ctxMenuDelegation', function() {
-    els.ctxMenu.addEventListener('click', function(e) {
-      var el = e.target.closest('.ctx-item');
-      if (!el || !_ctxMenuItems) return;
-      if (el.classList.contains('disabled')) return; // 禁用项不触发也不关闭菜单
-      e.stopPropagation();
-      CM.hideCtxMenu();
-      var item = _ctxMenuItems[parseInt(el.dataset.idx, 10)];
-      if (item && item.action) item.action();
-    });
-    });
+  function _showElement(el) {
+    el.removeEventListener('animationend', el._hideListener);
+    el.classList.remove('hidden', 'removing');
   }
-  var _ctxHideTimer = null; // hideCtxMenu 的隐藏定时器：showCtxMenu 时须清除，否则嵌套菜单会被延迟隐藏（添加到歌单闪退）
-  // 菜单贴近视口边缘时自动翻转定位 + 限制高度可滚动，确保任何触发点都不会让菜单底部/顶部组件超出视口被遮挡
-  CM.showCtxMenu = function(x, y, items) {
-    if (_ctxHideTimer) { clearTimeout(_ctxHideTimer); _ctxHideTimer = null; }
-    ensureCtxMenuDelegation();
-    _ctxMenuItems = items;
-    var menu = els.ctxMenu;
-    // 构建 HTML 字符串一次性写入，避免逐项 createElement + appendChild
-    var html = '';
-    items.forEach(function(item, i) {
-      if (item.divider) { html += '<div class="ctx-divider"></div>'; return; }
-      if (item.isLabel) { html += '<div class="ctx-label">' + esc(item.label) + '</div>'; return; }
-      html += '<div class="ctx-item' + (item.danger ? ' danger' : '') + (item.checked ? ' checked' : '') + (item.disabled ? ' disabled' : '') + '" data-idx="' + i + '">' +
-        (item.icon || '') + (item.html || '<span>' + esc(item.label) + '</span>') + '</div>';
+
+  function _hideElement(el) {
+    if (el.classList.contains('hidden') || el.classList.contains('removing')) return;
+    el.classList.add('removing');
+
+    const listener = function (e) {
+      if (e.animationName === 'ctx-out') {
+        el.classList.add('hidden');
+        el.classList.remove('removing');
+        el.removeEventListener('animationend', listener);
+      }
+    };
+    el.addEventListener('animationend', listener);
+    el._hideListener = listener;
+  }
+
+  function _setPosition(el, refX, refY, gap = 8, maxHeight = null) {
+    const { innerWidth: W, innerHeight: H } = window;
+
+    let maxH = maxHeight ?? Math.max(180, Math.min(H - 16, 480));
+    maxH = Math.max(180, Math.min(H - gap, maxH));
+    el.style.maxHeight = maxH + 'px';
+    el.classList.remove('hidden', 'removing');
+
+    const { width: w, height: h } = el.getBoundingClientRect();
+    const left = Math.max(8, (refX + gap + w > W - 8) ? refX - w - gap : refX + gap);
+    const top = Math.max(8, (refY + h > H - 8) ? Math.min(refY - h - gap, H - h - 8) : refY);
+
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+  }
+
+  CM.createMenu = function(items) {
+    return items.map((item, idx) => {
+      if (item.hidden) return ''; // 隐藏项
+      if (item.divider) return '<div class="ctx-divider"></div>'; // 分割线
+      if (item.isLabel) return `<div class="ctx-label">${esc(item.label)}</div>`; // 标签
+      if (item.submenu) return `
+        <div class="ctx-menu-item" data-idx="${idx}">
+          ${item.icon || ''}
+          <span>${esc(item.label)}</span>
+          <span style="margin-left:auto"> > </span>
+          <div class="ctx-submenu hidden">${CM.createMenu(item.submenu)}</div>
+        </div>`;
+
+      const classMap = { 'ctx-item': true, danger: item.danger, checked: item.checked, disabled: item.disabled };
+      const classes = Object.keys(classMap).filter(k => classMap[k]).join(' ');
+
+      const content = item.html || `<span>${esc(item.label)}</span>`;
+      return `<div class="${classes}" data-idx="${idx}">${item.icon || ''}${content}</div>`;
+    }).join('');
+  };
+
+  CM.showCtxMenu = function (x, y, items) {
+    const menu = els.ctxMenu;
+    menu.removeEventListener('animationend', menu._hideListener);
+
+    state.menuItems = items;
+    menu.innerHTML = CM.createMenu(items);
+    // 定位
+    _setPosition(menu, x, y, 8, 480);
+    _showElement(menu);
+  };
+
+  CM.hideCtxMenu = function () {
+    const menu = els.ctxMenu;
+    if (menu.classList.contains('hidden') || menu.classList.contains('removing')) return;
+
+    menu.querySelectorAll('.ctx-submenu').forEach(sub => {
+      if (!sub.classList.contains('hidden')) {
+        sub.removeEventListener('animationend', sub._hideListener);
+        sub.classList.add('hidden');
+        sub.classList.remove('removing');
+      }
     });
-    menu.innerHTML = html;
-    menu.classList.remove('hidden', 'removing');
-    menu.style.left = '0px'; menu.style.top = '0px';
-    // 高度限制随视口自适应，超长内容始终可滚动到达
-    var GAP = 8;
-    var maxH = Math.max(180, Math.min(window.innerHeight - GAP, 480));
-    menu.style.maxHeight = maxH + 'px';
-    var rect = menu.getBoundingClientRect();
-    var mw = rect.width, mh = rect.height;
-    // 水平：默认在 x 右侧展开；放不下则贴右缘
-    var left = (x + mw + GAP <= window.innerWidth) ? x : Math.max(GAP, window.innerWidth - mw - GAP);
-    // 垂直：默认在 y 下方展开；放不下则向上翻转（菜单整体落在触发点上方，编入视口内）
-    var top;
-    if (y + mh + GAP <= window.innerHeight) top = y;
-    else top = Math.max(GAP, Math.min(y - mh - GAP, window.innerHeight - mh - GAP));
-    menu.style.left = left + 'px';
-    menu.style.top = top + 'px';
+    _hideElement(menu);
   };
-  CM.hideCtxMenu = function() {
-    var menu = els.ctxMenu;
-    if (menu.classList.contains('hidden')) return;
-    menu.classList.add('removing');
-    if (_ctxHideTimer) clearTimeout(_ctxHideTimer);
-    _ctxHideTimer = setTimeout(function() { _ctxHideTimer = null; menu.classList.add('hidden'); menu.classList.remove('removing'); }, 110);
-  };
-  document.addEventListener('mousedown', function(e) {
-    if (!els.ctxMenu.contains(e.target)) CM.hideCtxMenu();
+
+  // 事件处理
+  els.ctxMenu.addEventListener('click', (e) => {
+    const el = e.target.closest('.ctx-item');
+    if (!el || !state.menuItems || el.classList.contains('disabled')) return;
+    e.stopPropagation();
+    CM.hideCtxMenu();
+
+    const idx = +el.dataset.idx, menuIdx = +e.target.closest('.ctx-menu-item')?.dataset.idx;
+    const target = menuIdx ? state.menuItems[menuIdx].submenu[idx] : state.menuItems[idx];
+    target?.action();
   });
-  window.addEventListener('blur', function() { CM.hideCtxMenu(); });
+
+  els.ctxMenu.addEventListener('mouseover', (e) => {
+    const item = e.target.closest('.ctx-menu-item');
+    const sub = item?.querySelector('.ctx-submenu');
+    if (!sub) return;
+
+    if (!sub.classList.contains('hidden')) {
+      if (sub.classList.contains('removing')) _showElement(sub);
+      return;
+    }
+
+    const { right, top } = item.getBoundingClientRect();
+    _setPosition(sub, right + 5, top, -8);
+    _showElement(sub);
+  });
+
+  els.ctxMenu.addEventListener('mouseout', (e) => {
+    const item = e.target.closest('.ctx-menu-item');
+    const sub = item?.querySelector('.ctx-submenu');
+    if (!sub || item.contains(e.relatedTarget)) return;
+    _hideElement(sub);
+  });
+
+  document.addEventListener('mousedown', e => {if (!els.ctxMenu.contains(e.target)) CM.hideCtxMenu()});
+  window.addEventListener('blur', e => CM.hideCtxMenu());
 
   /* ============================================
    * 标题栏（窗口控制按钮）

@@ -41,12 +41,12 @@
         if (idx === state.currentPlaylistIndex) cls += ' active';
         if (idx === state.playingPlaylistIndex) cls += ' playing';
         var count = pl.trackCount != null ? pl.trackCount : (pl.itemCount != null ? pl.itemCount : '');
-        return '<div class="' + cls + '" data-index="' + idx + '">' +
-          CM.icons.note +
-          '<span class="pl-item-name">' + esc(pl.name) + '</span>' +
-          (pl.isAutoplaylist ? '<span class="pl-auto-badge">AUTO</span>' : '') +
-          '<span class="pl-item-count">' + count + '</span>' +
-          '</div>';
+        return `<div class="${cls}" data-index="${idx}">
+          ${CM.icons.note}
+          <span class="pl-item-name">${esc(pl.name)}</span>
+          ${pl.isAutoplaylist ? '<span class="pl-auto-badge">AUTO</span>' : ''}
+          <span class="pl-item-count">${count}</span>
+        </div>`;
       });
       els.playlistList.innerHTML = parts.length ? parts.join('') : '<div class="queue-empty" style="padding:24px">暂无歌单</div>';
       ensurePlaylistDelegation();
@@ -80,7 +80,7 @@
     CM.api('dialog.openFile', { title: '选择要添加的音频文件', multiple: true, filters: AUDIO_FILTERS }).then(function(r) {
       if (!r || r.canceled) return;
       var paths = (r.filePaths || []).filter(Boolean);
-      if (paths.length) CM._addPaths(playlistIdx, paths, '正在添加 ' + paths.length + ' 个文件');
+      if (paths.length) CM._addPaths(playlistIdx, paths, `正在添加 ${paths.length} 个文件`);
     });
   };
 
@@ -92,63 +92,73 @@
       // 这里复用 expandDroppedPaths 递归枚举文件夹内的音频文件后再添加。
       CM.expandDroppedPaths([r.folderPath]).then(function(paths) {
         if (!paths.length) return;
-        CM._addPaths(playlistIdx, paths, '正在添加 ' + paths.length + ' 个文件');
+        CM._addPaths(playlistIdx, paths, `正在添加 ${paths.length} 个文件`);
       });
     });
   };
 
   // 统一路径添加（本地/文件夹/网络共用）
   CM._addPaths = function(playlistIdx, paths, okMsg) {
-    var params = { paths: paths };
+    var params = { paths };
     if (playlistIdx !== undefined && playlistIdx >= 0) params.playlist = playlistIdx;
-    CM.api('playlist.addPathsAsync', params).then(function(res) {
-      if (res && res.success !== false) CM.showToast(okMsg, null, 'success');
-      else CM.showToast('添加失败', res && res.error ? res.error : '路径可能无效', 'error');
+    CM.api('playlist.addPathsAsync', params).then(function (res) {
+      if (res?.success !== false) CM.showToast(okMsg, null, 'success');
+      else CM.showToast('添加失败', res?.error ?? '路径可能无效', 'error');
     });
   };
 
   CM.showPlaylistCtxMenu = function(x, y, idx) {
-    var pl = (CM.playlists || []).find(function(p) { return p.index === idx; }) || {};
-    // 自动歌单/锁定歌单（如默认「媒体库」）不接受手动编辑：隐藏 添加/重命名/清空/删除
-    var editable = !pl.isAutoplaylist && !pl.isLocked;
-    var items = [
-      { label: '播放', icon: CM.icons.play, action: function() {
-        CM.api('playlist.playTrack', { playlist: idx, index: 0 });
-      } }
+    const pl = CM.playlists?.find(p => p.index === idx) ?? {};
+    // 自动歌单/锁定歌单（如默认「媒体库」）不接受手动编辑：禁用 添加/重命名/清空/删除
+    const disabled = pl.isAutoplaylist || pl.isLocked;
+    const items = [
+      { label: pl.isAutoplaylist ? '自动播放列表' : pl.isLocked ? '锁定播放列表' : '普通播放列表', isLabel: true },
+      {
+        label: '播放', icon: CM.icons.play,
+        action: () => CM.api('playlist.playTrack', { playlist: idx, index: 0 })
+      },
+      { divider: true },
+      { label: '添加到歌单', isLabel: true },
+      {
+        label: '添加本地文件', icon: CM.icons.folder,
+        action: () => CM.addFolderToPlaylist(idx), disabled
+      },
+      {
+        label: '添加文件夹', icon: CM.icons.folder,
+        action: () => CM.addFolderToPlaylist(idx), disabled
+      },
+      {
+        label: '添加网络地址', icon: CM.icons.plus,
+        action: () => CM.addUrlToPlaylist(idx), disabled
+      },
+      { divider: true },
+      { label: '歌单操作', isLabel: true },
+      {
+        label: '复制歌单', icon: CM.icons.copy,
+        action: () => CM.api('playlist.duplicate', { playlist: idx })
+      },
+      {
+        label: '重命名', icon: CM.icons.edit, disabled,
+        action: () => CM.showModal({ title: '重命名歌单', input: pl.name || '', okText: '重命名' })
+          .then(name => CM.api('playlist.rename', { playlist: idx, name })
+            .then(r => { if (r?.success) CM.showToast('已重命名', name, 'success'); })
+          )
+      },
+      {
+        label: '清空歌单', icon: CM.icons.trash, disabled,
+        action: () => CM.showModal({ title: '清空歌单', desc: `将移除「${pl.name || ''}」中的全部曲目，此操作不可撤销。`, okText: '清空', danger: true })
+          .then(ok => { if (ok) CM.api('playlist.clear', { playlist: idx }); })
+      },
+      {
+        label: '删除歌单', icon: CM.icons.trash, disabled, danger: true,
+        action: () => CM.showModal({ title: '删除歌单', desc: `确定删除「${pl.name || ''}」吗？此操作不可撤销。`, okText: '删除', danger: true })
+          .then(ok => {
+            if (!ok) return;
+            CM.api('playlist.remove', { playlist: idx });
+            CM.openPlaylist(0);
+          })
+      },
     ];
-    if (editable) {
-      items.push({ isLabel: true, label: '添加到歌单' });
-      items.push({ label: '添加本地文件', icon: CM.icons.folder, action: function() {
-        CM.addFilesToPlaylist(idx);
-      } });
-      items.push({ label: '添加文件夹', icon: CM.icons.folder, action: function() {
-        CM.addFolderToPlaylist(idx);
-      } });
-      items.push({ label: '添加网络地址', icon: CM.icons.plus, action: function() {
-        CM.addUrlToPlaylist(idx);
-      } });
-      items.push({ label: '重命名', icon: CM.icons.edit, action: function() {
-        CM.showModal({ title: '重命名歌单', input: pl.name || '', okText: '重命名' }).then(function(name) {
-          if (!name) return;
-          CM.api('playlist.rename', { playlist: idx, name: name }).then(function(r) {
-            if (r && r.success) CM.showToast('已重命名', name, 'success');
-          });
-        });
-      } });
-      items.push({ divider: true });
-      items.push({ label: '清空歌单', icon: CM.icons.trash, action: function() {
-        CM.showModal({ title: '清空歌单', desc: '将移除「' + (pl.name || '') + '」中的全部曲目，此操作不可撤销。', okText: '清空', danger: true }).then(function(ok) {
-          if (ok) CM.api('playlist.clear', { playlist: idx });
-        });
-      } });
-      items.push({ label: '删除歌单', icon: CM.icons.trash, danger: true, action: function() {
-        CM.showModal({ title: '删除歌单', desc: '确定删除「' + (pl.name || '') + '」吗？此操作不可撤销。', okText: '删除', danger: true }).then(function(ok) {
-          if (ok) CM.api('playlist.remove', { playlist: idx });
-        });
-      } });
-    } else {
-      items.push({ isLabel: true, label: pl.isAutoplaylist ? '自动播放列表' : '锁定播放列表' });
-    }
     CM.showCtxMenu(x, y, items);
   };
 
@@ -374,7 +384,7 @@
         CM.showToast('移动失败', (r && r.error) ? r.error : '请稍后重试', 'error');
         return null;
       }
-      if (msg) CM.showToast(msg[0], msg[1] || null, 'success');
+      if (msg) CM.showToast(...msg, 'success');
       return r;
     });
   };
@@ -553,123 +563,109 @@
     }
   };
 
+  let foo_run_submenu = null;
+  fb2k.invoke('menu.getContextMenu').then(res =>
+    foo_run_submenu = res.items.find(item => item.label === '运行服务')?.children
+  )
+
   /* ============================================
    * 曲目右键菜单（通用）
    * track: 曲目对象；ctx: {playlist?, index?} 在播放列表内时可删除
    * ============================================ */
   CM.showTrackCtxMenu = function(x, y, track, ctx) {
     if (!track) return;
-    var path = CM.trackPath(track);
-    var items = [
-      { label: '跳转到当前播放', action: () =>
-          els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    const pl = (CM.playlists || []).find(p => p.index === ctx?.playlist) || {};
+    const path = CM.trackPath(track);
+    const selIdxs = CM._selectionIndices(ctx?.index);
+    const topDelta = -selIdxs[0] || 0;
+    const botDelta = (state.trackCache.length - selIdxs.at(-1) - 1) || 0;
+    const hidden = !CM.checkComponent('foo_run');
+    const items = [
+      {
+        label: '跳转到当前播放', icon: CM.icons.position, disabled: !CM.currentTrack || ctx?.playlist !== state.playingPlaylistIndex,
+        action: () => els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
       },
-      { label: '播放', icon: CM.icons.play, action: function() {
-        if (ctx && ctx.playlist != null) {
-          CM.stopPreviewIfActive().then(function() {
-            CM.api('playlist.playTrack', { playlist: ctx.playlist, index: ctx.index });
-          });
-        } else {
-          CM.playNow(path);
+      {
+        label: '播放', icon: CM.icons.play,
+        action: () => {
+          if (ctx?.playlist != null) {
+            CM.stopPreviewIfActive().then(() => CM.api('playlist.playTrack', { playlist: ctx.playlist, index: ctx.index }));
+          } else CM.playNow(path);
         }
-      } },
-      { label: '试听（不加入歌单）', action: function() {
-        CM.previewTrack(track, path);
-      } },
-      { label: '下一首播放', icon: CM.icons.queue, action: function() {
-        // queue.add 接受 tracks 数组（不是 index）
-        var p = (ctx && ctx.playlist != null)
+      },
+      {
+        label: '试听（不加入歌单）', action: () => CM.previewTrack(track, path)
+      },
+      {
+        label: '下一首播放', icon: CM.icons.queue,
+        action: () => (ctx?.playlist != null
           ? CM.api('queue.add', { playlist: ctx.playlist, tracks: [ctx.index] })
-          : CM.api('queue.addPaths', { paths: [path] });
-        p.then(function(r) {
-          if (r && r.success !== false) { CM.showToast('已加入播放队列', CM.trackName(track), 'success'); CM.refreshQueueBadge(); }
-        });
-      } },
-      { label: '添加到歌单', icon: CM.icons.plus, action: function() {
-        CM.showAddToPlaylistMenu(x, y, [path]);
-      } },
-      { divider: true },
-      { isLabel: true, label: '评分' }
-    ];
-    // 星级评分行
-    for (var s = 5; s >= 1; s--) {
-      (function(stars) {
-        items.push({
-          html: '<span class="ctx-stars">' + '★'.repeat(stars) + '<span style="opacity:0.25">' + '★'.repeat(5 - stars) + '</span></span>',
-          action: function() {
-            CM.api('rating.set', { path: path, rating: stars }).then(function(r) {
-              if (r && r.success !== false) {
-                CM.showToast('已评分 ' + stars + ' 星', CM.trackName(track), 'success');
-                if (path === CM.trackPath(CM.currentTrack)) CM.refreshLikeState();
-              } else {
-                CM.showToast('评分失败', '需要安装 foo_playcount 组件', 'error');
-              }
-            });
+          : CM.api('queue.addPaths', { paths: [path] })
+        ).then(r => {
+          if (r?.success !== false) {
+            CM.showToast('已加入播放队列', CM.trackName(track), 'success');
+            CM.refreshQueueBadge();
           }
-        });
-      })(s);
-    }
-    items.push({ label: '清除评分', action: function() {
-      CM.api('rating.set', { path: path, rating: 0 }).then(function() {
-        if (path === CM.trackPath(CM.currentTrack)) CM.refreshLikeState();
-      });
-    } });
-    if (CM.state.previewActive) {
-      items.push({ divider: true });
-      items.push({ label: '停止试听', danger: true, action: function() {
-        CM.stopPreview();
-      } });
-    }
-    items.push({ divider: true });
-    items.push({ label: '在资源管理器中显示', icon: CM.icons.folder, action: function() {
-      CM.api('shell.showInExplorer', { path: path });
-    } });
-    items.push({ label: '编辑标签', icon: CM.icons.tag, action: function() {
-      CM.showTagEditor(track);
-    } });
-    items.push({ label: '在线获取标签', icon: CM.icons.download, action: function() {
-      CM.fetchTagsOnline(path);
-    } });
-    // 批量编辑入口（有多选时显示）
-    if (ctx && ctx.playlist != null && state.batchSelected.size >= 2) {
-      items.push({ divider: true });
-      items.push({ label: '批量编辑标签（' + state.batchSelected.size + '首）', icon: CM.icons.tag, action: function() {
-        var tracks = [];
-        state.batchSelected.forEach(function(idx) {
-          if (state.trackCache[idx]) tracks.push(state.trackCache[idx]);
-        });
-        if (tracks.length >= 2) CM.showBatchTagEditor(tracks);
-      } });
-    }
-    if (ctx && ctx.playlist != null) {
-      // 调整顺序（仅可编辑歌单且曲目 > 1 时显示；多选时整组移动）
-      var plInfo = (CM.playlists || []).find(function(p) { return p.index === ctx.playlist; }) || {};
-      if (!plInfo.isAutoplaylist && !plInfo.isLocked && state.trackCache.length > 1) {
-        var selIdxs = CM._selectionIndices(ctx.index);
-        var nTracks = state.trackCache.length;
-        var topDelta = -selIdxs[0];
-        var botDelta = (nTracks - 1) - selIdxs[selIdxs.length - 1];
-        var suffix = selIdxs.length > 1 ? '（' + selIdxs.length + ' 首）' : '';
-        items.push({ divider: true });
-        items.push({ isLabel: true, label: '调整顺序' });
-        items.push({ label: '上移' + suffix, icon: CM.icons.up, disabled: topDelta === 0, action: function() {
-          CM.movePlaylistTracks(selIdxs, -1);
-        } });
-        items.push({ label: '下移' + suffix, icon: CM.icons.down, disabled: botDelta === 0, action: function() {
-          CM.movePlaylistTracks(selIdxs, 1);
-        } });
-        items.push({ label: '移到顶部' + suffix, icon: CM.icons.toTop, disabled: topDelta === 0, action: function() {
-          CM.movePlaylistTracks(selIdxs, topDelta, ['已移到顶部', selIdxs.length > 1 ? selIdxs.length + ' 首曲目' : CM.trackName(track)]);
-        } });
-        items.push({ label: '移到底部' + suffix, icon: CM.icons.toBottom, disabled: botDelta === 0, action: function() {
-          CM.movePlaylistTracks(selIdxs, botDelta, ['已移到底部', selIdxs.length > 1 ? selIdxs.length + ' 首曲目' : CM.trackName(track)]);
-        } });
+        })
+      },
+      {
+        label: '添加到歌单', icon: CM.icons.plus,
+        action: () => CM.showAddToPlaylistMenu(x, y, [path])
+      },
+      { divider: true, hidden: !CM.state.previewActive },
+      {
+        label: '停止试听', danger: true, hidden: !CM.state.previewActive,
+        action: () => CM.stopPreview()
+      },
+      { divider: true },
+      {
+        label: '在资源管理器中显示', icon: CM.icons.folder,
+        action: () => CM.api('shell.showInExplorer', { path })
+      },
+      {
+        label: '编辑标签', icon: CM.icons.tag,
+        action: () => CM.showTagEditor(track)
+      },
+      {
+        label: '在线获取标签', icon: CM.icons.download, hidden: !CM.checkComponent('foo_freedb2'),
+        action: () => CM.fetchTagsOnline(path)
+      },
+      { divider: true, hidden },
+      {
+        label: '运行服务', hidden,
+        submenu: foo_run_submenu.map(item => ({
+          label: item.label, hidden,
+          action: async () => await fb2k.invoke('menu.runContextCommandById', { id: item.commandId })
+        }))
+      },
+      { divider: true },
+      {
+        label: '调整顺序',
+        submenu: [
+          {
+            label: '上移', icon: CM.icons.up, disabled: pl.isLocked || topDelta === 0,
+            action: () => CM.movePlaylistTracks(selIdxs, -1)
+          },
+          {
+            label: "下移", icon: CM.icons.down, disabled: pl.isLocked || botDelta === 0,
+            action: () => CM.movePlaylistTracks(selIdxs, 1)
+          },
+          {
+            label: "移到顶部", icon: CM.icons.toTop, disabled: pl.isLocked || topDelta === 0,
+            action: () => CM.movePlaylistTracks(selIdxs, topDelta, ['已移到顶部', selIdxs.length > 1 ? `${selIdxs.length} 首曲目` : CM.trackName(track)])
+          },
+          {
+            label: "移到底部", icon: CM.icons.toBottom, disabled: pl.isLocked || botDelta === 0,
+            action: () => CM.movePlaylistTracks(selIdxs, botDelta, ['已移到底部', selIdxs.length > 1 ? `${selIdxs.length} 首曲目` : CM.trackName(track)])
+          },
+        ]
+       },
+      { divider: true },
+      {
+        label: '从歌单中删除', icon: CM.icons.trash, disabled: pl.isLocked, danger: true,
+        action: () => CM.api('playlist.removeTracks', { playlist: ctx.playlist, items: [ctx.index] })
       }
-      items.push({ divider: true });
-      items.push({ label: '从歌单中删除', icon: CM.icons.trash, danger: true, action: function() {
-        CM.api('playlist.removeTracks', { playlist: ctx.playlist, items: [ctx.index] });
-      } });
-    }
+    ];
     CM.showCtxMenu(x, y, items);
   };
 
@@ -711,42 +707,32 @@
     // 优先复用已缓存的歌单列表（loadPlaylists 已缓存至 CM.playlists），
     // 避免每次打开菜单都发起 playlist.getAll 请求；缓存为空时回退到 API
     var renderMenu = function(lists) {
-      var items = [{ isLabel: true, label: '添加 ' + paths.length + ' 首到歌单' }];
-      if (lists.length) {
-        lists.forEach(function(pl) {
-          var idx = pl.index !== undefined ? pl.index : null;
-          if (idx === null || pl.isLocked || pl.isAutoplaylist) return;
-          var name = pl.name || '未命名';
-          var count = pl.trackCount != null ? pl.trackCount : (pl.itemCount != null ? pl.itemCount : '');
-          items.push({
-            label: name + (count ? ' (' + count + ')' : ''),
-            action: function() {
-              CM.api('playlist.addPathsAsync', { playlist: idx, paths: paths }).then(function(res) {
-                if (res && res.success !== false) {
-                  CM.showToast('已添加', paths.length + ' 首到「' + name + '」', 'success');
-                } else {
-                  CM.showToast('添加失败', res && res.error ? res.error : '歌单可能被锁定', 'error');
-                }
-              });
-            }
-          });
-        });
-      }
-      items.push({ divider: true });
-      items.push({ label: '新建歌单并添加', icon: CM.icons.plus, action: function() {
-        CM.showModal({ title: '新建歌单', input: '', okText: '创建并添加' }).then(function(name) {
-          if (!name) return;
-          CM.api('playlist.create', { name: name }).then(function(cr) {
-            if (cr && cr.success !== false && cr.index != null) {
-              CM.api('playlist.addPathsAsync', { playlist: cr.index, paths: paths }).then(function() {
-                CM.showToast('已创建并添加', name + ' · ' + paths.length + ' 首', 'success');
-              });
-            } else {
-              CM.showToast('创建失败', '无法创建歌单', 'error');
-            }
-          });
-        });
-      } });
+      var items = [
+        { label: `添加 ${paths.length} 首到歌单`, isLabel: true },
+        ...lists.filter(pl => pl.index != null && !pl.isLocked && !pl.isAutoplaylist)
+          .map(pl => ({
+              label: `${pl.name}${(pl.trackCount || pl.itemCount) ? ` (${pl.trackCount || pl.itemCount})` : ''}`,
+              action: () => CM.api('playlist.addPathsAsync', { playlist: pl.index, paths })
+                .then(res => {
+                  if (res?.success !== false) CM.showToast('已添加', `${paths.length} 首到「${pl.name}」`, 'success');
+                  else CM.showToast('添加失败', res?.error || '歌单可能被锁定', 'error');
+                })
+          })),
+        { divider: true },
+        {
+          label: '新建歌单并添加', icon: CM.icons.plus,
+          action: () => CM.showModal({ title: '新建歌单', input: '', okText: '创建并添加' })
+            .then(async name => {
+              if (!name) return;
+              // 使用 await 减少回调层级
+              const res = await fb2k.invoke('playlist.create', { name });
+              if (res?.success !== false) {
+                await fb2k.invoke('playlist.addPathsAsync', { playlist: cr.index, paths });
+                CM.showToast('已创建并添加', `${name} · ${paths.length} 首`, 'success');
+              } else CM.showToast('创建失败', '无法创建歌单', 'error');
+            })
+        }
+      ];
       CM.showCtxMenu(x, y, items);
     };
     if (CM.playlists && CM.playlists.length) {

@@ -250,11 +250,7 @@
         var saved = CM.settings.lastPlaylist;
         var lists = CM.playlists || [];
         var target = -1;
-        if (saved) {
-          for (var i = 0; i < lists.length; i++) {
-            if (lists[i].name === saved) { target = lists[i].index; break; }
-          }
-        }
+        if (saved) target = lists.find(item => item.name === saved)?.index ?? -1;
         CM.api('playlist.getActive').then(function(r) {
           var idx = r && (r.index != null ? r.index : r.playlist);
           var use = target >= 0 ? target : (idx != null && idx >= 0 ? idx : target);

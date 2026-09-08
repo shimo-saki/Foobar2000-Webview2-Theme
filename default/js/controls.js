@@ -85,41 +85,46 @@
       var idx = state.currentPlaylistIndex;
       if (idx < 0) return;
       // 自动歌单/锁定歌单不接受手动编辑：隐藏 添加/排序/撤销 等操作
-      var pl = (CM.playlists || []).find(function(p) { return p.index === idx; }) || {};
-      var editable = !pl.isAutoplaylist && !pl.isLocked;
-      var items = [
-        { isLabel: true, label: '添加到歌单' }
+      const pl = CM.playlists?.find(p => p.index === idx) ?? {};
+      const disabled = pl.isAutoplaylist || pl.isLocked;
+      const items = [
+        { label: '添加到歌单', isLabel: true },
+        {
+          label: '添加本地文件', icon: CM.icons.folder, disabled,
+          action: () => CM.addFilesToPlaylist(idx),
+        },
+        {
+          label: '添加文件夹', icon: CM.icons.folder, disabled,
+          action: () => CM.addFolderToPlaylist(idx),
+        },
+        {
+          label: '添加网络地址', icon: CM.icons.plus, disabled,
+          action: () => CM.addUrlToPlaylist(idx),
+        },
+        { divider: true },
+        {
+          label: '随机排列', icon: CM.icons.refresh, disabled,
+          action: () => CM.api('playlist.shuffle', { playlist: idx }),
+        },
+        {
+          label: '按标题排序', disabled,
+          action: () => CM.api('playlist.sort', { playlist: idx, pattern: '%title%' }),
+        },
+        {
+          label: '按艺术家排序', disabled,
+          action: () => CM.api('playlist.sort', { playlist: idx, pattern: '%artist% | %album% | %tracknumber%' }),
+        },
+        {
+          label: '反转列表', icon: CM.icons.reverse, disabled,
+          action: () => CM.api('playlist.reverse', { playlist: idx })
+            .then(r => {if (r?.success !== false) CM.showToast('已反转列表顺序', null, 'success')}),
+        },
+        { divider: true },
+        {
+          label: '撤销上一步', disabled,
+          action: () => CM.api('playlist.undo', { playlist: idx }),
+        }
       ];
-      if (editable) {
-        items.push({ label: '添加本地文件', icon: CM.icons.folder, action: function() {
-          CM.addFilesToPlaylist(idx);
-        } });
-        items.push({ label: '添加文件夹', icon: CM.icons.folder, action: function() {
-          CM.addFolderToPlaylist(idx);
-        } });
-        items.push({ label: '添加网络地址', icon: CM.icons.plus, action: function() {
-          CM.addUrlToPlaylist(idx);
-        } });
-        items.push({ divider: true });
-        items.push({ label: '随机排列', icon: CM.icons.refresh, action: function() {
-          CM.api('playlist.shuffle', { playlist: idx });
-        } });
-        items.push({ label: '按标题排序', action: function() {
-          CM.api('playlist.sort', { playlist: idx, pattern: '%title%' });
-        } });
-        items.push({ label: '按艺术家排序', action: function() {
-          CM.api('playlist.sort', { playlist: idx, pattern: '%artist% | %album% | %tracknumber%' });
-        } });
-        items.push({ label: '反转列表', icon: CM.icons.reverse, action: function() {
-          CM.api('playlist.reverse', { playlist: idx }).then(function(r) {
-            if (r && r.success !== false) CM.showToast('已反转列表顺序', null, 'success');
-          });
-        } });
-        items.push({ divider: true });
-        items.push({ label: '撤销上一步', action: function() {
-          CM.api('playlist.undo', { playlist: idx });
-        } });
-      }
       CM.showCtxMenu(rect.left, rect.bottom + 6, items);
     });
     // 表头点击排序（客户端视图排序）
@@ -1124,30 +1129,22 @@
    * 输出设备 — 列出设备并切换
    * ============================================ */
   CM.showOutputDevices = function() {
-    CM.api('config.getOutputDevices').then(function(resp) {
-      var devices = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.devices) ? resp.devices : []);
+    CM.api('config.getOutputDevices').then(function(devices ) {
       if (!devices.length) {
         CM.showToast('无法获取输出设备', null, 'error');
         return;
       }
-      var items = [{ label: '输出设备', isLabel: true }];
-      devices.forEach(function(d) {
-        items.push({
-          label: d.name,
-          checked: !!d.isCurrent,
-          action: function() {
-            CM.api('config.setOutputDevice', { outputId: d.outputId, deviceId: d.deviceId }).then(function(r) {
-              if (r && r.success !== false) {
-                CM.showToast('已切换', d.name, 'success');
-              } else {
-                CM.showToast('切换失败', null, 'error');
-              }
-            });
-          }
-        });
-      });
-      var rect = els.btnMore.getBoundingClientRect();
-      CM.showCtxMenu(rect.left, rect.bottom + 6, items);
+      const items = [
+        { label: '输出设备', isLabel: true },
+        ...devices.map(d => ({
+          label: d.name, checked: d.isCurrent,
+          action: () => CM.api('config.setOutputDevice', { outputId: d.outputId, deviceId: d.deviceId })
+            .then(r => CM.showToast('已切换', d.name, 'success'))
+            .catch(e => CM.showToast('切换失败', null, 'error'))
+        }))
+      ];
+      const { left, bottom } = els.btnMore.getBoundingClientRect();
+      CM.showCtxMenu(left, bottom + 6, items);
     });
   };
 
@@ -1159,52 +1156,42 @@
       CM.api('config.getVersionInfo'),
       CM.api('playcount.getStats'),
       CM.api('config.getOutputConfig'),
-      CM.api('config.getComponents'),
       CM.api('audio.getStreamInfo')
     ]).then(function(results) {
-      var ver = results[0] || {};
-      var stats = results[1] || {};
-      var out = results[2] || {};
-      var compsRaw = results[3];
-      var comps = Array.isArray(compsRaw) ? compsRaw : (compsRaw && Array.isArray(compsRaw.components) ? compsRaw.components : []);
-      var stream = results[4] || {};
+      const [ver = {}, stats = {}, out = {}, stream = {}] = results;
 
       // plugin 可能是字符串或 {name,version} 对象
       var pluginVer = ver.plugin;
       if (pluginVer && typeof pluginVer === 'object') pluginVer = pluginVer.version || pluginVer.name;
 
-      var items = [
+      const items = [
         { label: 'CloudMusic 主题', isLabel: true },
         { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.4.1</span>' },
         { html: '<span class="ctx-info-label">作者</span><span class="ctx-info-value">灵芝含</span>' },
-        { html: '<span class="ctx-info-label">foobar2000</span><span class="ctx-info-value">' + CM.escHtml(ver.foobar2000 || '--') + '</span>' },
-        { html: '<span class="ctx-info-label">WebView2 组件</span><span class="ctx-info-value">v' + CM.escHtml(pluginVer || '--') + '</span>' },
+        { html: `<span class="ctx-info-label">foobar2000</span><span class="ctx-info-value">${CM.escHtml(ver.foobar2000 || '--')}</span>` },
+        { html: `<span class="ctx-info-label">WebView2 组件</span><span class="ctx-info-value">v${CM.escHtml(pluginVer || '--')}</span>` },
         { divider: true },
         { label: '媒体库', isLabel: true },
-        { html: '<span class="ctx-info-label">总曲目</span><span class="ctx-info-value">' + (stats.totalTracks || 0) + '</span>' },
-        { html: '<span class="ctx-info-label">已播放</span><span class="ctx-info-value">' + (stats.playedTracks || 0) + '</span>' },
-        { html: '<span class="ctx-info-label">未播放</span><span class="ctx-info-value">' + (stats.unplayedTracks || 0) + '</span>' },
-        { html: '<span class="ctx-info-label">总播放次数</span><span class="ctx-info-value">' + (stats.totalPlayCount || 0) + '</span>' },
-        { html: '<span class="ctx-info-label">平均播放</span><span class="ctx-info-value">' + (parseFloat(stats.averagePlayCount) || 0).toFixed(1) + ' 次</span>' },
+        { html: `<span class="ctx-info-label">总曲目</span><span class="ctx-info-value">${stats.totalTracks || 0}</span>` },
+        { html: `<span class="ctx-info-label">已播放</span><span class="ctx-info-value">${stats.playedTracks || 0}</span>` },
+        { html: `<span class="ctx-info-label">未播放</span><span class="ctx-info-value">${stats.unplayedTracks || 0}</span>` },
+        { html: `<span class="ctx-info-label">总播放次数</span><span class="ctx-info-value">${stats.totalPlayCount || 0}</span>` },
+        { html: `<span class="ctx-info-label">平均播放</span><span class="ctx-info-value">${(+stats.averagePlayCount || 0).toFixed(1)} 次</span>` },
         { divider: true },
         { label: '输出', isLabel: true },
-        { html: '<span class="ctx-info-label">输出模式</span><span class="ctx-info-value">' + CM.escHtml(out.outputName || '--') + '</span>' },
-        { html: '<span class="ctx-info-label">设备</span><span class="ctx-info-value">' + CM.escHtml(out.deviceName || '--') + '</span>' },
-        { html: '<span class="ctx-info-label">位深</span><span class="ctx-info-value">' + (out.bitDepth || '--') + ' bit</span>' },
-        { html: '<span class="ctx-info-label">缓冲</span><span class="ctx-info-value">' + (out.bufferLength || '--') + ' s</span>' }
+        { html: `<span class="ctx-info-label">输出模式</span><span class="ctx-info-value">${CM.escHtml(out.outputName || '--')}</span>` },
+        { html: `<span class="ctx-info-label">设备</span><span class="ctx-info-value">${CM.escHtml(out.deviceName || '--')}</span>` },
+        { html: `<span class="ctx-info-label">位深</span><span class="ctx-info-value">${out.bitDepth || '--'} bit</span>` },
+        { html: `<span class="ctx-info-label">缓冲</span><span class="ctx-info-value">${out.bufferLength || '--'} s</span>` },
+        { divider: true },
+        { label: '当前播放', isLabel: true },
+        { html: `<span class="ctx-info-label">编码</span><span class="ctx-info-value">${CM.escHtml(stream.codec || '--')}</span>`,disabled: !stream.playing },
+        { html: `<span class="ctx-info-label">采样率</span><span class="ctx-info-value">${stream.sampleRate ? (stream.sampleRate / 1000).toFixed(1) + ' kHz' : '--'}</span>`, disabled: !stream.playing},
+        { html: `<span class="ctx-info-label">比特率</span><span class="ctx-info-value">${stream.bitrate || '--'} kbps</span>`,disabled: !stream.playing },
+        { html: `<span class="ctx-info-label">声道</span><span class="ctx-info-value">${stream.channels || '--'} ch</span>`,disabled: !stream.playing },
+        { divider: true },
+        { html: `<span class="ctx-info-label">已安装组件</span><span class="ctx-info-value">${CM.components.length || 0} 个</span>` }
       ];
-
-      if (stream.playing) {
-        items.push({ divider: true });
-        items.push({ label: '当前播放', isLabel: true });
-        items.push({ html: '<span class="ctx-info-label">编码</span><span class="ctx-info-value">' + CM.escHtml(stream.codec || '--') + '</span>' });
-        items.push({ html: '<span class="ctx-info-label">采样率</span><span class="ctx-info-value">' + (stream.sampleRate ? (stream.sampleRate / 1000).toFixed(1) + ' kHz' : '--') + '</span>' });
-        items.push({ html: '<span class="ctx-info-label">比特率</span><span class="ctx-info-value">' + (stream.bitrate || '--') + ' kbps</span>' });
-        items.push({ html: '<span class="ctx-info-label">声道</span><span class="ctx-info-value">' + (stream.channels || '--') + ' ch</span>' });
-      }
-
-      items.push({ divider: true });
-      items.push({ html: '<span class="ctx-info-label">已安装组件</span><span class="ctx-info-value">' + (comps.length || 0) + ' 个</span>' });
 
       var rect = els.btnMore.getBoundingClientRect();
       CM.showCtxMenu(rect.left, rect.bottom + 6, items);
@@ -1308,7 +1295,7 @@
         var item = document.createElement('div');
         item.className = 'ctx-item';
         item.dataset.idx = menu.children.length;
-        item.innerHTML = (CM.icons.tag || '') + '<span>批量编辑标签（' + state.batchSelected.size + '首）</span>';
+        item.innerHTML = `${CM.icons.tag || ''}<span>批量编辑标签（${state.batchSelected.size}首）</span>`;
         item.addEventListener('click', function() {
           CM.hideCtxMenu();
           CM._batchEditFromBar();

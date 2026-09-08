@@ -83,4 +83,24 @@
       }, 300); // > 0.26s CSS 动画
     }
   };
+
+  els.lyricsScroll.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const hidden = !CM.checkComponent('foo_uie_eslyric');
+    const items = [
+      {
+        label: '重载歌词…', icon: CM.icons.refresh,
+        action: () => { lrcCache.delete(CM.trackPath(CM.currentTrack)); CM.loadLyrics();}},
+      {
+        label: '编辑歌词', icon: CM.icons.edit, hidden,
+        action: async () => await fb2k.invoke('discovery.executeMainMenuCommand', await CM.getGuid('编辑歌词')),
+      },
+      { divider: true, hidden },
+      {
+        label: '搜索歌词…', icon: CM.icons.search, hidden,
+        action: async () => await fb2k.invoke('discovery.executeMainMenuCommand', await CM.getGuid('搜索歌词')),
+      }
+    ];
+    CM.showCtxMenu(e.clientX, e.clientY, items);
+  });
 })();
