@@ -270,16 +270,6 @@
       e.stopPropagation();
       showMoreMenu(e.clientX, e.clientY);
     });
-    document.addEventListener('mousedown', function(e) {
-      if (els.morePopover.classList.contains('open') &&
-          !els.morePopover.contains(e.target) && e.target !== els.btnMore && !els.btnMore.contains(e.target)) {
-        els.morePopover.classList.remove('open');
-      }
-      if (els.rgPopover.classList.contains('open') &&
-          !els.rgPopover.contains(e.target) && e.target !== els.btnMore && !els.btnMore.contains(e.target)) {
-        els.rgPopover.classList.remove('open');
-      }
-    });
   };
 
   /* ============================================
@@ -603,7 +593,6 @@
           break;
         case 'Escape':
           if (state.queueOpen) CM.toggleQueue(false);
-          els.morePopover.classList.remove('open');
           CM.hideCtxMenu();
           // 关闭标签编辑器
           var teo = CM.$('tagEditorOverlay');

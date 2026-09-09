@@ -199,19 +199,20 @@
       if (item.hidden) return ''; // 隐藏项
       if (item.divider) return '<div class="ctx-divider"></div>'; // 分割线
       if (item.isLabel) return `<div class="ctx-label">${esc(item.label)}</div>`; // 标签
+
+      const classMap = { danger: item.danger, checked: item.checked, disabled: item.disabled };
+      const classes = Object.keys(classMap).filter(k => classMap[k]).join(' ');
+
       if (item.submenu && item.submenu.length) return `
-        <div class="ctx-menu-item" data-path="${JSON.stringify(path)}">
+        <div class="ctx-menu-item ${classes}" data-path="${JSON.stringify(path)}">
           ${item.icon || ''}
           <span>${esc(item.label)}</span>
           <span style="margin-left:auto"> > </span>
           <div class="ctx-submenu hidden">${CM.createMenu(item.submenu, path)}</div>
         </div>`;
 
-      const classMap = { 'ctx-item': true, danger: item.danger, checked: item.checked, disabled: item.disabled };
-      const classes = Object.keys(classMap).filter(k => classMap[k]).join(' ');
-
       const content = item.html || `<span>${esc(item.label)}</span>`;
-      return `<div class="${classes}" data-path="${JSON.stringify(path)}">${item.icon || ''}${content}</div>`;
+      return `<div class="ctx-item ${classes}" data-path="${JSON.stringify(path)}">${item.icon || ''}${content}</div>`;
     }).join('');
   };
 
@@ -534,10 +535,9 @@
       var el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');
       if (!el) return;
       e.preventDefault();
-      // 从 DOM 构造最小 track 对象（showTrackCtxMenu 只需 path + title）
-      var path = el.dataset.path;
-      var titleEl = el.querySelector('.dc-track-title, .search-result-title');
-      CM.showTrackCtxMenu(e.clientX, e.clientY, { absolutePath: path, title: titleEl ? titleEl.textContent : '' });
+
+      const { path, title, artist, album } = el.dataset;
+      CM.showTrackCtxMenu(e.clientX, e.clientY, { absolutePath: path, title, artist, album });
     });
     });
   };
@@ -662,33 +662,28 @@
       container.innerHTML = CM.emptyHTML(emptyText);
       return;
     }
-    startIdx = startIdx || 0;
-    var curPath = CM.trackPath(CM.currentTrack);
-    // 预转义曲目字段，避免循环内重复调用 esc()
-    var escTracks = tracks.map(function(t) {
-      var p = CM.trackPath(t);
-      return {
-        path: esc(p),
-        name: esc(CM.trackName(t)),
-        sub: esc(CM.trackArtist(t)) + (t.album ? ' · ' + esc(t.album) : ''),
-        duration: CM.formatTime(t.duration)
-      };
-    });
-    var parts = [];
-    escTracks.forEach(function(t, i) {
-      parts.push(
-        '<div class="dc-track fade-in' + (curPath && t.path === curPath ? ' playing' : '') + '" data-path="' + t.path + '" data-i="' + (startIdx + i) + '">' +
-        '<span class="dc-track-idx">' + (startIdx + i + 1) + '</span>' +
-        '<div class="dc-track-art ph" data-art-path="' + t.path + '">' + CM.icons.note + '</div>' +
-        '<div class="dc-track-info">' +
-        '<div class="dc-track-title">' + t.name + '</div>' +
-        '<div class="dc-track-sub">' + t.sub + '</div>' +
-        '</div>' +
-        '<span class="dc-track-dur">' + t.duration + '</span>' +
-        '</div>'
-      );
-    });
-    container.innerHTML = parts.join('');
+    startIdx ||= 0;
+    const curPath = CM.trackPath(CM.currentTrack);
+
+    container.innerHTML = tracks.map((track, i) => {
+      const idx = startIdx + i;
+      const title = esc(CM.trackName(track));
+      const artist = esc(CM.trackArtist(track));
+      const album = esc(track.album);
+      const path = esc(CM.trackPath(track));
+      const sub = artist + (track.album ? ` · ${album}` : '');
+      const duration = CM.formatTime(track.duration);
+
+      return `<div class="dc-track fade-in${path === curPath ? ' playing' : ''}" data-path="${path}" data-i="${idx}" data-title="${title}" data-artist="${artist}" data-album="${album}">
+        <span class="dc-track-idx">${idx + 1}</span>
+        <div class="dc-track-art ph" data-art-path="${path}">${CM.icons.note}</div>
+        <div class="dc-track-info">
+          <div class="dc-track-title">${title}</div>
+          <div class="dc-track-sub">${sub}</div>
+        </div>
+        <span class="dc-track-dur">${duration}</span>
+      </div>`;
+    }).join('');
     // 登记本次渲染标记的播放行，供 refreshPlayingMarks 切换时清除（避免旧行残留高亮）
     if (curPath) {
       var _dc = container.querySelector('.dc-track.playing');

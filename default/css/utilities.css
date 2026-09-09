@@ -32,7 +32,7 @@
 @keyframes toast-out{to{transform:translateX(24px);opacity:0}}
 
 /* ============ Context Menu ============ */
-.ctx-menu{
+.ctx-menu, .ctx-submenu{
   position:fixed;z-index:2000;min-width:180px;max-width:280px;
   background:var(--bg-2);border:1px solid var(--border-strong);
   border-radius:var(--r-m);box-shadow:var(--shadow-pop);padding:5px;
@@ -42,35 +42,21 @@
   overflow-y:auto;overscroll-behavior:contain;
   scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.22) transparent;
 }
-.ctx-menu::-webkit-scrollbar{width:8px}
-.ctx-menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.22);border-radius:4px}
-.ctx-menu::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35)}
-.ctx-menu.removing{animation:ctx-out 0.12s ease forwards}
-.ctx-submenu{
-  position:fixed;z-index:2000;min-width:180px;max-width:280px;
-  background:var(--bg-2);border:1px solid var(--border-strong);
-  border-radius:var(--r-m);box-shadow:var(--shadow-pop);padding:5px;
-  animation:ctx-in 0.16s var(--ease);
-  /* 菜单过长时允许滚轮滚动，避免底部项（如“在线获取标签”）超出视口被挡住 */
-  max-height:min(52vh, 460px, calc(100vh - 20px));
-  overflow-y:auto;overscroll-behavior:contain;
-  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.22) transparent;
-}
-.ctx-submenu::-webkit-scrollbar{width:8px}
-.ctx-submenu::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.22);border-radius:4px}
-.ctx-submenu::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35)}
-.ctx-submenu.removing{animation:ctx-out 0.12s ease forwards}
+.ctx-menu::-webkit-scrollbar, .ctx-submenu::-webkit-scrollbar{width:8px}
+.ctx-menu::-webkit-scrollbar-thumb, .ctx-submenu::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.22);border-radius:4px}
+.ctx-menu::-webkit-scrollbar-thumb:hover, .ctx-submenu::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35)}
+.ctx-menu.removing, .ctx-submenu.removing{animation:ctx-out 0.12s ease forwards}
 .ctx-item, .ctx-menu-item{
   display:flex;align-items:center;gap:9px;padding:7px 12px;
   cursor:pointer;font-size:12.5px;color:var(--text-2);
   border-radius:var(--r-s);transition:background var(--t-fast),color var(--t-fast);
   white-space:nowrap;overflow:hidden;
 }
-.ctx-item:hover{background:var(--bg-3);color:var(--text)}
-.ctx-item.danger{color:#ff6b6b}
-.ctx-item.danger:hover{background:rgba(255,107,107,0.12)}
+.ctx-item:hover, .ctx-menu-item:hover{background:var(--bg-3);color:var(--text)}
+.ctx-item.danger, .ctx-menu-item.danger{color:#ff6b6b}
+.ctx-item.danger:hover .ctx-menu-item.danger:hover{background:rgba(255,107,107,0.12)}
 .ctx-item.checked{color:var(--accent)}
-.ctx-item.disabled{opacity:0.35;pointer-events:none}
+.ctx-item.disabled, .ctx-menu-item.disabled{opacity:0.35;pointer-events:none}
 .ctx-item .ctx-check{width:14px;flex-shrink:0;font-size:11px;color:var(--accent);text-align:center}
 .ctx-item svg, .ctx-menu-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .ctx-item .ctx-stars{color:var(--accent);letter-spacing:1px;font-size:11px}

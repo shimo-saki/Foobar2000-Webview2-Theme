@@ -60,7 +60,6 @@
     queueDrawer: CM.$('queueDrawer'), queueCount: CM.$('queueCount'), queueList: CM.$('queueList'), queueNow: CM.$('queueNow'),
     queueClear: CM.$('queueClear'), queueClose: CM.$('queueClose'),
     // Overlays
-    morePopover: CM.$('morePopover'), rgPopover: CM.$('rgPopover'),
     modalMask: CM.$('modalMask'), modalTitle: CM.$('modalTitle'), modalDesc: CM.$('modalDesc'),
     modalInput: CM.$('modalInput'), modalOk: CM.$('modalOk'), modalCancel: CM.$('modalCancel'),
     toastContainer: CM.$('toastContainer'), ctxMenu: CM.$('ctxMenu'), dropOverlay: CM.$('dropOverlay'),
@@ -571,5 +570,6 @@
     search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><path d="M 7.2 7.2 L 7.2 5.28 A 2.88 2.88 0 0 1 10.08 2.4 L 16.32 2.4 A 2.88 2.88 0 0 1 19.2 5.28 L 19.2 11.52 A 2.88 2.88 0 0 1 16.32 14.4 L 14.4 14.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.28 7.2 L 11.52 7.2 A 2.88 2.88 0 0 1 14.4 10.08 L 14.4 16.32 A 2.88 2.88 0 0 1 11.52 19.2 L 5.28 19.2 A 2.88 2.88 0 0 1 2.4 16.32 L 2.4 10.08 A 2.88 2.88 0 0 1 5.28 7.2 Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     position: '<svg viewBox="0 0 24 24"><path d="M11.09 1.66h1.5c.11 0 .19.08.19.19v1.81c3.98.44 7.14 3.6 7.58 7.58h1.81c.11 0 .19.08.19.19v1.5c0 .11-.08.19-.19.19h-1.81c-.44 3.98-3.6 7.14-7.58 7.58v1.81c0 .11-.08.19-.19.19h-1.5c-.11 0-.19-.08-.19-.19v-1.81c-3.98-.44-7.14-3.6-7.58-7.58H1.69c-.11 0-.19-.08-.19-.19v-1.5c0-.11.08-.19.19-.19H3.5C3.94 7.1 7.1 3.94 11.08 3.5V1.85c0-.11.08-.19.19-.19z M18.72 12c0-3.7-3.02-6.72-6.72-6.72S5.28 8.3 5.28 12s3.02 6.72 6.72 6.72 6.72-3.02 6.72-6.72z M12 13.4c.77 0 1.4-.63 1.4-1.4s-.63-1.4-1.4-1.4-1.4.63-1.4 1.4.63 1.4 1.4 1.4z" fill="currentColor"/></svg>',
+    album: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12a9 9 0 10-18 0 9 9 0 0018 0zm-4 0a1 1 0 112 0c0 1.977-.815 3.747-2.127 4.94a1 1 0 01-1.346-1.48C16.415 14.653 17 13.423 17 12zM5 12c0-1.977.815-3.747 2.127-4.94a1 1 0 011.346 1.48C7.585 9.347 7 10.577 7 12a1 1 0 11-2 0zm18 0c0 6.075-4.925 11-11 11S1 18.075 1 12 5.925 1 12 1s11 4.925 11 11z"/></svg>'
   };
 })();

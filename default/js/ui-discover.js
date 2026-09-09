@@ -94,35 +94,40 @@
         els.searchResults.innerHTML = '<div class="section-error">' + CM.icons.error + '<span>搜索失败，媒体库可能未就绪</span></div>';
         return;
       }
-      var tracks = CM.respTracks(r);
+      const tracks = CM.respTracks(r);
       if (!tracks.length) {
-        els.searchResults.innerHTML = '<div class="search-empty">没有找到与「' + esc(query) + '」相关的结果</div>';
+        els.searchResults.innerHTML = `<div class="search-empty">没有找到与「${esc(query)}」相关的结果</div>`;
         return;
       }
-      var curPath = CM.trackPath(CM.currentTrack);
+      const curPath = CM.trackPath(CM.currentTrack);
       state.searchTracks = tracks;
-      var total = r.total != null ? r.total : tracks.length;
-      var parts = [
-        '<div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px">' +
-        '<div class="library-section-title" style="margin:0">共 ' + total + ' 条结果</div>' +
-        '<button class="pl-btn" id="searchAddAllBtn" style="margin-left:auto">' +
-        '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>添加全部到歌单</span></button>' +
-        '</div>'
-      ];
-      tracks.forEach(function(t, i) {
-        var p = CM.trackPath(t);
-        parts.push(
-          '<div class="search-result-item fade-in' + (curPath && p === curPath ? ' playing' : '') + '" data-path="' + esc(p) + '" data-i="' + i + '">' +
-          '<div class="search-result-art" data-art-path="' + esc(p) + '">' + CM.icons.note + '</div>' +
-          '<div class="search-result-info">' +
-          '<div class="search-result-title">' + esc(CM.trackName(t)) + '</div>' +
-          '<div class="search-result-sub">' + esc(CM.trackArtist(t)) + (t.album ? ' · ' + esc(t.album) : '') + '</div>' +
-          '</div>' +
-          '<span class="search-result-dur">' + CM.formatTime(t.duration) + '</span>' +
-          '</div>'
-        );
+      const total = r?.total ?? tracks.length;
+      const header = `<div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px">
+        <div class="library-section-title" style="margin:0">共 ${total} 条结果</div>
+        <button class="pl-btn" id="searchAddAllBtn" style="margin-left:auto">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>添加全部到歌单</span>
+        </button>
+      </div>`;
+
+      const items = tracks.map((track, i) => {
+        const title = esc(CM.trackName(track));
+        const artist = CM.trackArtist(track);
+        const album = esc(track.album || '');
+        const path = esc(CM.trackPath(track));
+        const sub = artist + (album ? ` · ${album}` : '');
+
+        return `<div class="search-result-item fade-in${path === curPath ? ' playing' : ''}" data-path="${path}" data-i="${i}" data-title="${title}" data-artist="${artist}" data-album="${album}">
+          <div class="search-result-art" data-art-path="${path}">${CM.icons.note}</div>
+          <div class="search-result-info">
+            <div class="search-result-title">${title}</div>
+            <div class="search-result-sub">${sub}</div>
+          </div>
+          <span class="search-result-dur">${CM.formatTime(track.duration)}</span>
+        </div>`;
       });
-      els.searchResults.innerHTML = parts.join('');
+
+      els.searchResults.innerHTML = header + items.join('');
       CM.fillArtworkBatch(els.searchResults, 120);
       var addAllBtn = els.searchResults.querySelector('#searchAddAllBtn');
       if (addAllBtn) {

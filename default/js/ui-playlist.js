@@ -109,8 +109,7 @@
 
   CM.showPlaylistCtxMenu = function(x, y, idx) {
     const pl = CM.playlists?.find(p => p.index === idx) ?? {};
-    // 自动歌单/锁定歌单（如默认「媒体库」）不接受手动编辑：禁用 添加/重命名/清空/删除
-    const disabled = pl.isAutoplaylist || pl.isLocked;
+    // 自动歌单/锁定歌单（如默认「媒体库」）不接受手动编辑：禁用 添加/清空
     const items = [
       { label: pl.isAutoplaylist ? '自动播放列表' : pl.isLocked ? '锁定播放列表' : '普通播放列表', isLabel: true },
       {
@@ -120,16 +119,16 @@
       { divider: true },
       { label: '添加到歌单', isLabel: true },
       {
-        label: '添加本地文件', icon: CM.icons.folder,
-        action: () => CM.addFolderToPlaylist(idx), disabled
+        label: '添加本地文件', icon: CM.icons.folder, disabled: pl.isAutoplaylist,
+        action: () => CM.addFolderToPlaylist(idx)
       },
       {
-        label: '添加文件夹', icon: CM.icons.folder,
-        action: () => CM.addFolderToPlaylist(idx), disabled
+        label: '添加文件夹', icon: CM.icons.folder, disabled: pl.isAutoplaylist,
+        action: () => CM.addFolderToPlaylist(idx)
       },
       {
-        label: '添加网络地址', icon: CM.icons.plus,
-        action: () => CM.addUrlToPlaylist(idx), disabled
+        label: '添加网络地址', icon: CM.icons.plus, disabled: pl.isAutoplaylist,
+        action: () => CM.addUrlToPlaylist(idx)
       },
       { divider: true },
       { label: '歌单操作', isLabel: true },
@@ -138,19 +137,19 @@
         action: () => CM.api('playlist.duplicate', { playlist: idx })
       },
       {
-        label: '重命名', icon: CM.icons.edit, disabled,
+        label: '重命名', icon: CM.icons.edit,
         action: () => CM.showModal({ title: '重命名歌单', input: pl.name || '', okText: '重命名' })
           .then(name => CM.api('playlist.rename', { playlist: idx, name })
             .then(r => { if (r?.success) CM.showToast('已重命名', name, 'success'); })
           )
       },
       {
-        label: '清空歌单', icon: CM.icons.trash, disabled,
+        label: '清空歌单', icon: CM.icons.trash, disabled: pl.isAutoplaylist,
         action: () => CM.showModal({ title: '清空歌单', desc: `将移除「${pl.name || ''}」中的全部曲目，此操作不可撤销。`, okText: '清空', danger: true })
           .then(ok => { if (ok) CM.api('playlist.clear', { playlist: idx }); })
       },
       {
-        label: '删除歌单', icon: CM.icons.trash, disabled, danger: true,
+        label: '删除歌单', icon: CM.icons.trash, danger: true,
         action: () => CM.showModal({ title: '删除歌单', desc: `确定删除「${pl.name || ''}」吗？此操作不可撤销。`, okText: '删除', danger: true })
           .then(ok => {
             if (!ok) return;
@@ -602,7 +601,7 @@
    * 曲目右键菜单（通用）
    * track: 曲目对象；ctx: {playlist?, index?} 在播放列表内时可删除
    * ============================================ */
-  CM.showTrackCtxMenu = function(x, y, track, ctx) {
+  CM.showTrackCtxMenu = function (x, y, track, ctx) {
     if (!track) return;
     const pl = (CM.playlists || []).find(p => p.index === ctx?.playlist) || {};
     const path = CM.trackPath(track);
@@ -646,6 +645,30 @@
       {
         label: '停止试听', danger: true, hidden: !CM.state.previewActive,
         action: () => CM.stopPreview()
+      },
+      { divider: true },
+      {
+        label: '快捷查找', icon: CM.icons.search,
+        submenu: [
+          {
+            label: '相同标题', disabled: !track.title,
+            action: () => fb2k.invoke('playlist.createAutoplaylist', { name: `查找 - ${track.title}`, query: `%title% HAS ${track.title}` })
+              .then(r => CM.openPlaylist(r?.index ?? 0))
+          },
+          {
+            label: '相同艺术家', disabled: !track.artist,
+            submenu: track.artist?.split(', ').map(artist => ({
+              label: artist,
+              action: () => fb2k.invoke('playlist.createAutoplaylist', { name: `查找 - ${artist}`, query: `%artist% HAS ${artist}` })
+              .then(r => CM.openPlaylist(r?.index ?? 0))
+            }))
+          },
+          {
+            label: '相同专辑', disabled: !track.album,
+            action: () => fb2k.invoke('playlist.createAutoplaylist', { name: `查找 - ${track.album}`, query: `%album% HAS ${track.album}` })
+            .then(r => CM.openPlaylist(r?.index ?? 0))
+          }
+        ]
       },
       { divider: true },
       {
