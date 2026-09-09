@@ -248,16 +248,15 @@
       CM.setLyricsVisible(!state.lyricsVisible);
     });
     // 底栏封面：单击展开歌词面板，双击进入沉浸式模式
-    var artClickTimer = null;
-    els.bottomArtWrap.addEventListener('click', function() {
-      if (artClickTimer) {
-        clearTimeout(artClickTimer);
-        artClickTimer = null;
+    els.bottomArtWrap.addEventListener('click', function () {
+      if (this._clickTimer) {
+        clearTimeout(this._clickTimer);
+        this._clickTimer = null;
         CM.toggleNpOverlay(true);
       } else {
-        artClickTimer = setTimeout(function() {
-          artClickTimer = null;
-          if (!state.lyricsVisible) CM.setLyricsVisible(true);
+        this._clickTimer = setTimeout(() => {
+          this._clickTimer = null;
+          CM.setLyricsVisible(true);
         }, 250);
       }
     });

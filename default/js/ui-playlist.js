@@ -173,54 +173,58 @@
   };
 
   CM._playlistViewLoadId = 0;
-  CM.renderPlaylistView = function(idx) {
-    var pl = (CM.playlists || []).find(function(p) { return p.index === idx; }) || {};
+  CM.renderPlaylistView = function (idx) {
+    const pl = (CM.playlists || []).find(p => p.index === idx) || {};
     els.playlistHeaderName.textContent = pl.name || '播放列表';
     els.playlistHeaderTag.textContent = pl.isAutoplaylist ? 'AUTOPLAYLIST' : 'PLAYLIST';
-    // 记忆最近打开的歌单（按名称持久化，启动时据此自动恢复上次听歌的歌单）
+
+    // 记忆最近打开的歌单
     if (CM.settings.lastPlaylist !== (pl.name || '')) {
       CM.settings.lastPlaylist = pl.name || '';
       CM.saveSettings();
     }
 
-    var loadId = ++CM._playlistViewLoadId;
-    // 延迟加载指示器：API 快速返回（<150ms）时不闪烁，保留旧表格内容
-    var cancelLoading = CM.delayedLoading(function() {
-      if (loadId !== CM._playlistViewLoadId) return;
-      els.trackTbody.innerHTML = '<tr><td colspan="6"><div class="table-loading"><div class="spinner"></div>加载中...</div></td></tr>';
+    const loadId = ++CM._playlistViewLoadId;
+    const cancelLoading = CM.delayedLoading(() => {
+      if (loadId === CM._playlistViewLoadId) {
+        els.trackTbody.innerHTML = `<tr><td colspan="6"><div class="table-loading"><div class="spinner"></div>加载中...</div></td></tr>`;
+      }
     });
 
-    CM.api('playlist.getTracks', { playlist: idx, start: 0, count: 5000 }).then(function(r) {
-      if (loadId !== CM._playlistViewLoadId) { cancelLoading(); return; }
+    CM.api('playlist.getTracks', { playlist: idx, start: 0, count: 5000 }).then(r => {
       cancelLoading();
-      if (!r || r.success === false) {
+      if (loadId !== CM._playlistViewLoadId) return;
+
+      if (!r) {
         els.trackTbody.innerHTML = '<tr><td colspan="6"><div class="table-error">加载失败</div></td></tr>';
         return;
       }
-      var tracks = CM.respTracks(r);
+
+      const tracks = CM.respTracks(r);
       state.trackCache = tracks;
-      state.playlistTracksTotal = r.total != null ? r.total : tracks.length;
-      var totalDur = 0;
-      tracks.forEach(function(t) { totalDur += t.duration || 0; });
-      els.playlistHeaderMeta.textContent = state.playlistTracksTotal + ' 首曲目 · ' + CM.formatTime(totalDur);
-      // 歌单封面取第一首歌；无封面或空歌单回退占位图
+      state.playlistTracksTotal = r.total ?? tracks.length;
+      const totalDur = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+      els.playlistHeaderMeta.textContent = `${state.playlistTracksTotal} 首曲目 · ${CM.formatTime(totalDur)}`;
+
+      // 封面处理
       if (tracks.length) {
-        CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[Math.max(state.playingTrackIndex, 0)]), type: 'front', maxSize: 300 }).then(function(ar) {
-          if (loadId !== CM._playlistViewLoadId) return;
-          els.plCover.onerror = ar && ar.dataUrl && ar.available !== false
-            ? function() { els.plCover.onerror = null; els.plCover.src = CM.DEFAULT_TRACK_COVER; els.plCover.style.display = ''; }
-            : null;
-          els.plCover.src = (ar && ar.dataUrl && ar.available !== false) ? ar.dataUrl : CM.DEFAULT_TRACK_COVER;
-          els.plCover.style.display = '';
-        });
+        CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[Math.max(state.playingTrackIndex, 0)]), type: 'front', maxSize: 300 })
+          .then(ar => {
+            if (loadId !== CM._playlistViewLoadId) return;
+            const hasCover = ar?.dataUrl && ar.available !== false;
+            els.plCover.onerror = hasCover ? () => { els.plCover.onerror = null; els.plCover.src = CM.DEFAULT_TRACK_COVER; } : null;
+            els.plCover.src = hasCover ? ar.dataUrl : CM.DEFAULT_TRACK_COVER;
+            els.plCover.style.display = '';
+          });
       } else {
         els.plCover.onerror = null;
         els.plCover.src = CM.DEFAULT_TRACK_COVER;
         els.plCover.style.display = '';
       }
+
       CM.renderTrackTable();
-      // 预加载缺失元数据（foobar2000 延迟加载机制：异步添加文件时不立即读取标签）
       CM.preloadTrackMetadata(tracks);
+
       // 滚动到当前播放曲目
       els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center' });
     });
@@ -238,112 +242,133 @@
   var _metaRenderTimer = null;
   CM.preloadTrackMetadata = function(tracks) {
     if (!tracks || !tracks.length) return;
-    var missing = [];
-    for (var i = 0; i < tracks.length; i++) {
-      var t = tracks[i];
-      if (!t.artist && !t.album && !t.albumArtist) {
-        var p = CM.trackPath(t);
-        if (p) missing.push({ idx: i, path: p });
-      }
-    }
+    const missing = tracks
+      .map((track, idx) => ({ idx, path: CM.trackPath(track), track }))
+      .filter(({ track, path }) => path && !track.artist && !track.album && !track.albumArtist)
     if (!missing.length) return;
 
-    var currentCache = state.trackCache; // 捕获当前引用，防止快速切歌后写入错误歌单
-    var BATCH = 50;
-    for (var b = 0; b < missing.length; b += BATCH) {
-      (function(batch) {
-        var paths = batch.map(function(m) { return m.path; });
-        CM.api('metadata.readBatch', { paths: paths }).then(function(r) {
-          if (!r || r.success === false || !r.results) return;
-          if (state.trackCache !== currentCache) return; // 歌单已切换，放弃写入
-          var changedIdxs = [];
-          r.results.forEach(function(res, ri) {
-            if (!res.success || !res.tags) return;
-            var t = state.trackCache[batch[ri].idx];
-            if (!t) return;
-            var tags = res.tags, changed = false;
-            for (var up in META_TAG_MAP) {
-              var lo = META_TAG_MAP[up];
-              if (tags[up] && !t[lo]) { t[lo] = tags[up]; changed = true; }
-            }
-            for (var up in META_INT_TAGS) {
-              var lo = META_INT_TAGS[up];
-              if (tags[up] && t[lo] == null) { t[lo] = parseInt(tags[up], 10) || 0; changed = true; }
-            }
-            if (changed) changedIdxs.push(batch[ri].idx);
-          });
-          if (!changedIdxs.length) return;
-          if (state.sortKey) {
-            // 排序模式下防抖全量重渲染（多批合并为一次）
-            clearTimeout(_metaRenderTimer);
-            _metaRenderTimer = setTimeout(CM.renderTrackTable, 100);
-          } else {
-            CM._updateTrackRows(changedIdxs);
-          }
+    const currentCache = state.trackCache;   // 捕获当前歌单引用，防止切换后污染
+    const BATCH = 50;
+
+    const applyMeta = (tags, track, mapping, transform) => {
+      let changed = false;
+      for (const [up, lo] of Object.entries(mapping)) {
+        if (tags[up] && track[lo] == null) {
+          track[lo] = transform ? transform(tags[up]) : tags[up];
+          changed = true;
+        }
+      }
+      return changed;
+    };
+
+    // 分片
+    Array.from(
+      { length: Math.ceil(missing.length / BATCH) },
+      (_, i) => missing.slice(i * BATCH, (i + 1) * BATCH)
+    ).forEach(batch => {
+      CM.api('metadata.readBatch', { paths: batch.map(track => track.path) }).then(({ results }) => {
+        if (!results || state.trackCache !== currentCache) return; // 歌单已切换，放弃写入
+
+        // 主逻辑
+        const changedIdxs = results.flatMap((res, i) => {
+          const track = state.trackCache[batch[i].idx];
+          if (!res.success || !res.tags || !track) return [];
+
+          const tags = res.tags;
+          const changed1 = applyMeta(tags, track, META_TAG_MAP)
+          const changed2 = applyMeta(tags, track, META_INT_TAGS, v => +v || 0);
+
+          return changed1 || changed2 ? [batch[i].idx] : [];
         });
-      })(missing.slice(b, b + BATCH));
-    }
+
+        if (!changedIdxs.length) return;
+
+        // 有变更时触发重渲染
+        if (state.sortKey) {
+          clearTimeout(_metaRenderTimer);
+          _metaRenderTimer = setTimeout(CM.renderTrackTable, 100);
+        } else {
+          CM._updateTrackRows(changedIdxs);
+        }
+      });
+    });
   };
 
   // 增量更新表格行（仅更新指定索引的单元格内容，不重建整个表格）
   CM._updateTrackRows = function(idxs) {
-    idxs.forEach(function(idx) {
-      var tr = els.trackTbody.querySelector('tr[data-index="' + idx + '"]');
+    idxs.forEach(idx => {
+      const tr = els.trackTbody.querySelector(`tr[data-index="${idx}"]`);
       if (!tr) return;
-      var t = state.trackCache[idx];
-      if (!t) return;
-      var cells = tr.children;
+      const track = state.trackCache[idx];
+      if (!track) return;
+
+      const cells = tr.children;
       // cells[0]=track-num, [1]=title, [2]=artist, [3]=album, [4]=duration, [5]=bitrate
-      if (cells[1]) cells[1].textContent = CM.trackName(t);
-      if (cells[2]) cells[2].textContent = CM.trackArtist(t);
-      if (cells[3]) cells[3].textContent = t.album || '';
+      if (cells[1]) cells[1].textContent = CM.trackName(track);
+      if (cells[2]) cells[2].textContent = CM.trackArtist(track);
+      if (cells[3]) cells[3].textContent = track.album || '';
     });
   };
 
-  // 播放列表表格事件委托（一次性绑定，避免每次渲染都逐行 attach N 个监听器）
+  // 播放列表表格事件
   var _sortHeaders = null; // 缓存排序表头单元格
-  function ensureTrackTableDelegation() {
-    CM.runOnce('trackTableDelegation', function() {
-    els.trackTbody.addEventListener('click', function(e) {
-      var tr = e.target.closest('tr[data-index]');
-      if (!tr) return;
-      var realIdx = parseInt(tr.dataset.index, 10);
-      if (e.ctrlKey || e.metaKey) {
-        // Ctrl+click：批量多选
-        if (state.batchSelected.has(realIdx)) {
-          state.batchSelected.delete(realIdx);
-          tr.classList.remove('batch-selected');
-        } else {
-          state.batchSelected.add(realIdx);
-          tr.classList.add('batch-selected');
-        }
-        CM._updateBatchBar();
-      } else {
-        // 普通点击：清除多选，单选高亮，并记录聚焦行（Alt+↑/↓ 移动用）
-        if (state.batchSelected.size > 0) CM.clearBatchSelection();
-        var sel = els.trackTbody.querySelector('tr.selected');
-        if (sel) sel.classList.remove('selected');
-        tr.classList.add('selected');
-        state.focusedTrackIndex = realIdx;
-        state.focusedPlaylistIndex = state.currentPlaylistIndex;
+  let rangeAnchor = null;
+  els.trackTbody.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-index]');
+    if (!tr) return;
+    const idx = +tr.dataset.index;
+
+    const clearAll = () => {
+      state.batchSelected.clear();
+      els.trackTbody.querySelectorAll('tr').forEach(r =>
+        r.classList.remove('batch-selected', 'selected')
+      );
+    };
+
+    // Ctrl/Cmd + Click
+    if (e.ctrlKey || e.metaKey) {
+      const isSelected = state.batchSelected.has(idx);
+      state.batchSelected[isSelected ? 'delete' : 'add'](idx);
+      tr.classList.toggle('batch-selected', !isSelected);
+      if (state.batchSelected.size > 0)
+        els.trackTbody.querySelector('tr.selected')?.classList.remove('selected');
+      CM._updateBatchBar();
+      return;
+    }
+
+    // Shift + Click
+    if (e.shiftKey && rangeAnchor != null) {
+      clearAll();
+      const start = Math.min(rangeAnchor, idx);
+      const end = Math.max(rangeAnchor, idx);
+      for (let i = start; i <= end; i++) {
+        state.batchSelected.add(i);
+        els.trackTbody.querySelector(`tr[data-index="${i}"]`)?.classList.add('batch-selected');
       }
-    });
-    els.trackTbody.addEventListener('dblclick', function(e) {
-      var tr = e.target.closest('tr[data-index]');
-      if (!tr) return;
-      CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: parseInt(tr.dataset.index, 10) });
-    });
-    els.trackTbody.addEventListener('contextmenu', function(e) {
-      var tr = e.target.closest('tr[data-index]');
-      if (!tr) return;
-      e.preventDefault();
-      var realIdx = parseInt(tr.dataset.index, 10);
-      CM.showTrackCtxMenu(e.clientX, e.clientY, state.trackCache[realIdx], {
-        playlist: state.currentPlaylistIndex, index: realIdx
-      });
-    });
-    });
-  }
+      state.focusedTrackIndex = idx;
+      CM._updateBatchBar();
+      return;
+    }
+
+    // Click
+    clearAll();
+    tr.classList.add('selected');
+    state.focusedTrackIndex = idx;
+    rangeAnchor = idx;
+    CM._updateBatchBar();
+  });
+  els.trackTbody.addEventListener('dblclick', (e) => {
+    const tr = e.target.closest('tr[data-index]');
+    if (!tr) return;
+    CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: +tr.dataset.index });
+  });
+  els.trackTbody.addEventListener('contextmenu', (e) => {
+    const tr = e.target.closest('tr[data-index]');
+    if (!tr) return;
+    e.preventDefault();
+    const idx = +tr.dataset.index;
+    CM.showTrackCtxMenu(e.clientX, e.clientY, state.trackCache[idx], { playlist: state.currentPlaylistIndex, index: idx });
+  });
 
   /* ============================================
    * 播放列表曲目调序（右键菜单 / Alt+↑↓ 快捷键）
@@ -353,24 +378,21 @@
    * ============================================ */
   // 歌单是否允许手动排序（自动歌单/锁定歌单不可编辑）
   CM.canReorderPlaylist = function(playlistIdx) {
-    var idx = playlistIdx != null ? playlistIdx : state.currentPlaylistIndex;
+    const idx = playlistIdx ?? state.currentPlaylistIndex;
     if (idx < 0) return false;
-    var pl = (CM.playlists || []).find(function(p) { return p.index === idx; }) || {};
-    return !pl.isAutoplaylist && !pl.isLocked;
+    const pl = CM.playlists?.find(p => p.index === idx) ?? {};
+    return !(pl.isAutoplaylist || pl.isLocked);
   };
   // 参与移动的索引集合：多选集含锚点时返回排序后的整个选择集，否则仅锚点
   CM._selectionIndices = function(anchorIdx) {
-    if (state.batchSelected.size >= 2 && state.batchSelected.has(anchorIdx)) {
-      var arr = [];
-      state.batchSelected.forEach(function(i) { arr.push(i); });
-      return arr.sort(function(a, b) { return a - b; });
-    }
-    return [anchorIdx];
+    const set = state.batchSelected;
+    if (set.size < 2 || !set.has(anchorIdx)) return [anchorIdx];
+    return Array.from(set).sort((a, b) => a - b);
   };
   // moveTracks 包装：校验可编辑性，统一错误提示；msg=[title, sub] 时成功后弹 toast
   CM.movePlaylistTracks = function(indices, delta, msg) {
     var idx = state.currentPlaylistIndex;
-    if (idx < 0 || !indices || !indices.length || !delta) return Promise.resolve(null);
+    if (idx < 0 || !indices?.length || !delta) return Promise.resolve(null);
     if (!CM.canReorderPlaylist(idx)) {
       CM.showToast('无法调整顺序', '该歌单为锁定或自动播放列表', 'error');
       return Promise.resolve(null);
@@ -380,8 +402,8 @@
       return Promise.resolve(null);
     }
     return CM.api('playlist.moveTracks', { playlist: idx, items: indices, delta: delta }).then(function(r) {
-      if (!r || r.success === false) {
-        CM.showToast('移动失败', (r && r.error) ? r.error : '请稍后重试', 'error');
+      if (r?.success !== true) {
+        CM.showToast('移动失败', r?.error ?? '请稍后重试', 'error');
         return null;
       }
       if (msg) CM.showToast(...msg, 'success');
@@ -390,58 +412,62 @@
   };
   // 快捷键移动：批量选择优先，否则移动聚焦行；焦点随移动跟随
   CM.keyboardMoveTracks = function(delta) {
-    if (state.currentTab !== 'playlist' || state.currentPlaylistIndex < 0) return;
-    if (!state.trackCache.length) return;
-    var indices, anchor;
+    if (state.currentTab !== 'playlist' || state.currentPlaylistIndex < 0 || !state.trackCache.length) return;
+
+    let indices, anchor;
     if (state.batchSelected.size > 0) {
-      indices = CM._selectionIndices(state.batchSelected.values().next().value);
       // 焦点跟随移动方向的前缘：上移取最顶行，下移取最底行
+      indices = CM._selectionIndices(state.batchSelected.values().next().value);
       anchor = delta < 0 ? indices[0] : indices[indices.length - 1];
     } else if (state.focusedPlaylistIndex === state.currentPlaylistIndex && state.focusedTrackIndex >= 0) {
       // 聚焦索引仅在录制时的歌单内有效，且需钳制在当前曲目数内
       anchor = Math.min(state.focusedTrackIndex, state.trackCache.length - 1);
       indices = [anchor];
-    } else {
-      return;
-    }
+    } else return;
+
     if (!CM.canReorderPlaylist() || state.sortKey) {
       CM.movePlaylistTracks(indices, delta); // 走统一提示
       return;
     }
-    var n = state.trackCache.length;
-    // 先本地重映射焦点，保证长按连按时目标跟随（宿主事件随后会完整刷新）
-    var newFocus = Math.max(0, Math.min(n - 1, anchor + delta));
-    CM.movePlaylistTracks(indices, delta).then(function(r) {
+
+    // 本地计算新焦点，异步执行移动后更新状态
+    const n = state.trackCache.length;
+    const newFocus = Math.max(0, Math.min(n - 1, anchor + delta));
+    CM.movePlaylistTracks(indices, delta).then(r => {
       if (r) {
         state.focusedTrackIndex = newFocus;
         state.focusedPlaylistIndex = state.currentPlaylistIndex;
       }
     });
   };
-  CM.renderTrackTable = function() {
-    CM._lastPlayingTr = null; // 清除旧引用（innerHTML 替换后旧 DOM 已分离）
-    // 清除批量选择（表格重建后旧索引失效）
-    if (state.batchSelected.size > 0) {
+  CM.renderTrackTable = function () {
+    // 清除旧引用与批量选择状态
+    CM._lastPlayingTr = null;
+    if (state.batchSelected.size) {
       state.batchSelected.clear();
       CM._updateBatchBar();
     }
-    var tracks = state.trackCache.slice();
-    // 客户端排序视图（不改动实际播放列表顺序）
-    var viewIndex = tracks.map(function(_, i) { return i; });
-    if (state.sortKey) {
-      var key = state.sortKey, asc = state.sortAsc ? 1 : -1;
-      viewIndex.sort(function(a, b) {
-        var va = tracks[a][key], vb = tracks[b][key];
+
+    const tracks = state.trackCache.slice();
+    const viewIndex = Array.from({ length: tracks.length }, (_, i) => i);
+    const hasSort = state.sortKey && state.sortKey.length;
+
+    // 客户端排序
+    if (hasSort) {
+      const key = state.sortKey, asc = state.sortAsc ? 1 : -1;
+      viewIndex.sort((a, b) => {
+        const va = tracks[a][key], vb = tracks[b][key];
         if (key === 'duration' || key === 'bitrate') {
           return ((va || 0) - (vb || 0)) * asc;
         }
         return String(va || '').localeCompare(String(vb || ''), 'zh-CN') * asc;
       });
     }
-    // 排序箭头（缓存表头单元格，避免每次渲染都 querySelectorAll）
+
+    // 更新表头排序箭头
     if (!_sortHeaders) _sortHeaders = els.trackTable.querySelectorAll('thead th[data-sort]');
-    _sortHeaders.forEach(function(th) {
-      var arrow = th.querySelector('.sort-arrow');
+    _sortHeaders.forEach(th => {
+      const arrow = th.querySelector('.sort-arrow');
       if (th.dataset.sort === state.sortKey) {
         th.classList.add('sorted');
         arrow.textContent = state.sortAsc ? '▲' : '▼';
@@ -451,115 +477,119 @@
       }
     });
 
+    // 空状态处理
     if (!tracks.length) {
-      els.trackTbody.innerHTML = '<tr><td colspan="6"><div class="table-empty">这个歌单还没有曲目<br><span style="font-size:11.5px;opacity:0.7">拖放音频文件到窗口即可添加</span></div></td></tr>';
+      els.trackTbody.innerHTML = `
+        <tr><td colspan="6">
+          <div class="table-empty">这个歌单还没有曲目<br>
+            <span style="font-size:11.5px;opacity:0.7">拖放音频文件到窗口即可添加</span>
+          </div>
+        </td></tr>`;
       return;
     }
 
-    var isPlayingList = state.currentPlaylistIndex === state.playingPlaylistIndex;
+    const isPlayingList = state.currentPlaylistIndex === state.playingPlaylistIndex;
+    const EQ_HTML = '<span class="eq-bars"><i></i><i></i><i></i></span>';
+
     // 预转义曲目字段，避免循环内重复调用 esc()
-    var escTracks = tracks.map(function(t) {
-      return {
-        name: esc(CM.trackName(t)),
-        artist: esc(CM.trackArtist(t)),
-        album: esc(t.album || ''),
-        duration: CM.formatTime(t.duration),
-        bitrate: t.bitrate ? t.bitrate + 'k' : ''
-      };
-    });
-    // —— keyed 差量渲染：按 data-index 复用内容未变的行节点 ——
-    // 全量 innerHTML 重写时 N 行 = N 行 HTML 解析 + 全表重排；差量仅重建签名变化的行，
-    // 纯排序场景 0 次 HTML 解析（仅节点移动 + 行号 textContent 更新）
-    var EQ_HTML = '<span class="eq-bars"><i></i><i></i><i></i></span>';
-    var tbody = els.trackTbody;
-    // 收集现有可复用行（仅差量渲染产生的行带 _rowSig；empty/loading 行无此标记自动失配）
-    var oldByIdx = {};
-    for (var ci = 0; ci < tbody.children.length; ci++) {
-      var ctr = tbody.children[ci];
-      if (ctr._rowSig != null) oldByIdx[ctr.dataset.index] = ctr;
+    const escTracks = tracks.map(t => ({
+      name: esc(CM.trackName(t)),
+      artist: esc(CM.trackArtist(t)),
+      album: esc(t.album || ''),
+      duration: CM.formatTime(t.duration),
+      bitrate: t.bitrate ? t.bitrate + 'k' : ''
+    }));
+
+    // 收集现有可复用行（仅差量渲染产生的行附带 _rowSig）
+    const tbody = els.trackTbody;
+    const oldByIdx = {};
+    for (const tr of tbody.children) {
+      if (tr._rowSig != null) oldByIdx[tr.dataset.index] = tr;
     }
-    var frag = document.createDocumentFragment();
-    viewIndex.forEach(function(realIdx, row) {
-      var t = escTracks[realIdx];
-      var playing = isPlayingList && realIdx === state.playingTrackIndex;
-      // 行签名 = 除行号外的全部渲染输入（行号在复用时单独更新；签名不含 refreshPlayingMarks
-      // 命令式改动的 playing 态——该改动会使签名失配触发单行重建，结果自愈为正确状态）
-      var sig = realIdx + '|' + (playing ? 1 : 0) + '|' + t.name + '|' + t.artist + '|' + t.album + '|' + t.duration + '|' + t.bitrate;
-      var tr = oldByIdx[realIdx];
+
+    const frag = document.createDocumentFragment();
+
+    viewIndex.forEach((realIdx, row) => {
+      const track = escTracks[realIdx];
+      const playing = isPlayingList && realIdx === state.playingTrackIndex;
+
+      // 行签名 除行号外的全部渲染输入（行号在复用时单独更新）
+      const sig = [ realIdx, playing ? 1 : 0, track.name, track.artist, track.album, track.duration, track.bitrate].join('|');
+
+      let tr = oldByIdx[realIdx];
       if (tr && tr._rowSig === sig) {
-        // 复用：与全量重建行为一致地清除选择态（入口已 clear batchSelected）
-        if (tr.classList.contains('batch-selected') || tr.classList.contains('selected')) {
-          tr.classList.remove('batch-selected', 'selected');
+        // 复用行 清除可能残留的类名
+        tr.classList.remove('batch-selected', 'selected');
+        const numCell = tr.children[0];
+        if (playing) {
+          if (!numCell.querySelector('.eq-bars')) numCell.innerHTML = EQ_HTML;
+        } else if (numCell.textContent !== String(row + 1)) {
+          numCell.textContent = row + 1;
         }
-        var numCell = tr.children[0];
-        if (playing) { if (!numCell.querySelector('.eq-bars')) numCell.innerHTML = EQ_HTML; }
-        else if (numCell.textContent !== String(row + 1)) numCell.textContent = row + 1;
       } else {
+        // 新建行
         tr = document.createElement('tr');
         if (playing) tr.className = 'playing';
         tr.setAttribute('data-index', realIdx);
         tr._rowSig = sig;
-        tr.innerHTML =
-          '<td class="track-num">' + (playing ? EQ_HTML : (row + 1)) + '</td>' +
-          '<td class="track-title">' + t.name + '</td>' +
-          '<td class="track-artist-cell">' + t.artist + '</td>' +
-          '<td class="track-artist-cell">' + t.album + '</td>' +
-          '<td class="track-duration">' + t.duration + '</td>' +
-          '<td class="track-bitrate">' + t.bitrate + '</td>';
+        tr.innerHTML = `
+          <td class="track-num">${playing ? EQ_HTML : row + 1}</td>
+          <td class="track-title">${track.name}</td>
+          <td class="track-artist-cell">${track.artist}</td>
+          <td class="track-artist-cell">${track.album}</td>
+          <td class="track-duration">${track.duration}</td>
+          <td class="track-bitrate">${track.bitrate}</td>`;
       }
-      // 登记播放行，供 refreshPlayingMarks 切换时清除，避免残留导致两行同时高亮
+
+      // 记录正在播放的行
       if (playing) CM._lastPlayingTr = tr;
-      frag.appendChild(tr); // 复用节点为 move 操作，不触发 HTML 解析
+      frag.appendChild(tr); // 复用节点为 move 操作
     });
-    tbody.textContent = ''; // 移除未被复用的旧行（已复用的行已移入 frag）
-    tbody.appendChild(frag);
-    ensureTrackTableDelegation();
+
+    tbody.replaceChildren(frag);
   };
 
-  // 标记表格/发现页/搜索中的"正在播放"行
-  // 只更新变化的行（旧播放行 → 恢复序号，新播放行 → 显示均衡器），避免全表扫描
-  CM._lastPlayingTr = null;
-  CM._lastPlayingDc = null; // 上一次标记为 playing 的 dc-track/search-result-item
-  CM.refreshPlayingMarks = function() {
-    var isPlayingList = state.currentPlaylistIndex === state.playingPlaylistIndex;
+  // // 标记表格/发现页/搜索中的"正在播放"行
+  // // 只更新变化的行（旧播放行 → 恢复序号，新播放行 → 显示均衡器），避免全表扫描
+  CM.refreshPlayingMarks = function () {
+    const isPlayingList = state.currentPlaylistIndex === state.playingPlaylistIndex;
+
     // 清除旧的播放行
-    if (CM._lastPlayingTr && CM._lastPlayingTr.parentNode) {
-      CM._lastPlayingTr.classList.remove('playing');
-      var oldNum = CM._lastPlayingTr.querySelector('.track-num');
-      if (oldNum && oldNum.querySelector('.eq-bars')) {
-        oldNum.textContent = String(CM._lastPlayingTr.sectionRowIndex + 1);
-      }
+    const tr = CM._lastPlayingTr;
+    if (tr?.parentNode) {
+      tr.classList.remove('playing');
+      const num = tr.querySelector('.track-num');
+      if (num?.querySelector('.eq-bars')) num.textContent = String(tr.sectionRowIndex + 1);
       CM._lastPlayingTr = null;
     }
+
     // 设置新的播放行
     if (isPlayingList && state.playingTrackIndex >= 0) {
-      var tr = els.trackTbody.querySelector('tr[data-index="' + state.playingTrackIndex + '"]');
+      const tr = els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`);
       if (tr) {
         tr.classList.add('playing');
-        // 自动滚动到当前播放项
         tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        var numCell = tr.querySelector('.track-num');
-        if (numCell) numCell.innerHTML = '<span class="eq-bars"><i></i><i></i><i></i></span>';
+        tr.querySelector('.track-num').innerHTML = '<span class="eq-bars"><i></i><i></i><i></i></span>';
         CM._lastPlayingTr = tr;
       }
     }
-    // dc-track / search-result-item：只更新变化的元素，避免每次都全量扫描 mainContent
-    var curPath = CM.trackPath(CM.currentTrack);
+
     // 清除旧的 playing 标记
-    if (CM._lastPlayingDc && CM._lastPlayingDc.parentNode) {
+    if (CM._lastPlayingDc?.parentNode) {
       CM._lastPlayingDc.classList.remove('playing');
       CM._lastPlayingDc = null;
     }
-    // 设置新的 playing 标记：逐项比较 dataset.path（属性选择器在下划线/引号等特殊路径下会失效）
-    if (curPath) {
-      var _nodes = els.mainContent.querySelectorAll('.dc-track, .search-result-item');
-      for (var _ni = 0; _ni < _nodes.length; _ni++) {
-        if (_nodes[_ni].dataset.path === curPath) {
-          _nodes[_ni].classList.add('playing');
-          CM._lastPlayingDc = _nodes[_ni];
-          break;
-        }
-      }
+
+    // 设置新的 playing 标记
+    const curPath = CM.trackPath(CM.currentTrack);
+    if (!curPath) return;
+
+    const node = Array.from(els.mainContent.querySelectorAll('.dc-track, .search-result-item'))
+      .find(n => n.dataset.path === curPath);
+
+    if (node) {
+      node.classList.add('playing');
+      CM._lastPlayingDc = node;
     }
   };
 
@@ -663,7 +693,7 @@
       { divider: true },
       {
         label: '从歌单中删除', icon: CM.icons.trash, disabled: pl.isLocked, danger: true,
-        action: () => CM.api('playlist.removeTracks', { playlist: ctx.playlist, items: [ctx.index] })
+        action: () => CM.api('playlist.removeTracks', { playlist: ctx.playlist, items: state.batchSelected.size ? [...state.batchSelected] : [ctx.index] })
       }
     ];
     CM.showCtxMenu(x, y, items);
@@ -745,33 +775,24 @@
   };
 
   /* ============================================
-   * 批量选择（Ctrl+click 多选）
+   * 批量选择
    * ============================================ */
   CM.clearBatchSelection = function() {
     state.batchSelected.clear();
-    els.trackTbody.querySelectorAll('tr.batch-selected').forEach(function(tr) {
-      tr.classList.remove('batch-selected');
-    });
+    els.trackTbody.querySelectorAll('tr.batch-selected').forEach(tr => tr.classList.remove('batch-selected'));
     CM._updateBatchBar();
   };
 
-  CM._updateBatchBar = function() {
-    var count = state.batchSelected.size;
-    if (count >= 2) {
-      els.batchBarCount.textContent = count;
-      els.batchBar.classList.remove('hidden');
-    } else {
-      els.batchBar.classList.add('hidden');
-    }
+  CM._updateBatchBar = () => {
+    const count = state.batchSelected.size;
+    els.batchBarCount.textContent = count;
+    els.batchBar.classList.toggle('hidden', count < 2);
   };
 
   // 批量编辑入口（从 batch bar 触发）
-  CM._batchEditFromBar = function() {
+  CM._batchEditFromBar = () => {
     if (state.batchSelected.size < 2) return;
-    var tracks = [];
-    state.batchSelected.forEach(function(idx) {
-      if (state.trackCache[idx]) tracks.push(state.trackCache[idx]);
-    });
+    const tracks = Array.from(state.batchSelected, idx => state.trackCache[idx]).filter(Boolean);
     if (tracks.length >= 2) CM.showBatchTagEditor(tracks);
   };
 })();

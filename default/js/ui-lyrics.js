@@ -47,41 +47,11 @@
   /* ============================================
    * 歌词面板显隐
    * ============================================ */
-  var _rpAnimTimer = null;
-  // 解冻主内容（恢复自适应宽度）
-  function _unfreezeMain() {
-    var tab = els.mainBody.querySelector('.tab-content[data-rp-frozen]');
-    if (tab) { tab.style.width = ''; tab.style.right = ''; delete tab.dataset.rpFrozen; }
-  }
-  CM.setLyricsVisible = function(visible, instant) {
-    state.lyricsVisible = visible;
-    CM.settings.lyricsVisible = visible;
+  CM.setLyricsVisible = function(visible) {
+    CM.state.lyricsVisible = CM.settings.lyricsVisible = visible;
     CM.saveSettings();
     els.btnLyricsToggle.classList.toggle('active', visible);
-    // 平滑开合且零卡顿的"冻结"方案（详见下方非对称冻结注释）：
-    //   列轨道 0.26s 动画驱动 320px 固定宽面板平移进出（内部零重排、模糊背景零重绘），
-    //   主内容冻结在像素宽度使动画期间零重排，全程每方向只有一次重排且时机自然。
-    if (_rpAnimTimer) { clearTimeout(_rpAnimTimer); _rpAnimTimer = null; _unfreezeMain(); }
-    var tab = els.mainBody.querySelector('.tab-content.active');
-    if (instant || !tab) {
-      els.app.classList.toggle('lyrics-hidden', !visible);
-    } else {
-      var rightW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--right-w'), 10) || 320;
-      var cur = els.mainBody.clientWidth;
-      // 对称冻结在"目标宽度"（两方向均把唯一一次重排放置在动画起点，被面板滑动掩盖）：
-      //   显示：内容立刻重排变窄让位，面板滑入右侧空条；终点容器宽=冻结宽，解冻零变化。
-      //   隐藏：内容立刻重排变宽（右侧 320px 被裁剪的部分恰好被尚未离开的面板遮住），
-      //        面板滑出时逐像素显露已是最终布局的内容；终点同样零跳变。
-      var target = visible ? cur - rightW : cur + rightW;
-      tab.style.width = Math.max(0, target) + 'px';
-      tab.style.right = 'auto'; // 左锚定，右侧被裁剪/展开的部分由滑动中的面板遮盖
-      tab.dataset.rpFrozen = '1';
-      els.app.classList.toggle('lyrics-hidden', !visible);
-      _rpAnimTimer = setTimeout(function() {
-        _rpAnimTimer = null;
-        _unfreezeMain();
-      }, 300); // > 0.26s CSS 动画
-    }
+    els.app.classList.toggle('lyrics-hidden', !visible);
   };
 
   els.lyricsScroll.addEventListener('contextmenu', e => {

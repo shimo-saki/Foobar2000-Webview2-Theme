@@ -18,28 +18,19 @@
       CM.renderNpOverlay();
       els.npOverlay.classList.add('open');
       document.body.style.overflow = 'hidden';
-      // 关闭歌词面板节省资源
-      if (state.lyricsVisible) CM.setLyricsVisible(false, true);
       els.npLyrics.replaceChildren(CM.player.getElement());
     } else {
       els.npOverlay.classList.remove('open');
       document.body.style.overflow = '';
-      // 恢复歌词面板
-      if (!state.lyricsVisible) CM.setLyricsVisible(true, true);
       els.lyricsScroll.replaceChildren(CM.player.getElement());
     }
   };
 
   CM.renderNpOverlay = function() {
     // 同步封面（getAttribute 判断：未设置 src 时 .src 返回页面基址 URL，恒为 truthy）
-    var artUrl = els.bottomArt.getAttribute('src');
-    if (artUrl) {
-      els.npArtwork.src = artUrl;
-      els.npBgBlur.style.backgroundImage = 'url("' + artUrl + '")';
-    } else {
-      els.npArtwork.src = DEFAULT_TRACK_COVER;
-      els.npBgBlur.style.backgroundImage = 'url("' + DEFAULT_TRACK_COVER + '")';
-    }
+    const artUrl = els.bottomArt.getAttribute('src') || DEFAULT_TRACK_COVER;
+    els.npArtwork.src = artUrl;
+    els.npBgBlur.style.backgroundImage = `url("${artUrl}")`;
     // 同步曲目信息
     els.npTrackTitle.textContent = els.bottomTitle.textContent;
     els.npTrackArtist.textContent = els.bottomArtist.textContent;

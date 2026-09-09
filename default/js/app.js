@@ -211,8 +211,8 @@
    * ============================================ */
   function boot() {
     CM.loadSettings();
-    CM.state.lyricsVisible = CM.settings.lyricsVisible !== false;
-    CM.state.visualizerActive = CM.settings.visualizer !== false;
+    CM.state.lyricsVisible = CM.settings.lyricsVisible ?? true;
+    CM.state.visualizerActive = CM.settings.visualizer ?? true;
 
     // UI 绑定（不依赖宿主，先行执行保证界面可交互）
     CM.initTitlebar();
@@ -225,7 +225,7 @@
     CM.bindNpOverlay();
     CM.bindTagEditor();
 
-    CM.setLyricsVisible(CM.state.lyricsVisible, true);
+    CM.setLyricsVisible(CM.state.lyricsVisible);
     CM.setVisualizerActive(CM.state.visualizerActive);
     CM.updateOrderIcon();
     CM.updateVolumeIcon();
