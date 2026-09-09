@@ -72,7 +72,7 @@
 .ctx-item.checked{color:var(--accent)}
 .ctx-item.disabled{opacity:0.35;pointer-events:none}
 .ctx-item .ctx-check{width:14px;flex-shrink:0;font-size:11px;color:var(--accent);text-align:center}
-.ctx-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ctx-item svg, .ctx-menu-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .ctx-item .ctx-stars{color:var(--accent);letter-spacing:1px;font-size:11px}
 .ctx-divider{height:1px;background:var(--border);margin:5px 8px}
 .ctx-label{padding:6px 12px 3px;font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--text-3)}

@@ -457,7 +457,7 @@
   fb2k.invoke('discovery.getComponents').then(data => CM.components = data.components);
 
   CM.checkCompCache = new Map();
-  CM.checkComponent = function (name) {
+  CM.checkComponent = function(name) {
     if (CM.checkCompCache.has(name)) return CM.checkCompCache.get(name);
     const found = CM.components.some(c => c.filename === name);
     CM.checkCompCache.set(name, found);

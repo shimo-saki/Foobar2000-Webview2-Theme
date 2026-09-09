@@ -175,55 +175,58 @@
     el._hideListener = listener;
   }
 
-  function _setPosition(el, refX, refY, gap = 8, maxHeight = null) {
+  function _setPosition(el, refX, refY, gap = 8) {
+    const MARGIN = 8;
     const { innerWidth: W, innerHeight: H } = window;
 
-    let maxH = maxHeight ?? Math.max(180, Math.min(H - 16, 480));
-    maxH = Math.max(180, Math.min(H - gap, maxH));
+    const maxH = Math.max(180, Math.min(H - gap, 480));
     el.style.maxHeight = maxH + 'px';
     el.classList.remove('hidden', 'removing');
 
     const { width: w, height: h } = el.getBoundingClientRect();
-    const left = Math.max(8, (refX + gap + w > W - 8) ? refX - w - gap : refX + gap);
-    const top = Math.max(8, (refY + h > H - 8) ? Math.min(refY - h - gap, H - h - 8) : refY);
+    const offsetW = el.classList.contains('ctx-submenu') ? (el.parentNode.getBoundingClientRect().width || 0) : 0;
+    const left = Math.max(MARGIN, (refX + gap + w > W - MARGIN) ? refX - offsetW - w - -gap : refX + gap);
+    const top = Math.max(MARGIN, (refY + h > H - MARGIN) ? Math.min(refY - h - gap, H - h - MARGIN) : refY);
 
     el.style.left = left + 'px';
     el.style.top = top + 'px';
-  }
+  };
 
-  CM.createMenu = function(items) {
+  CM.createMenu = function(items, basePath = []) {
     return items.map((item, idx) => {
+      const path = [...basePath, idx];
+
       if (item.hidden) return ''; // 隐藏项
       if (item.divider) return '<div class="ctx-divider"></div>'; // 分割线
       if (item.isLabel) return `<div class="ctx-label">${esc(item.label)}</div>`; // 标签
-      if (item.submenu) return `
-        <div class="ctx-menu-item" data-idx="${idx}">
+      if (item.submenu && item.submenu.length) return `
+        <div class="ctx-menu-item" data-path="${JSON.stringify(path)}">
           ${item.icon || ''}
           <span>${esc(item.label)}</span>
           <span style="margin-left:auto"> > </span>
-          <div class="ctx-submenu hidden">${CM.createMenu(item.submenu)}</div>
+          <div class="ctx-submenu hidden">${CM.createMenu(item.submenu, path)}</div>
         </div>`;
 
       const classMap = { 'ctx-item': true, danger: item.danger, checked: item.checked, disabled: item.disabled };
       const classes = Object.keys(classMap).filter(k => classMap[k]).join(' ');
 
       const content = item.html || `<span>${esc(item.label)}</span>`;
-      return `<div class="${classes}" data-idx="${idx}">${item.icon || ''}${content}</div>`;
+      return `<div class="${classes}" data-path="${JSON.stringify(path)}">${item.icon || ''}${content}</div>`;
     }).join('');
   };
 
-  CM.showCtxMenu = function (x, y, items) {
+  CM.showCtxMenu = function(x, y, items) {
     const menu = els.ctxMenu;
     menu.removeEventListener('animationend', menu._hideListener);
 
     state.menuItems = items;
     menu.innerHTML = CM.createMenu(items);
     // 定位
-    _setPosition(menu, x, y, 8, 480);
+    _setPosition(menu, x, y, 8);
     _showElement(menu);
   };
 
-  CM.hideCtxMenu = function () {
+  CM.hideCtxMenu = function() {
     const menu = els.ctxMenu;
     if (menu.classList.contains('hidden') || menu.classList.contains('removing')) return;
 
@@ -237,6 +240,11 @@
     _hideElement(menu);
   };
 
+  function getMenuItemByPath(path) {
+    const node = path.slice(0, -1).reduce((acc, key) => acc?.[key]?.submenu, state.menuItems);
+    return node?.[path[path.length - 1]];
+  }
+
   // 事件处理
   els.ctxMenu.addEventListener('click', (e) => {
     const el = e.target.closest('.ctx-item');
@@ -244,8 +252,8 @@
     e.stopPropagation();
     CM.hideCtxMenu();
 
-    const idx = +el.dataset.idx, menuIdx = +e.target.closest('.ctx-menu-item')?.dataset.idx;
-    const target = menuIdx ? state.menuItems[menuIdx].submenu[idx] : state.menuItems[idx];
+    const path = JSON.parse(el.dataset.path);
+    const target = getMenuItemByPath(path);
     target?.action();
   });
 
