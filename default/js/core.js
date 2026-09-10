@@ -46,7 +46,7 @@
     lyricsScroll: CM.$('lyricsScroll'), lyricsEmpty: CM.$('lyricsEmpty'),
     // Bottom bar
     bottomArtWrap: CM.$('bottomArtWrap'), bottomArt: CM.$('bottomArt'),
-    bottomTitle: CM.$('bottomTitle'), bottomArtist: CM.$('bottomArtist'), likeBtn: CM.$('likeBtn'),
+    bottomTitle: CM.$('bottomTitle'), bottomArtist: CM.$('bottomArtist'),
     btnOrder: CM.$('btnOrder'), iconOrderSeq: CM.$('iconOrderSeq'), iconOrderLoop: CM.$('iconOrderLoop'),
     iconOrderOne: CM.$('iconOrderOne'), iconOrderShuffle: CM.$('iconOrderShuffle'),
     btnPrev: CM.$('btnPrev'), btnPlayPause: CM.$('btnPlayPause'), iconPlay: CM.$('iconPlay'), iconPause: CM.$('iconPause'),

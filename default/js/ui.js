@@ -444,19 +444,6 @@
     });
   };
 
-  // 更新“喜欢”按钮（rating >= 4 视为喜欢）
-  CM._ratingLoadId = 0;
-  CM.refreshLikeState = function() {
-    var path = CM.trackPath(CM.currentTrack);
-    if (!path) { els.likeBtn.classList.remove('liked'); return; }
-    var loadId = ++CM._ratingLoadId;
-    CM.api('rating.get', { path: path }).then(function(r) {
-      if (loadId !== CM._ratingLoadId) return;
-      var rt = r && r.success !== false ? (r.rating || 0) : 0;
-      els.likeBtn.classList.toggle('liked', rt >= 4);
-    });
-  };
-
   /* ============================================
    * 批量封面（fb2k:// URL）
    * container 内查找 [data-path] 的 .art-slot 元素并填充

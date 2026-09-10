@@ -28,7 +28,6 @@
     CM.updateTrackInfo(track);
     CM.loadCurrentArtwork();
     CM.loadLyrics();
-    CM.refreshLikeState();
     CM._renderQueueNow(); // 队列抽屉"正在播放"卡片
     // 如果沉浸式页面打开，重新渲染
     if (CM.state.npOpen) {

@@ -193,22 +193,6 @@
       });
     });
 
-    // 喜欢 = 评分 5 星 / 清除
-    els.likeBtn.addEventListener('click', function() {
-      var path = CM.trackPath(CM.currentTrack);
-      if (!path) return;
-      var liked = els.likeBtn.classList.contains('liked');
-      var target = liked ? 0 : 5;
-      CM.api('rating.set', { path: path, rating: target }).then(function(r) {
-        if (r && r.success !== false) {
-          els.likeBtn.classList.toggle('liked', !liked);
-          CM.showToast(liked ? '已取消喜欢' : '已添加到喜欢', CM.trackName(CM.currentTrack), liked ? null : 'success');
-        } else {
-          CM.showToast('操作失败', '评分功能需要 foo_playcount 组件', 'error');
-        }
-      });
-    });
-
     // 进度条
     CM.bindSeekBar(els.seekBar, els.seekCurrent, '--seek-pct', 'seeking', CM.updateSeekUI);
 
