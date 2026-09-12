@@ -84,8 +84,7 @@
   CM.doSearch = function(query) {
     query = (query || '').trim();
     if (!query) {
-      els.searchResults.innerHTML =
-        CM.emptyHTML('输入关键词搜索媒体库', '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>');
+      els.searchResults.innerHTML = CM.emptyHTML('输入关键词搜索媒体库', '<span class="icon" style="font-size:48px;color:var(--text-3);"></span>');
       return;
     }
     els.searchResults.innerHTML = CM.loadingHTML('搜索中...');
@@ -105,7 +104,7 @@
       const header = `<div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px">
         <div class="library-section-title" style="margin:0">共 ${total} 条结果</div>
         <button class="pl-btn" id="searchAddAllBtn" style="margin-left:auto">
-          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          ${CM.icons.plus}
           <span>添加全部到歌单</span>
         </button>
       </div>`;

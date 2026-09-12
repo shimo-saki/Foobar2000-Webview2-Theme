@@ -218,11 +218,10 @@
   };
 
   CM.debounce = function(fn, ms) {
-    var timer = null;
-    return function() {
-      var args = arguments, self = this;
+    let timer;
+    return (...args) => {
       clearTimeout(timer);
-      timer = setTimeout(function() { fn.apply(self, args); }, ms);
+      timer = setTimeout(() => fn(...args), ms);
     };
   };
 
@@ -533,43 +532,55 @@
   };
 
   /* ============================================
-   * SVG 图标库（供渲染函数复用）
+   * 图标库（供渲染函数复用）
    * ============================================ */
   CM.icons = {
-    play: '<svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></svg>',
-    note: '<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
-    plus: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
-    trash: '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
-    edit: '<svg viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
-    queue: '<svg viewBox="0 0 24 24"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>',
-    star: '<svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
-    info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
-    check: '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
-    error: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
-    folder: '<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-    refresh: '<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
+    play: '<span class="icon"></span>',
+    note: '<span class="icon"></span>',
+    plus: '<span class="icon"></span>',
+    trash: '<span class="icon"></span>',
+    edit: '<span class="icon"></span>',
+    rename: '<span class="icon"></span>',
+    file: '<span class="icon"></span>',
+    queue: '<span class="icon"></span>',
+    info: '<span class="icon"></span>',
+    check: '<span class="icon"></span>',
+    cancel: '<span class="icon"></span>',
+    error: '<span class="icon"></span>',
+    folder: '<span class="icon"></span>',
+    addfolder: '<span class="icon"></span>',
+    refresh: '<span class="icon"></span>',
+    random: '<span class="icon"></span>',
+    search: '<span class="icon"></span>',
+    copy: '<span class="icon"></span>',
+    redo: '<span class="icon"></span>',
+    undo: '<span class="icon"></span>',
+    artist: '<span class="icon"></span>',
+    album: '<span class="icon"></span>',
+    group: '<span class="icon"></span>',
+    headphone: '<span class="icon"></span>',
+    title: '<span class="icon"></span>',
+    eq: '<span class="icon"></span>',
+    position: '<span class="icon"></span>',
     // Popover 专用图标
-    desktopLyric: '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
-    pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-2.5c0-.5-.5-1-1-1h-1.5l-1-7.5h-7l-1 7.5H6c-.5 0-1 .5-1 1V17z"/></svg>',
-    lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
-    eq: '<svg viewBox="0 0 24 24"><path d="M3 12h2l2-8 4 16 3-10 2 4h5"/></svg>',
-    output: '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
-    console: '<svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
-    preferences: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    desktopLyric: '<span class="icon"></span>',
+    pin: '<span class="icon"></span>',
+    lock: '<span class="icon"></span>',
+    output: '<span class="icon"></span>',
+    console: '<span class="icon"></span>',
+    preferences: '<span class="icon"></span>',
     // 标签编辑/封面/下载
-    tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
-    download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
-    image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
+    tag: '<span class="icon"></span>',
+    download: '<span class="icon"></span>',
     // 曲目排序 / 调整顺序
-    up: '<svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
-    down: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
-    toTop: '<svg viewBox="0 0 24 24"><line x1="4" y1="4" x2="20" y2="4"/><line x1="12" y1="20" x2="12" y2="8"/><polyline points="7 13 12 8 17 13"/></svg>',
-    toBottom: '<svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="20"/><line x1="12" y1="4" x2="12" y2="16"/><polyline points="7 11 12 16 17 11"/></svg>',
-    reverse: '<svg viewBox="0 0 24 24"><polyline points="7 3 3 7 7 11"/><path d="M3 7h13a5 5 0 0 1 5 5v1"/><polyline points="17 21 21 17 17 13"/><path d="M21 17H8a5 5 0 0 1-5-5v-1"/></svg>',
+    sort: '<span class="icon"></span>',
+    up: '<span class="icon"></span>',
+    down: '<span class="icon"></span>',
+    toTop: '<span class="icon"></span>',
+    toBottom: '<span class="icon"></span>',
+    reverse: '<span class="icon"></span>',
+    pre: '<span class="icon"></span>',
+    next: '<span class="icon"></span>',
     grip: '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>',
-    search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
-    copy: '<svg viewBox="0 0 24 24"><path d="M 7.2 7.2 L 7.2 5.28 A 2.88 2.88 0 0 1 10.08 2.4 L 16.32 2.4 A 2.88 2.88 0 0 1 19.2 5.28 L 19.2 11.52 A 2.88 2.88 0 0 1 16.32 14.4 L 14.4 14.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.28 7.2 L 11.52 7.2 A 2.88 2.88 0 0 1 14.4 10.08 L 14.4 16.32 A 2.88 2.88 0 0 1 11.52 19.2 L 5.28 19.2 A 2.88 2.88 0 0 1 2.4 16.32 L 2.4 10.08 A 2.88 2.88 0 0 1 5.28 7.2 Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    position: '<svg viewBox="0 0 24 24"><path d="M11.09 1.66h1.5c.11 0 .19.08.19.19v1.81c3.98.44 7.14 3.6 7.58 7.58h1.81c.11 0 .19.08.19.19v1.5c0 .11-.08.19-.19.19h-1.81c-.44 3.98-3.6 7.14-7.58 7.58v1.81c0 .11-.08.19-.19.19h-1.5c-.11 0-.19-.08-.19-.19v-1.81c-3.98-.44-7.14-3.6-7.58-7.58H1.69c-.11 0-.19-.08-.19-.19v-1.5c0-.11.08-.19.19-.19H3.5C3.94 7.1 7.1 3.94 11.08 3.5V1.85c0-.11.08-.19.19-.19z M18.72 12c0-3.7-3.02-6.72-6.72-6.72S5.28 8.3 5.28 12s3.02 6.72 6.72 6.72 6.72-3.02 6.72-6.72z M12 13.4c.77 0 1.4-.63 1.4-1.4s-.63-1.4-1.4-1.4-1.4.63-1.4 1.4.63 1.4 1.4 1.4z" fill="currentColor"/></svg>',
-    album: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12a9 9 0 10-18 0 9 9 0 0018 0zm-4 0a1 1 0 112 0c0 1.977-.815 3.747-2.127 4.94a1 1 0 01-1.346-1.48C16.415 14.653 17 13.423 17 12zM5 12c0-1.977.815-3.747 2.127-4.94a1 1 0 011.346 1.48C7.585 9.347 7 10.577 7 12a1 1 0 11-2 0zm18 0c0 6.075-4.925 11-11 11S1 18.075 1 12 5.925 1 12 1s11 4.925 11 11z"/></svg>'
   };
 })();

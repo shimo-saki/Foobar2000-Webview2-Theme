@@ -29,17 +29,23 @@
   var _tagCtx = null; // { mode: 'single'|'batch', tracks: [], original: {} }
 
   CM.showTagEditor = function(track) {
-    var path = CM.trackPath(track);
-    if (!path) { CM.showToast('无法编辑', '未获取到文件路径', 'error'); return; }
-    _tagCtx = { mode: 'single', tracks: [track], path: path };
+    const path = CM.trackPath(track);
+    if (!path) { return CM.showToast('无法编辑', '未获取到文件路径', 'error') }
+
+    _tagCtx = { mode: 'single', tracks: [track], path };
     els.tagEditorTitle.textContent = '编辑标签';
-    els.tagEditorTrack.textContent = CM.trackName(track) + ' — ' + path;
+    els.tagEditorTrack.textContent = `${CM.trackName(track)} — ${path}`;
     els.tagEditorHint.textContent = '正在读取标签...';
+
     // 立即打开编辑器，显示加载态
-    els.tagEditorBody.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-3);font-size:13px"><div class="spinner" style="margin:0 auto 10px"></div>正在读取标签...</div>';
+    els.tagEditorBody.innerHTML = `
+      <div style="text-align:center;padding:32px;color:var(--text-3);font-size:13px">
+        <div class="spinner" style="margin:0 auto 10px"></div>正在读取标签...
+      </div>`;
     els.tagEditorOverlay.classList.add('open');
+
     // 读取元数据（扁平格式，大写键名）
-    CM.api('metadata.readByPath', { path: path }).then(function(r) {
+    CM.api('metadata.readByPath', { path }).then(r => {
       if (!_tagCtx || _tagCtx.mode !== 'single') return; // 已关闭或切换
       if (!r || r.success === false) {
         CM.showToast('读取失败', '无法读取文件标签', 'error');
@@ -55,17 +61,22 @@
 
   CM.showBatchTagEditor = function(tracks) {
     if (!tracks || tracks.length < 2) return;
-    _tagCtx = { mode: 'batch', tracks: tracks };
-    els.tagEditorTitle.textContent = '批量编辑标签（' + tracks.length + '首）';
-    // 显示前3首曲目名 + 省略
-    var names = tracks.slice(0, 3).map(CM.trackName).join('、');
-    if (tracks.length > 3) names += ' 等' + tracks.length + '首';
+    _tagCtx = { mode: 'batch', tracks };
+
+    const { length } = tracks;
+    let names = tracks.slice(0, 3).map(CM.trackName).join('、');
+    if (length > 3) names += ` 等${length}首`;
+
+    els.tagEditorTitle.textContent = `批量编辑标签（${length}首）`;
     els.tagEditorTrack.textContent = names;
     els.tagEditorHint.textContent = '勾选要批量修改的字段，未勾选的字段保持原值';
+
     _renderTagFields(true, {});
+
     // 批量模式隐藏封面区
-    var coverSec = els.tagEditorBody.querySelector('.tag-cover-section');
+    const coverSec = els.tagEditorBody.querySelector('.tag-cover-section');
     if (coverSec) coverSec.style.display = 'none';
+
     els.tagEditorOverlay.classList.add('open');
   };
 
@@ -76,97 +87,98 @@
 
   // 渲染标签输入字段
   function _renderTagFields(isBatch, tags) {
-    var parts = [];
-    if (!isBatch) {
-      // 单曲模式：显示封面区
-      parts.push('<div class="tag-cover-section" id="tagCoverSection">' +
-        '<div class="tag-cover-preview" id="tagCoverPreview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>' +
-        '<div class="tag-cover-actions">' +
-        '<button class="tag-btn" id="tagCoverReplace">更换封面</button>' +
-        '<button class="tag-btn danger" id="tagCoverRemove">移除封面</button>' +
-        '</div></div>');
-    }
-    TAG_FIELDS.forEach(function(f) {
-      var val = tags[f.key] || '';
-      if (isBatch) {
-        parts.push('<div class="tag-field batch">' +
-          '<input type="checkbox" class="tag-field-check" data-field="' + f.key + '">' +
-          '<label class="tag-field-label">' + f.label + '</label>' +
-          '<input type="text" class="tag-field-input" data-field="' + f.key + '" placeholder="保持原值" disabled>' +
-          '</div>');
-      } else {
-        parts.push('<div class="tag-field">' +
-          '<label class="tag-field-label">' + f.label + '</label>' +
-          '<input type="text" class="tag-field-input" data-field="' + f.key + '" value="' + esc(val) + '">' +
-          '</div>');
-      }
-    });
-    els.tagEditorBody.innerHTML = parts.join('');
+    const coverHTML = isBatch ? '' : `
+      <div class="tag-cover-section" id="tagCoverSection">
+        <div class="tag-cover-preview" id="tagCoverPreview">${CM.icons.note}</div>
+        <div class="tag-cover-actions">
+          <button class="tag-btn" id="tagCoverReplace">更换封面</button>
+          <button class="tag-btn danger" id="tagCoverRemove">移除封面</button>
+        </div>
+      </div>`;
+
+    const fieldsHTML = TAG_FIELDS.map(f =>
+      isBatch
+        ? `<div class="tag-field batch">
+            <input type="checkbox" class="tag-field-check" data-field="${f.key}">
+            <label class="tag-field-label">${f.label}</label>
+            <input type="text" class="tag-field-input" data-field="${f.key}" placeholder="保持原值" disabled>
+          </div>`
+        : `<div class="tag-field">
+            <label class="tag-field-label">${f.label}</label>
+            <input type="text" class="tag-field-input" data-field="${f.key}" value="${esc(tags[f.key] ?? '')}">
+          </div>`
+    ).join('');
+
+    els.tagEditorBody.innerHTML = coverHTML + fieldsHTML;
+
     // 批量模式：checkbox 启用/禁用对应输入框
-    if (isBatch) {
-      els.tagEditorBody.querySelectorAll('.tag-field-check').forEach(function(cb) {
-        cb.addEventListener('change', function() {
-          var input = els.tagEditorBody.querySelector('.tag-field-input[data-field="' + cb.dataset.field + '"]');
-          if (input) input.disabled = !cb.checked;
-        });
-      });
-    }
+    if (!isBatch) return;
+    els.tagEditorBody.querySelectorAll('.tag-field-check').forEach(cb =>
+      cb.addEventListener('change', () => {
+        const input = els.tagEditorBody.querySelector(`.tag-field-input[data-field="${cb.dataset.field}"]`);
+        if (input) input.disabled = !cb.checked;
+      })
+    );
   }
 
   // 渲染封面预览
   function _renderTagCover(path) {
-    CM.api('artwork.getForTrack', { path: path, type: 'front' }).then(function(r) {
-      if (r && r.success !== false && r.dataUrl) {
-        var preview = CM.$('tagCoverPreview');
-        if (preview) preview.innerHTML = '<img src="' + r.dataUrl + '" alt="">';
-      }
+    CM.api('artwork.getForTrack', { path, type: 'front' }).then(r => {
+      if (!r || r.success === false || !r.dataUrl) return;
+      const preview = CM.$('tagCoverPreview');
+      if (preview) preview.innerHTML = `<img src="${r.dataUrl}" alt="">`;
     });
   }
 
   // 保存标签
   CM._saveTagEditor = function() {
     if (!_tagCtx) return;
-    if (_tagCtx.mode === 'single') {
-      _saveSingleTags();
-    } else {
-      _saveBatchTags();
-    }
+    (_tagCtx.mode === 'single' ? _saveSingleTags : _saveBatchTags)();
   };
 
+  const _TAG_TO_TRACK = {
+    TITLE: 'title', ARTIST: 'artist', ALBUM: 'album', 'ALBUM ARTIST': 'albumArtist',
+    GENRE: 'genre', DATE: 'date', TRACKNUMBER: 'trackNumber', DISCNUMBER: 'discNumber',
+  };
+  const _NUMERIC_TRACK_KEYS = new Set(['trackNumber', 'discNumber']);
+
   function _saveSingleTags() {
-    var path = _tagCtx.path;
-    var tags = {};
-    var changed = false;
-    TAG_FIELDS.forEach(function(f) {
-      var input = els.tagEditorBody.querySelector('.tag-field-input[data-field="' + f.key + '"]');
-      if (!input) return;
-      var newVal = input.value.trim();
-      var oldVal = (_tagCtx.original && _tagCtx.original[f.key]) || '';
-      if (newVal !== oldVal) {
-        tags[f.key] = newVal || null; // 空值设为 null 以清除标签
-        changed = true;
-      }
-    });
-    if (!changed) { CM.showToast('无变更', '没有检测到修改的标签', null); CM.hideTagEditor(); return; }
+    const path = _tagCtx.path;
+    const original = _tagCtx.original || {};
+    const tags = {};
+
+    for (const f of TAG_FIELDS) {
+      const input = els.tagEditorBody.querySelector(`.tag-field-input[data-field="${f.key}"]`);
+      if (!input) continue;
+      const newVal = input.value.trim();
+      const oldVal = original[f.key] ?? '';
+      if (newVal !== oldVal) tags[f.key] = newVal || null; // 空值设为 null 以清除标签
+    }
+
+    if (!Object.keys(tags).length) {
+      CM.showToast('无变更', '没有检测到修改的标签', null);
+      CM.hideTagEditor();
+      return;
+    }
+
     els.tagEditorHint.textContent = '正在写入...';
-    CM.api('metadata.write', { path: path, tags: tags }).then(function(r) {
+    CM.api('metadata.write', { path, tags }).then(r => {
       if (!r || r.success === false) {
         CM.showToast('写入失败', '标签写入出错', 'error');
         els.tagEditorHint.textContent = '写入失败，请重试';
         return;
       }
       CM.showToast('标签已保存', CM.trackName(_tagCtx.tracks[0]), 'success');
+
       // 更新本地缓存
-      var track = _tagCtx.tracks[0];
+      const track = _tagCtx.tracks[0];
       if (track) {
-        if (tags.TITLE != null) track.title = tags.TITLE;
-        if (tags.ARTIST != null) track.artist = tags.ARTIST;
-        if (tags.ALBUM != null) track.album = tags.ALBUM;
-        if (tags['ALBUM ARTIST'] != null) track.albumArtist = tags['ALBUM ARTIST'];
-        if (tags.GENRE != null) track.genre = tags.GENRE;
-        if (tags.DATE != null) track.date = tags.DATE;
-        if (tags.TRACKNUMBER != null) track.trackNumber = parseInt(tags.TRACKNUMBER, 10) || 0;
-        if (tags.DISCNUMBER != null) track.discNumber = parseInt(tags.DISCNUMBER, 10) || 0;
+        for (const [tagKey, trackKey] of Object.entries(_TAG_TO_TRACK)) {
+          if (tags[tagKey] == null) continue;
+          track[trackKey] = _NUMERIC_TRACK_KEYS.has(trackKey)
+            ? parseInt(tags[tagKey], 10) || 0
+            : tags[tagKey];
+        }
         CM.renderTrackTable();
       }
       CM.hideTagEditor();
@@ -174,46 +186,47 @@
   }
 
   function _saveBatchTags() {
-    var tags = {};
-    var hasChecked = false;
-    TAG_FIELDS.forEach(function(f) {
-      var cb = els.tagEditorBody.querySelector('.tag-field-check[data-field="' + f.key + '"]');
-      if (!cb || !cb.checked) return;
-      var input = els.tagEditorBody.querySelector('.tag-field-input[data-field="' + f.key + '"]');
-      if (!input) return;
+    const tags = {};
+
+    for (const f of TAG_FIELDS) {
+      const cb = els.tagEditorBody.querySelector(`.tag-field-check[data-field="${f.key}"]`);
+      if (!cb?.checked) continue;
+      const input = els.tagEditorBody.querySelector(`.tag-field-input[data-field="${f.key}"]`);
+      if (!input) continue;
       tags[f.key] = input.value.trim() || null;
-      hasChecked = true;
-    });
-    if (!hasChecked) { CM.showToast('未选择字段', '请勾选要批量修改的标签字段', 'error'); return; }
+    }
+
+    if (!Object.keys(tags).length) return CM.showToast('未选择字段', '请勾选要批量修改的标签字段', 'error');
     els.tagEditorHint.textContent = '正在批量写入...';
-    var items = _tagCtx.tracks.map(function(t) {
-      var p = CM.trackPath(t);
-      return p ? { path: p, tags: tags } : null;
-    }).filter(Boolean);
-    CM.api('metadata.writeBatch', { items: items }).then(function(r) {
+
+    const items = _tagCtx.tracks
+      .map(track => (track && CM.trackPath(track) ? { path: CM.trackPath(track), tags } : null))
+      .filter(Boolean);
+
+    CM.api('metadata.writeBatch', { items }).then(r => {
       if (!r || r.success === false) {
         CM.showToast('批量写入失败', '标签写入出错', 'error');
         els.tagEditorHint.textContent = '写入失败，请重试';
         return;
       }
-      var ok = r.successCount || 0, fail = r.failCount || 0;
+
+      const success = r.successCount || 0, fail = r.failCount || 0;
       if (fail > 0) {
-        CM.showToast('部分成功', ok + '首成功，' + fail + '首失败', 'error');
+        CM.showToast('部分成功', `${success}首成功，${fail}首失败`, 'error');
       } else {
-        CM.showToast('批量保存成功', ok + '首曲目标签已更新', 'success');
+        CM.showToast('批量保存成功', `${success}首曲目标签已更新`, 'success');
       }
+
       // 更新本地缓存
-      _tagCtx.tracks.forEach(function(track) {
-        if (!track) return;
-        if (tags.TITLE != null) track.title = tags.TITLE;
-        if (tags.ARTIST != null) track.artist = tags.ARTIST;
-        if (tags.ALBUM != null) track.album = tags.ALBUM;
-        if (tags['ALBUM ARTIST'] != null) track.albumArtist = tags['ALBUM ARTIST'];
-        if (tags.GENRE != null) track.genre = tags.GENRE;
-        if (tags.DATE != null) track.date = tags.DATE;
-        if (tags.TRACKNUMBER != null) track.trackNumber = parseInt(tags.TRACKNUMBER, 10) || 0;
-        if (tags.DISCNUMBER != null) track.discNumber = parseInt(tags.DISCNUMBER, 10) || 0;
-      });
+      for (const track of _tagCtx.tracks) {
+        if (!track) continue;
+        for (const [tagKey, trackKey] of Object.entries(_TAG_TO_TRACK)) {
+          if (tags[tagKey] == null) continue;
+          track[trackKey] = _NUMERIC_TRACK_KEYS.has(trackKey)
+            ? parseInt(tags[tagKey], 10) || 0
+            : tags[tagKey];
+        }
+      }
       CM.renderTrackTable();
       CM.hideTagEditor();
     });
@@ -226,21 +239,17 @@
   };
 
   // 封面管理：移除封面
-  CM._removeCover = function() {
+  CM._removeCover = () => {
     if (!_tagCtx || _tagCtx.mode !== 'single') return;
-    var path = _tagCtx.path;
-    CM.showModal({
-      title: '移除封面',
-      desc: '确定要移除这首曲目的嵌入封面吗？',
-      okText: '移除',
-      danger: true
-    }).then(function(result) {
-      if (!result) return;
-      CM.api('metadata.removeEmbeddedArt', { path: path, removeAll: true }).then(function(r) {
+    const { path } = _tagCtx;
+
+    CM.showModal({ title: '移除封面', desc: '确定要移除这首曲目的嵌入封面吗？', okText: '移除', danger: true }).then(ok => {
+      if (!ok) return;
+      return CM.api('metadata.removeEmbeddedArt', { path, removeAll: true }).then(r => {
         if (r && r.success !== false) {
           CM.showToast('封面已移除', null, 'success');
-          var preview = CM.$('tagCoverPreview');
-          if (preview) preview.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+          const preview = CM.$('tagCoverPreview');
+          if (preview) preview.innerHTML = CM.icons.note;
         } else {
           CM.showToast('移除失败', '该格式可能不支持嵌入封面操作', 'error');
         }
@@ -251,19 +260,20 @@
   // 文件选择回调：读取 Base64 并嵌入封面
   CM._onCoverFileSelected = function() {
     if (!_tagCtx || _tagCtx.mode !== 'single') return;
-    var file = els.tagCoverFile.files[0];
+    const file = els.tagCoverFile.files[0];
     if (!file) return;
     els.tagCoverFile.value = ''; // 重置以便重复选择同一文件
-    var path = _tagCtx.path;
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var dataUrl = e.target.result;
-      var base64 = dataUrl.slice(dataUrl.indexOf(',') + 1); // 去掉 data:image/...;base64, 前缀
-      CM.api('metadata.embedArtwork', { path: path, imageData: base64, type: 'front' }).then(function(r) {
+
+    const { path } = _tagCtx;
+    const reader = new FileReader();
+    reader.onload = ({ target }) => {
+      const { result: dataUrl } = target;
+      const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1); // 去掉 data:image/...;base64, 前缀
+      CM.api('metadata.embedArtwork', { path, imageData: base64, type: 'front' }).then(r => {
         if (r && r.success !== false) {
           CM.showToast('封面已更新', null, 'success');
-          var preview = CM.$('tagCoverPreview');
-          if (preview) preview.innerHTML = '<img src="' + dataUrl + '" alt="">';
+          const preview = CM.$('tagCoverPreview');
+          if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="">`;
         } else {
           CM.showToast('嵌入失败', '该格式可能不支持嵌入封面', 'error');
         }

@@ -67,15 +67,12 @@
   // 沉浸式波形：把当前曲目完整波形作为进度条背景
   var _waveCache = {}, _wavePending = null, _waveBound = false;
   CM.waveformSVG = function(data, w, h) {
-    var n = data.length, step = w / n, mid = h / 2, amp = (h - 6) / 2;
-    var d = 'M0 ' + mid.toFixed(1);
-    for (var i = 0; i < n; i++) {
-      var v = data[i]; if (v < 0) v = -v; if (v > 1) v = 1;
-      d += ' L' + (i * step).toFixed(1) + ' ' + (mid - v * amp).toFixed(1);
-    }
-    d += ' L' + w + ' ' + mid.toFixed(1) + ' Z';
-    return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' +
-      '<path d="' + d + '" fill="var(--accent)" opacity="0.55"/></svg>';
+    const n = data.length, step = w / n, mid = h / 2, amp = (h - 6) / 2;
+    const d = data.reduce(
+      (s, v, i) => `${s} L${(i * step).toFixed(1)} ${(mid - Math.min(Math.abs(v), 1) * amp).toFixed(1)}`,
+      `M0 ${mid.toFixed(1)}`
+    ) + ` L${w} ${mid.toFixed(1)} Z`;
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${d}" fill="var(--accent)" opacity="0.55"/></svg>`;
   };
   CM.loadNpWaveform = function(path) {
     var el = els.npWaveform; if (!el) return;

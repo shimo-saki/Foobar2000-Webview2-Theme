@@ -29,12 +29,12 @@
     if (!t) { els.queueNow.classList.add('hidden'); els.queueNow.innerHTML = ''; return; }
     var path = CM.trackPath(t);
     els.queueNow.innerHTML =
-      '<div class="queue-now-art ph">' + CM.icons.note + '</div>' +
-      '<div class="queue-now-info">' +
-        '<div class="queue-now-label"><span class="eq-bars"><i></i><i></i><i></i></span>正在播放</div>' +
-        '<div class="queue-now-title">' + esc(CM.trackName(t)) + '</div>' +
-        '<div class="queue-now-artist">' + esc(CM.trackArtist(t)) + '</div>' +
-      '</div>';
+      `<div class="queue-now-art ph">${CM.icons.note}</div>
+      <div class="queue-now-info">
+        <div class="queue-now-label"><span class="eq-bars"><i></i><i></i><i></i></span>正在播放</div>
+        <div class="queue-now-title">${esc(CM.trackName(t))}</div>
+        <div class="queue-now-artist">${esc(CM.trackArtist(t))}</div>
+      </div>`;
     els.queueNow.classList.remove('hidden');
     if (!path || !state.queueOpen) return; // 无路径曲目不取封面；抽屉关闭时省一次请求（打开时 renderQueue 会补渲染）
     // 封面小图；响应到达时校验曲目未变更，避免切歌竞态贴错封面
@@ -89,21 +89,18 @@
       var sig = canDrag + '|' + escItems.map(function(t) { return t.name + '|' + t.artist; }).join('\n');
       if (sig === CM._queueSig && !loadingShown) return;
       CM._queueSig = sig;
-      var parts = [];
-      escItems.forEach(function(t, i) {
-        parts.push(
-          '<div class="queue-item' + (canDrag ? ' can-drag' : '') + '" data-i="' + i + '">' +
-          (canDrag ? '<span class="queue-grip" title="拖拽调整顺序">' + CM.icons.grip + '</span>' : '') +
-          '<span class="queue-item-idx">' + (i + 1) + '</span>' +
-          '<div class="queue-item-info">' +
-          '<div class="queue-item-title">' + t.name + '</div>' +
-          '<div class="queue-item-artist">' + t.artist + '</div>' +
-          '</div>' +
-          '<button class="queue-item-del" title="移出队列"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
-          '</div>'
-        );
-      });
-      els.queueList.innerHTML = parts.join('');
+      const grip = canDrag ? `<span class="queue-grip" title="拖拽调整顺序">${CM.icons.grip}</span>` : '';
+      els.queueList.innerHTML = escItems.map((track, i) =>
+         `<div class="queue-item${canDrag ? ' can-drag' : ''}" data-i="${i}">
+            ${grip}
+            <span class="queue-item-idx">${i + 1}</span>
+            <div class="queue-item-info">
+              <div class="queue-item-title">${track.name}</div>
+              <div class="queue-item-artist">${track.artist}</div>
+            </div>
+            <button class="queue-item-del" title="移出队列">${CM.icons.cancel}</button>
+          </div>`
+      ).join('');
       ensureQueueDelegation();
     });
   };

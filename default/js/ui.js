@@ -33,12 +33,14 @@
    * 通用 HTML 片段
    * ============================================ */
   CM.loadingHTML = function(text, extraStyle) {
-    return '<div class="loading-spinner"' + (extraStyle ? ' style="' + extraStyle + '"' : '') +
-      '><div class="spinner"></div><span>' + (text || '加载中...') + '</span></div>';
+    return `<div class="loading-spinner"${extraStyle ? ` style="${extraStyle}"` : ''}>
+      <div class="spinner"></div><span>${text || '加载中...'}</span>
+    </div>`;
   };
   CM.emptyHTML = function(text, icon, extraStyle) {
-    return '<div class="empty-illustration"' + (extraStyle ? ' style="' + extraStyle + '"' : '') + '>' +
-      (icon || CM.icons.note) + '<span>' + esc(text || '暂无内容') + '</span></div>';
+    return `<div class="empty-illustration"${extraStyle ? ` style="${extraStyle}"` : ''}>
+      ${icon || CM.icons.note}<span>${esc(text || '暂无内容')}</span>
+    </div>`;
   };
   CM.trackPaths = function(tracks) {
     return tracks.map(function(t) { return CM.trackPath(t); }).filter(Boolean);
@@ -164,7 +166,7 @@
     if (el.classList.contains('hidden') || el.classList.contains('removing')) return;
     el.classList.add('removing');
 
-    const listener = function (e) {
+    const listener = (e) => {
       if (e.animationName === 'ctx-out') {
         el.classList.add('hidden');
         el.classList.remove('removing');
@@ -194,16 +196,16 @@
 
   CM.createMenu = function(items, basePath = []) {
     return items.map((item, idx) => {
-      const path = [...basePath, idx];
-
       if (item.hidden) return ''; // 隐藏项
       if (item.divider) return '<div class="ctx-divider"></div>'; // 分割线
       if (item.isLabel) return `<div class="ctx-label">${esc(item.label)}</div>`; // 标签
 
-      const classMap = { danger: item.danger, checked: item.checked, disabled: item.disabled };
-      const classes = Object.keys(classMap).filter(k => classMap[k]).join(' ');
+      const path = [...basePath, idx];
+      const classes = ['danger', 'checked', 'disabled']
+        .filter(k => item[k])
+        .join(' ');
 
-      if (item.submenu && item.submenu.length) return `
+      if (item?.submenu?.length) return `
         <div class="ctx-menu-item ${classes}" data-path="${JSON.stringify(path)}">
           ${item.icon || ''}
           <span>${esc(item.label)}</span>
@@ -287,29 +289,28 @@
    * 标题栏（窗口控制按钮）
    * ============================================ */
   CM.initTitlebar = function() {
-    els.titlebarControls.innerHTML =
-      '<button class="caption-btn" id="capMin" title="最小化"><svg viewBox="0 0 12 12"><line x1="1" y1="6" x2="11" y2="6"/></svg></button>' +
-      '<button class="caption-btn" id="capMax" title="最大化/还原">' +
-        '<svg viewBox="0 0 12 12" class="icon-max"><rect x="1.5" y="1.5" width="9" height="9" rx="1"/></svg>' +
-        '<svg viewBox="0 0 12 12" class="icon-restore"><rect x="1.5" y="3.5" width="7" height="7" rx="1"/><path d="M3.5 3.5v-2h7v7h-2"/></svg>' +
-      '</button>' +
-      '<button class="caption-btn close" id="capClose" title="关闭"><svg viewBox="0 0 12 12"><line x1="1.5" y1="1.5" x2="10.5" y2="10.5"/><line x1="10.5" y1="1.5" x2="1.5" y2="10.5"/></svg></button>';
-    CM.$('capMin').addEventListener('click', function() { CM.api('window.minimize'); });
-    CM.$('capMax').addEventListener('click', function() { CM.api('window.toggleMaximize'); });
-    CM.$('capClose').addEventListener('click', function() { CM.api('window.close'); });
-    els.titlebarDrag.addEventListener('mousedown', function(e) {
-      if (e.button === 0) CM.api('window.startDrag');
-    });
-    els.titlebarDrag.addEventListener('dblclick', function() { CM.api('window.toggleMaximize'); });
+    els.titlebarControls.innerHTML = `
+      <button class="caption-btn" id="capMin" title="最小化">
+        <span class="icon"></icon>
+      </button>
+      <button class="caption-btn" id="capMax" title="最大化/还原">
+        <span class="icon icon-max"></span>
+        <span class="icon icon-restore"></span>
+      </button>
+      <button class="caption-btn close" id="capClose" title="关闭"><span class="icon">${CM.icons.cancel}</span></button>`;
+    CM.$('capMin').addEventListener('click', () => CM.api('window.minimize'));
+    CM.$('capMax').addEventListener('click', () => CM.api('window.toggleMaximize'));
+    CM.$('capClose').addEventListener('click', () => CM.api('window.close'));
+    els.titlebarDrag.addEventListener('mousedown', (e) => { if (e.button === 0) CM.api('window.startDrag') });
+    els.titlebarDrag.addEventListener('dblclick', () => CM.api('window.toggleMaximize'));
     CM.updateMaxIcon();
-    fb.on('window:stateChanged', function() {
-      CM.updateMaxIcon();
-    });
+    fb.on('window:stateChanged', () => CM.updateMaxIcon());
   };
   CM.updateMaxIcon = function() {
-    CM.api('window.isMaximized').then(function(r) {
-      var btn = CM.$('capMax');
-      if (btn && r) btn.classList.toggle('is-max', !!r.maximized || r.isMaximized === true || r.result === true);
+    CM.api('window.isMaximized').then(r => {
+      if (!r) return;
+      const max = r.maximized ?? r.isMaximized ?? r.result ?? false;
+      CM.$('capMax')?.classList.toggle('is-max', !!max);
     });
   };
 
@@ -339,8 +340,8 @@
    * 底栏图标状态
    * ============================================ */
   CM.updatePlayPauseIcon = function(isPlaying) {
-    els.iconPlay.style.display = isPlaying ? 'none' : '';
-    els.iconPause.style.display = isPlaying ? '' : 'none';
+    els.iconPlay.classList.toggle('hidden', isPlaying);
+    els.iconPause.classList.toggle('hidden', !isPlaying);
   };
 
   var ORDER_ICONS = null; // 延迟初始化（els 尚未就绪）
@@ -352,19 +353,12 @@
     els.btnOrder.classList.toggle('active', order.id !== 0);
   };
 
+  const VOLUME_STAGE = [ { max: 0, icon: '' }, { max: 33, icon: '' }, { max: 66, icon: '' }, { max: Infinity, icon: '' } ];
   CM.updateVolumeIcon = function() {
-    var v = state.muted ? 0 : state.volume;
-    var svg;
-    if (v <= 0) {
-      svg = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>';
-    } else if (v < 50) {
-      svg = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>';
-    } else {
-      svg = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>';
-    }
-    els.volIcon.innerHTML = svg;
-    els.volSlider.value = state.muted ? 0 : state.volume;
-    els.volSlider.style.setProperty('--vol-pct', (state.muted ? 0 : state.volume) + '%');
+    const value = state.volume;
+    els.volIcon.innerHTML = VOLUME_STAGE.find(l => value <= l.max).icon;
+    els.volSlider.value = value;
+    els.volSlider.style.setProperty('--vol-pct', `${value}%`);
   };
 
   // 通用进度条更新（主进度条 + 沉浸式进度条共用）
@@ -456,9 +450,9 @@
     var CHUNK = 50;
     // 先收集未填充的 slot：跳过已有封面的（"加载更多"重渲染时避免重复请求）
     // 注意：IMG.src 属性在未设置时返回页面基址 URL（truthy），需用 getAttribute 判断
-    var pendSlots = [], pendPaths = [];
-    for (var i = 0; i < slots.length; i++) {
-      var s = slots[i];
+    const pendSlots = [], pendPaths = [];
+
+    for (const s of slots) {
       if (s.style.backgroundImage || (s.tagName === 'IMG' && s.getAttribute('src'))) continue;
       pendSlots.push(s);
       pendPaths.push(s.dataset.artPath);
@@ -466,33 +460,45 @@
     if (!pendPaths.length) return Promise.resolve();
     function fillOne(el, entry) {
       if (!el || !entry) return;
-      var url = entry.dataUrl || entry.url;
+      const url = entry.dataUrl || entry.url;
       if (entry.success === false || !url) return;
-      if (el.tagName === 'IMG') { el.src = url; el.classList.remove('ph'); el.innerHTML = ''; }
-      else { el.style.backgroundImage = 'url("' + url + '")'; el.innerHTML = ''; }
+
+      if (el.tagName === 'IMG') {
+        el.src = url;
+        el.classList.remove('ph');
+      } else {
+        el.style.backgroundImage = `url("${url}")`;
+      }
+      el.innerHTML = '';
     }
-    var reqs = [];
-    for (var start = 0; start < pendPaths.length; start += CHUNK) {
-      (function(chunkSlots, chunkPaths) {
-        reqs.push(CM.api('artwork.getFb2kUrlByPathBatch', { paths: chunkPaths, type: 'front', maxSize: maxSize || 160 }).then(function(r) {
-          if (r && r.artworks) r.artworks.forEach(function(entry, i) { fillOne(chunkSlots[i], entry); });
-        }));
-      })(pendSlots.slice(start, start + CHUNK), pendPaths.slice(start, start + CHUNK));
+    const reqs = [];
+
+    for (let start = 0; start < pendPaths.length; start += CHUNK) {
+      const chunkSlots = pendSlots.slice(start, start + CHUNK);
+      const chunkPaths = pendPaths.slice(start, start + CHUNK);
+
+      reqs.push(
+        CM.api('artwork.getFb2kUrlByPathBatch', { paths: chunkPaths, type: 'front', maxSize: maxSize || 160 }).then(r =>
+          r?.artworks.forEach((entry, i) => fillOne(chunkSlots[i], entry))
+        )
+      );
     }
     return Promise.all(reqs);
   };
 
   // 专辑卡片渲染（复用：发现页 + 媒体库全部专辑）
   // 不含封面数据；封面通过 _loadAlbumCovers 异步批量加载
-  CM._renderAlbumCard = function(al) {
-    return '<div class="album-card fade-in" data-album="' + esc(al.name || al.album || '') + '" data-artist="' + esc(al.artist || al.albumArtist || '') + '">' +
-      '<div class="album-card-art">' +
-      '<div class="art-placeholder">' + CM.icons.note + '</div>' +
-      '<div class="album-card-play">' + CM.icons.play + '</div>' +
-      '</div>' +
-      '<div class="album-card-name">' + esc(al.name || al.album || '未知专辑') + '</div>' +
-      '<div class="album-card-artist">' + esc(al.artist || al.albumArtist || '未知艺术家') + '</div>' +
-      '</div>';
+  CM._renderAlbumCard = function (al) {
+    const name = al.name || al.album || '未知专辑';
+    const artist = al.artist || al.albumArtist || '未知艺术家';
+    return `<div class="album-card fade-in" data-album="${esc(name)}" data-artist="${esc(artist)}">
+      <div class="album-card-art">
+        <div class="art-placeholder">${CM.icons.note}</div>
+        <div class="album-card-play">${CM.icons.play}</div>
+      </div>
+      <div class="album-card-name">${esc(name)}</div>
+      <div class="album-card-artist">${esc(artist)}</div>
+    </div>`;
   };
 
   // 主内容区统一事件委托（专辑卡片 / dc-track / 搜索结果）

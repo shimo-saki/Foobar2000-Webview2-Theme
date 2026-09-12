@@ -59,8 +59,8 @@
 .sidebar-search input:hover{background:var(--bg-3)}
 .sidebar-search input:focus{background:var(--bg-3);border-color:var(--accent-glow)}
 .sidebar-search input::placeholder{color:var(--text-3)}
-.sidebar-search>svg{
-  position:absolute;left:26px;top:50%;transform:translateY(-50%);
+.sidebar-search>span{
+  position:absolute;left:26px;top:50%;transform:translateY(-50%);color:var(--text-3);
   width:14px;height:14px;stroke:var(--text-3);fill:none;stroke-width:2;pointer-events:none;
 }
 .sidebar-search .clear-btn{

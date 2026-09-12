@@ -89,11 +89,11 @@
       const items = [
         { label: '添加到歌单', isLabel: true },
         {
-          label: '添加本地文件', icon: CM.icons.folder, disabled,
+          label: '添加本地文件', icon: CM.icons.file, disabled,
           action: () => CM.addFilesToPlaylist(idx),
         },
         {
-          label: '添加文件夹', icon: CM.icons.folder, disabled,
+          label: '添加文件夹', icon: CM.icons.addfolder, disabled,
           action: () => CM.addFolderToPlaylist(idx),
         },
         {
@@ -102,15 +102,15 @@
         },
         { divider: true },
         {
-          label: '随机排列', icon: CM.icons.refresh, disabled,
+          label: '随机排列', icon: CM.icons.random, disabled,
           action: () => CM.api('playlist.shuffle', { playlist: idx }),
         },
         {
-          label: '按标题排序', disabled,
+          label: '按标题排序', icon: CM.icons.title, disabled,
           action: () => CM.api('playlist.sort', { playlist: idx, pattern: '%title%' }),
         },
         {
-          label: '按艺术家排序', disabled,
+          label: '按艺术家排序', icon: CM.icons.artist, disabled,
           action: () => CM.api('playlist.sort', { playlist: idx, pattern: '%artist% | %album% | %tracknumber%' }),
         },
         {
@@ -120,8 +120,12 @@
         },
         { divider: true },
         {
-          label: '撤销上一步', disabled,
+          label: '撤销上一步', icon: CM.icons.undo, disabled,
           action: () => CM.api('playlist.undo', { playlist: idx }),
+        },
+        {
+          label: '恢复上一步', icon: CM.icons.redo, disabled,
+          action: () => CM.api('playlist.redo', { playlist: idx }),
         }
       ];
       CM.showCtxMenu(rect.left, rect.bottom + 6, items);
@@ -300,8 +304,8 @@
         submenu: outputDevice.map(d => ({
           label: d.name, checked: d.isCurrent,
           action: () => CM.api('config.setOutputDevice', { outputId: d.outputId, deviceId: d.deviceId })
-            .then(r => { CM.showToast('已切换', d.name, 'success'); syncOutputDevice(); })
-            .catch(e => CM.showToast('切换失败', null, 'error'))
+            .then(() => { CM.showToast('已切换', d.name, 'success'); syncOutputDevice(); })
+            .catch(() => CM.showToast('切换失败', null, 'error'))
           }))
       },
       { label: '播放增益', icon: CM.icons.eq, submenu: replaygain },
@@ -339,7 +343,7 @@
   /* ============================================
    * 播放增益（ReplayGain）面板
    * ============================================ */
-  let replaygain = null;
+  let replaygain = [];
   function syncReplaygain() {
     CM.api('replaygain.getSettings').then(res => {
       replaygain = [
@@ -760,7 +764,7 @@
   /* ============================================
    * 输出设备 — 列出设备并切换
    * ============================================ */
-  let outputDevice = null;
+  let outputDevice = [];
   function syncOutputDevice() {
     fb2k.invoke('config.getOutputDevices').then(devices => {
       if (!devices.length) return CM.showToast('无法获取输出设备', null, 'error');
