@@ -597,23 +597,17 @@
     }
   };
 
-  let foo_run_submenu = [];
-  fb2k.invoke('menu.getContextMenu').then(res =>
-    foo_run_submenu = res.items.find(item => item.label === '运行服务')?.children
-  )
-
   /* ============================================
    * 曲目右键菜单（通用）
    * track: 曲目对象；ctx: {playlist?, index?} 在播放列表内时可删除
    * ============================================ */
-  CM.showTrackCtxMenu = function (x, y, track, ctx) {
+  CM.showTrackCtxMenu = async function (x, y, track, ctx) {
     if (!track) return;
     const pl = (CM.playlists || []).find(p => p.index === ctx?.playlist) || {};
     const path = CM.trackPath(track);
     const selIdxs = CM._selectionIndices(ctx?.index);
     const topDelta = -selIdxs[0] || 0;
     const botDelta = (state.trackCache.length - selIdxs.at(-1) - 1) || 0;
-    const hidden = !CM.checkComponent('foo_run');
     const items = [
       {
         label: '跳转到当前播放', icon: CM.icons.position, disabled: !CM.currentTrack || ctx?.playlist !== state.playingPlaylistIndex,
@@ -650,15 +644,6 @@
       {
         label: '添加到歌单', icon: CM.icons.plus,
         action: () => CM.showAddToPlaylistMenu(x, y, [path])
-      },
-      {
-        label: '属性', icon: CM.icons.console,
-        action: async () => {
-          const handles = [state.trackCache.at(state.focusedTrackIndex)?.absolutePath];
-          const res = await fb2k.invoke('menu.getContextMenu', { mode: 'handles', handles });
-          const id = res?.items?.find(i => i.label === '属性')?.commandId;
-          await fb2k.invoke('menu.runContextCommandById', { id, mode: 'handles', handles });
-        }
       },
       { divider: true },
       {
@@ -697,14 +682,6 @@
         label: '在线获取标签', icon: CM.icons.download, hidden: !CM.checkComponent('foo_freedb2'),
         action: () => CM.fetchTagsOnline(path)
       },
-      { divider: true, hidden },
-      {
-        label: '运行服务', hidden,
-        submenu: foo_run_submenu.map(item => ({
-          label: item.label,
-          action: async () => await fb2k.invoke('menu.runContextCommandById', { id: item.commandId, mode: 'selection' })
-        }))
-      },
       { divider: true },
       {
         label: '调整顺序', icon: CM.icons.sort,
@@ -731,10 +708,30 @@
       {
         label: '从歌单中删除', icon: CM.icons.trash, disabled: pl.isLocked, danger: true,
         action: () => CM.api('playlist.removeTracks', { playlist: ctx.playlist, items: state.batchSelected.size ? [...state.batchSelected] : [ctx.index] })
-      }
+      },
+      {
+        label: '菜单选项',
+        submenu: await getCtxMenu(),
+      },
     ];
     CM.showCtxMenu(x, y, items);
   };
+
+  async function getCtxMenu() {
+    const { batchSelected, trackCache, focusedTrackIndex } = state;
+    const handles = batchSelected.size
+      ? trackCache.slice(Math.min(...batchSelected), Math.max(...batchSelected) + 1)
+      : [trackCache.at(focusedTrackIndex)];
+
+    const createMenuItem = ({ label, commandId, children }) => ({
+      label,
+      action: children ? null : () => fb2k.invoke('menu.runContextCommandById', { id: commandId, mode: 'handles', handles }),
+      submenu: children?.map(createMenuItem),
+    });
+
+    const res = await fb2k.invoke('menu.getContextMenu', { mode: 'handles', handles });
+    return res.items.filter(i => i.type !== 'separator').map(createMenuItem);
+  }
 
   /* ============================================
    * JIT 无痕试听（不改变播放列表）
@@ -798,7 +795,7 @@
                 CM.showToast('已创建并添加', `${name} · ${paths.length} 首`, 'success');
               } else CM.showToast('创建失败', '无法创建歌单', 'error');
             })
-        }
+        },
       ];
       CM.showCtxMenu(x, y, items);
     };

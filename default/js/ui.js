@@ -209,7 +209,7 @@
         <div class="ctx-menu-item ${classes}" data-path="${JSON.stringify(path)}">
           ${item.icon || ''}
           <span>${esc(item.label)}</span>
-          <span style="margin-left:auto"> > </span>
+          <span class="icon" style="margin-left:auto"></span>
           <div class="ctx-submenu hidden">${CM.createMenu(item.submenu, path)}</div>
         </div>`;
 

@@ -126,7 +126,7 @@
         {
           label: '恢复上一步', icon: CM.icons.redo, disabled,
           action: () => CM.api('playlist.redo', { playlist: idx }),
-        }
+        },
       ];
       CM.showCtxMenu(rect.left, rect.bottom + 6, items);
     });
@@ -398,8 +398,8 @@
   var specBarEls = [];
 
   // 通用频谱条生成器（迷你频谱 + 沉浸式频谱共用）
-  CM.createSpectrumBars = (container, count, barClass) => {
-    container.innerHTML = Array.from({ length: count }, () => `<div class="${barClass}"></div>`).join('');
+  CM.createSpectrumBars = function(container, count, barClass) {
+    container.innerHTML = `<div class="${barClass}"></div>`.repeat(count);
     return [...container.children];
   };
 
@@ -815,7 +815,7 @@
         { html: `<span class="ctx-info-label">比特率</span><span class="ctx-info-value">${stream.bitrate || '--'} kbps</span>`,disabled: !stream.playing },
         { html: `<span class="ctx-info-label">声道</span><span class="ctx-info-value">${stream.channels || '--'} ch</span>`,disabled: !stream.playing },
         { divider: true },
-        { html: `<span class="ctx-info-label">已安装组件</span><span class="ctx-info-value">${CM.components.length || 0} 个</span>` }
+        { html: `<span class="ctx-info-label">已安装组件</span><span class="ctx-info-value">${CM.components.length || 0} 个</span>` },
       ];
 
       var rect = els.btnMore.getBoundingClientRect();

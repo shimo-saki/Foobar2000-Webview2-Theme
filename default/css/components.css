@@ -323,7 +323,7 @@ body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
 }
 .seek-bar::-webkit-slider-runnable-track{
   height:4px;border-radius:2px;
-  background:linear-gradient(to right,var(--accent) 0%,var(--accent) var(--seek-pct,0%),var(--bg-4) var(--seek-pct,0%),var(--bg-4) 100%);
+  background: linear-gradient(to right, var(--accent) var(--seek-pct, 0%), var(--bg-4) var(--seek-pct, 0%));
 }
 .seek-bar::-webkit-slider-thumb{
   -webkit-appearance:none;width:12px;height:12px;border-radius:50%;margin-top:-4px;

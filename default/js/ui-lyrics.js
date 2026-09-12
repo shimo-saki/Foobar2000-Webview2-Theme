@@ -69,7 +69,7 @@
       {
         label: '搜索歌词…', icon: CM.icons.search, hidden,
         action: async () => await fb2k.invoke('discovery.executeMainMenuCommand', await CM.getGuid('搜索歌词')),
-      }
+      },
     ];
     CM.showCtxMenu(e.clientX, e.clientY, items);
   });
