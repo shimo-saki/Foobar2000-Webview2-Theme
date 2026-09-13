@@ -47,8 +47,7 @@
     // Bottom bar
     bottomArtWrap: CM.$('bottomArtWrap'), bottomArt: CM.$('bottomArt'),
     bottomTitle: CM.$('bottomTitle'), bottomArtist: CM.$('bottomArtist'),
-    btnOrder: CM.$('btnOrder'), iconOrderSeq: CM.$('iconOrderSeq'), iconOrderLoop: CM.$('iconOrderLoop'),
-    iconOrderOne: CM.$('iconOrderOne'), iconOrderShuffle: CM.$('iconOrderShuffle'),
+    btnOrder: CM.$('btnOrder'),
     btnPrev: CM.$('btnPrev'), btnPlayPause: CM.$('btnPlayPause'), iconPlay: CM.$('iconPlay'), iconPause: CM.$('iconPause'),
     btnNext: CM.$('btnNext'), btnStopAfter: CM.$('btnStopAfter'),
     seekBar: CM.$('seekBar'), seekCurrent: CM.$('seekCurrent'), seekTotal: CM.$('seekTotal'),
@@ -86,14 +85,15 @@
   };
 
   /* ============================================
-   * 播放顺序（foobar2000 playback order）
-   * 0=Default 1=Repeat(playlist) 2=Repeat(track) 4=Shuffle(tracks)
-   * ============================================ */
+  * 播放顺序（foobar2000 playback order）
+  * 0=Default 1=Repeat(playlist) 2=Repeat(track) 4=Shuffle(tracks) 6=Shuffle(folders)
+  * ============================================ */
   CM.ORDERS = [
-    { id: 0, name: '顺序播放', icon: 'seq' },
-    { id: 1, name: '列表循环', icon: 'loop' },
-    { id: 2, name: '单曲循环', icon: 'one' },
-    { id: 4, name: '随机播放', icon: 'shuffle' }
+    { id: 0, name: '顺序播放', icon: '' },
+    { id: 1, name: '列表循环', icon: '' },
+    { id: 2, name: '单曲循环', icon: '' },
+    { id: 4, name: '随机播放', icon: '' },
+    { id: 6, name: '随机目录', icon: '' },
   ];
   CM.orderIndexOf = function (orderId) {
     return CM.ORDERS.findIndex(o => o.id === orderId) || 0;

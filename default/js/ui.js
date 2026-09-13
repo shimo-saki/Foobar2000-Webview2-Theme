@@ -373,11 +373,9 @@
     els.iconPause.classList.toggle('hidden', !isPlaying);
   };
 
-  let ORDER_ICONS = null; // 延迟初始化（els 尚未就绪）
   CM.updateOrderIcon = function () {
-    if (!ORDER_ICONS) ORDER_ICONS = { seq: els.iconOrderSeq, loop: els.iconOrderLoop, one: els.iconOrderOne, shuffle: els.iconOrderShuffle };
     const order = CM.ORDERS[CM.orderIndexOf(state.order)];
-    for (const icon in ORDER_ICONS) ORDER_ICONS[icon].style.display = order.icon === icon ? '' : 'none';
+    els.btnOrder.innerHTML = `<span class="icon font-size-16">${order.icon}</span>`
     els.btnOrder.title = `播放顺序： ${order.name}`;
     els.btnOrder.classList.toggle('active', order.id !== 0);
   };
