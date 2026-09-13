@@ -4,18 +4,18 @@
  * 主歌词面板显隐（右栏开合动画）
  * ============================================ */
 
-(function() {
+(function () {
   'use strict';
-  var CM = window.CloudMusic;
-  var els = CM.els, state = CM.state;
+  const CM = window.CloudMusic;
+  const els = CM.els;
 
   CM._lyricLoadId = 0;
-  CM.loadLyrics = function() {
+  CM.loadLyrics = function () {
     CM.currentLyrics = [];
     if (!CM.currentTrack) return;
-    var path = CM.trackPath(CM.currentTrack);
-    var loadId = ++CM._lyricLoadId;
-    CM.api('lyrics.get', path ? { path } : {}).then(function(r) {
+    const path = CM.trackPath(CM.currentTrack);
+    const loadId = ++CM._lyricLoadId;
+    CM.api('lyrics.get', path ? { path } : {}).then(r => {
       if (loadId !== CM._lyricLoadId) return; // 已被更新的切歌请求取代
       // 以"歌词对应歌曲的路径"为 key 缓存解析结果：切回已播过的曲目时免去重新解析
       const parsed = CM.parseLRCCached(r.path, r.lyrics);
@@ -42,12 +42,12 @@
   CM.changePlayerState = function (state) {
     CM.player?.[state === "playing" ? "resume" : "pause"]();
     if (state === 'stopped') CM.player.setLyricLines(EMPTY_LYRIC);
-  }
+  };
 
   /* ============================================
    * 歌词面板显隐
    * ============================================ */
-  CM.setLyricsVisible = function(visible) {
+  CM.setLyricsVisible = function (visible) {
     CM.state.lyricsVisible = CM.settings.lyricsVisible = visible;
     CM.saveSettings();
     els.btnLyricsToggle.classList.toggle('active', visible);
@@ -60,7 +60,8 @@
     const items = [
       {
         label: '重载歌词…', icon: CM.icons.refresh,
-        action: () => { lrcCache.delete(CM.trackPath(CM.currentTrack)); CM.loadLyrics();}},
+        action: () => { lrcCache.delete(CM.trackPath(CM.currentTrack)); CM.loadLyrics(); }
+      },
       {
         label: '编辑歌词', icon: CM.icons.edit, hidden,
         action: async () => await fb2k.invoke('discovery.executeMainMenuCommand', await CM.getGuid('编辑歌词')),

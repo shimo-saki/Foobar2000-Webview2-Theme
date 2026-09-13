@@ -2,9 +2,9 @@
  * CloudMusic app.js — 初始化编排
  * 顺序：设置 → UI 绑定 → fb.ready → 状态同步 → 事件订阅 → 首屏渲染
  * ============================================ */
-(function() {
+(function () {
   'use strict';
-  var CM = window.CloudMusic;
+  const CM = window.CloudMusic;
 
   /* ============================================
    * 播放/暂停可视状态（图标 + 表格均衡器动画 + 任务栏）
@@ -31,21 +31,20 @@
     CM._renderQueueNow(); // 队列抽屉"正在播放"卡片
     // 如果沉浸式页面打开，重新渲染
     if (CM.state.npOpen) {
-      setTimeout(function() { CM.renderNpOverlay(); }, 200);
+      setTimeout(() => CM.renderNpOverlay(), 200);
     }
     // 同步"正在播放"标记（列表行 / 侧栏歌单徽标）
     Promise.all([
       CM.api('playback.getPlayingPlaylist'),
       CM.api('playback.getCurrentTrackIndex')
-    ]).then(function(rs) {
-      var pl = rs[0], ti = rs[1];
-      var newPl = pl && pl.playlist != null ? pl.playlist : (pl && pl.index != null ? pl.index : -1);
-      var changed = newPl !== CM.state.playingPlaylistIndex;
+    ]).then(([pl, ti]) => {
+      const newPl = pl?.playlist ?? pl?.index ?? -1;
+      const changed = newPl !== CM.state.playingPlaylistIndex;
       CM.state.playingPlaylistIndex = newPl;
-      CM.state.playingTrackIndex = ti && ti.index != null ? ti.index : -1;
+      CM.state.playingTrackIndex = ti?.index ?? -1;
       CM.refreshPlayingMarks();
       if (changed) CM.loadPlaylists();
-    }).catch(function() { /* 静默忽略 */ });
+    }).catch(() => { /* 静默忽略 */ });
   }
 
   function onStopped() {
@@ -66,7 +65,7 @@
    * 初始状态同步（fb.ready 之后）
    * ============================================ */
   function syncInitialState() {
-    CM.api('playback.getState').then(async function(r) {
+    CM.api('playback.getState').then(async r => {
       const position = await fb2k.invoke('playback.getPosition');
       CM.state.duration = position.duration || 0;
       CM.state.position = position.position || 0;
@@ -74,23 +73,23 @@
       CM.changePlayerState(r.state);
       setPlayingVisual(r.state === "playing");
     });
-    CM.api('playback.getCurrentTrack').then(function(r) {
-      var track = r && (r.track || (r.title || r.path ? r : null));
+    CM.api('playback.getCurrentTrack').then(r => {
+      const track = r && (r.track || (r.title || r.path ? r : null));
       if (track) onTrackChanged(track);
     });
-    CM.api('playback.getVolume').then(function(r) {
+    CM.api('playback.getVolume').then(r => {
       if (!r) return;
       if (r.volume != null) CM.state.volume = r.volume;
       if (r.isMuted != null) CM.state.muted = r.isMuted;
       if (CM.els.volSlider) CM.els.volSlider.value = CM.state.volume;
       CM.updateVolumeIcon();
     });
-    CM.api('playback.getPlaybackOrder').then(function(r) {
+    CM.api('playback.getPlaybackOrder').then(r => {
       if (!r) return;
       CM.state.order = r.order != null ? r.order : (r.index != null ? r.index : 0);
       CM.updateOrderIcon();
     });
-    CM.api('playback.getStopAfterCurrent').then(function(r) {
+    CM.api('playback.getStopAfterCurrent').then(r => {
       if (!r) return;
       CM.state.stopAfterCurrent = !!(r.enabled != null ? r.enabled : r.stopAfterCurrent);
       CM.updateStopAfterIcon();
@@ -102,30 +101,30 @@
    * 事件订阅（全部事件驱动，不做轮询）
    * ============================================ */
   function subscribeEvents() {
-    fb.on('playback:trackChanged', function(data) {
-      var track = data && (data.track || data);
+    fb.on('playback:trackChanged', data => {
+      const track = data && (data.track || data);
       onTrackChanged(track);
       if (CM.state.npOpen) { CM.updateNpFormat(); CM.loadNpWaveform(CM.trackPath(CM.currentTrack)); }
       setPlayingVisual(true);
     });
 
-    fb.on('playback:stateChanged', function(data) {
+    fb.on('playback:stateChanged', data => {
       if (!data) return;
       CM.changePlayerState(data.state);
       // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
-      var dur = data.duration || data.length;
+      const dur = data.duration || data.length;
       if (dur != null) CM.state.duration = dur;
       if (data.position != null && !CM.state.seeking) CM.state.position = data.position;
       CM.updateSeekUI();
       if (data.state != null) setPlayingVisual(data.state === 'playing' || data.state === 1);
     });
 
-    fb.on('playback:paused', function(data) {
+    fb.on('playback:paused', data => {
       setPlayingVisual(!(data && data.paused));
     });
 
     // 高分辨率进度事件 — 驱动进度条 + 歌词高亮 + 任务栏进度
-    fb.on('playback:timeHighRes', function(data) {
+    fb.on('playback:timeHighRes', data => {
       if (!data || data.position == null) return;
       if (!CM.state.seeking) {
         CM.state.position = data.position;
@@ -135,7 +134,7 @@
       if (CM.state.npOpen && !CM.state.npSeeking) CM.updateNpSeekUI();
     });
 
-    fb.on('playback:seeked', function(data) {
+    fb.on('playback:seeked', data => {
       if (data && data.position != null) CM.state.position = data.position;
       CM.player.setCurrentTime(data.position * 1000, true);
       CM.state.seeking = false;
@@ -144,7 +143,7 @@
       if (CM.state.npOpen) CM.updateNpSeekUI();
     });
 
-    fb.on('playback:volumeChanged', function(data) {
+    fb.on('playback:volumeChanged', data => {
       if (!data) return;
       if (data.volume != null) CM.state.volume = data.volume;
       if (data.isMuted != null) CM.state.muted = data.isMuted;
@@ -154,25 +153,25 @@
       CM.saveSettings();
     });
 
-    fb.on('playback:orderChanged', function(data) {
+    fb.on('playback:orderChanged', data => {
       if (!data || data.order == null) return;
       CM.state.order = data.order;
       CM.updateOrderIcon();
     });
 
-    fb.on('playback:stopAfterCurrentChanged', function(data) {
+    fb.on('playback:stopAfterCurrentChanged', data => {
       CM.state.stopAfterCurrent = !!(data && data.enabled);
       CM.updateStopAfterIcon();
     });
 
-    fb.on('playback:queueChanged', function() {
+    fb.on('playback:queueChanged', () => {
       CM.refreshQueueBadge();
       if (CM.state.queueOpen) CM.renderQueue();
     });
 
     // 输出设备切换（如接入解码器）会打断宿主侧的频谱计算管线，但页面仍持有旧订阅句柄，
     // 导致频谱流永久中断（直到刷新页面）。此处先停掉旧订阅再重新订阅即可恢复。
-    fb.on('audio:outputDeviceChanged', function() {
+    fb.on('audio:outputDeviceChanged', () => {
       if (!CM.state.visualizerActive) return;
       CM.stopSpectrum();
       CM.startSpectrum();
@@ -181,27 +180,25 @@
     fb.on('playback:stopped', onStopped);
 
     // 播放列表结构变化 → 刷新侧栏 + 当前列表视图
-    var refreshPlaylistUI = CM.debounce(function() {
+    const refreshPlaylistUI = CM.debounce(() => {
       CM.loadPlaylists();
       if (CM.state.currentTab === 'playlist' && CM.state.currentPlaylistIndex >= 0) {
         CM.renderPlaylistView(CM.state.currentPlaylistIndex);
       }
     }, 200);
     ['playlist:created', 'playlist:renamed', 'playlist:removed', 'playlist:activated',
-     'playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered'
-    ].forEach(function(ev) { fb.on(ev, refreshPlaylistUI); });
+      'playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered'
+    ].forEach(ev => fb.on(ev, refreshPlaylistUI));
 
     // 媒体库就绪后重绘发现页（首次启动时库可能延迟初始化）
-    fb.on('library:initialized', function() {
+    fb.on('library:initialized', () => {
       if (CM.state.currentTab === 'discover') CM.renderDiscover();
     });
 
     // 标签写入完成事件（metadata.write / removeTag 异步完成时广播）
-    fb.on('metadata:writeComplete', function(e) {
-      if (e && e.success) {
-        // 刷新播放列表表格以显示更新后的标签
-        if (CM.state.currentTab === 'playlist') CM.renderTrackTable();
-      }
+    fb.on('metadata:writeComplete', e => {
+      // 刷新播放列表表格以显示更新后的标签
+      if (e?.success && CM.state.currentTab === 'playlist') CM.renderTrackTable();
     });
   }
 
@@ -234,40 +231,35 @@
 
     // 首屏渲染（API 失败时各渲染函数自带空态/错误态）
     CM.renderDiscover();
-    var plPromise = CM.loadPlaylists();
+    const plPromise = CM.loadPlaylists();
     CM.switchTab(CM.settings.tab || 'discover');
 
     // 宿主就绪后：状态同步 + 事件订阅 + 宿主专属能力
-    var readyFn = (typeof fb.ready === 'function') ? fb.ready.bind(fb) : function() { return Promise.resolve(); };
-    readyFn().then(function() {
+    const readyFn = typeof fb.ready === 'function' ? fb.ready.bind(fb) : () => Promise.resolve();
+
+    readyFn().then(() => {
       syncInitialState();
       subscribeEvents();
       CM.initDragDrop();
       CM.initTaskbar();
-      // 打开“上次听歌的歌单”（按名称持久化），找不到/未记忆则退回活跃歌单
-      plPromise.then(function() {
-        var saved = CM.settings.lastPlaylist;
-        var lists = CM.playlists || [];
-        var target = -1;
-        if (saved) target = lists.find(item => item.name === saved)?.index ?? -1;
-        CM.api('playlist.getActive').then(function(r) {
-          var idx = r && (r.index != null ? r.index : r.playlist);
-          var use = target >= 0 ? target : (idx != null && idx >= 0 ? idx : target);
+      // 打开"上次听歌的歌单"（按名称持久化），找不到/未记忆则退回活跃歌单
+      plPromise.then(() => {
+        const saved = CM.settings.lastPlaylist;
+        const lists = CM.playlists || [];
+        const target = saved ? lists.find(item => item.name === saved)?.index ?? -1 : -1;
+        CM.api('playlist.getActive').then(r => {
+          const idx = r?.index ?? r?.playlist;
+          const use = target >= 0 ? target : (idx >= 0 ? idx : target);
           if (use >= 0) {
             CM.state.currentPlaylistIndex = use;
-            CM.loadPlaylists(); // 刷新侧栏“当前歌单”高亮
+            CM.loadPlaylists(); // 刷新侧栏"当前歌单"高亮
             if (CM.state.currentTab === 'playlist') CM.renderPlaylistView(use);
           }
         });
       });
-    }).catch(function() {
-      // 宿主桥接未就绪，以受限模式运行
-    });
+    }).catch(() => {/* 宿主桥接未就绪，以受限模式运行 */ });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();

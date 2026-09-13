@@ -3,16 +3,16 @@
  * 单曲/批量标签编辑 / 封面查看·更换·移除
  * ============================================ */
 
-(function() {
+(function () {
   'use strict';
-  var CM = window.CloudMusic;
-  var els = CM.els, state = CM.state, esc = CM.escHtml;
+  const CM = window.CloudMusic;
+  const els = CM.els, esc = CM.escHtml;
 
   /* ============================================
    * 标签编辑器（单曲 + 批量）
    * ============================================ */
   // 标签字段定义：SDK 键名 → 中文标签
-  var TAG_FIELDS = [
+  const TAG_FIELDS = [
     { key: 'TITLE', label: '标题' },
     { key: 'ARTIST', label: '艺术家' },
     { key: 'ALBUM', label: '专辑' },
@@ -26,11 +26,11 @@
   ];
 
   // 标签编辑器内部状态
-  var _tagCtx = null; // { mode: 'single'|'batch', tracks: [], original: {} }
+  let _tagCtx = null; // { mode: 'single'|'batch', tracks: [], original: {} }
 
-  CM.showTagEditor = function(track) {
+  CM.showTagEditor = function (track) {
     const path = CM.trackPath(track);
-    if (!path) { return CM.showToast('无法编辑', '未获取到文件路径', 'error') }
+    if (!path) { return CM.showToast('无法编辑', '未获取到文件路径', 'error'); }
 
     _tagCtx = { mode: 'single', tracks: [track], path };
     els.tagEditorTitle.textContent = '编辑标签';
@@ -59,7 +59,7 @@
     });
   };
 
-  CM.showBatchTagEditor = function(tracks) {
+  CM.showBatchTagEditor = function (tracks) {
     if (!tracks || tracks.length < 2) return;
     _tagCtx = { mode: 'batch', tracks };
 
@@ -80,7 +80,7 @@
     els.tagEditorOverlay.classList.add('open');
   };
 
-  CM.hideTagEditor = function() {
+  CM.hideTagEditor = function () {
     els.tagEditorOverlay.classList.remove('open');
     _tagCtx = null;
   };
@@ -131,7 +131,7 @@
   }
 
   // 保存标签
-  CM._saveTagEditor = function() {
+  CM._saveTagEditor = function () {
     if (!_tagCtx) return;
     (_tagCtx.mode === 'single' ? _saveSingleTags : _saveBatchTags)();
   };
@@ -211,11 +211,8 @@
       }
 
       const success = r.successCount || 0, fail = r.failCount || 0;
-      if (fail > 0) {
-        CM.showToast('部分成功', `${success}首成功，${fail}首失败`, 'error');
-      } else {
-        CM.showToast('批量保存成功', `${success}首曲目标签已更新`, 'success');
-      }
+      if (fail > 0) CM.showToast('部分成功', `${success}首成功，${fail}首失败`, 'error');
+      else CM.showToast('批量保存成功', `${success}首曲目标签已更新`, 'success');
 
       // 更新本地缓存
       for (const track of _tagCtx.tracks) {
@@ -233,7 +230,7 @@
   }
 
   // 封面管理：更换封面
-  CM._replaceCover = function() {
+  CM._replaceCover = function () {
     if (!_tagCtx || _tagCtx.mode !== 'single') return;
     els.tagCoverFile.click();
   };
@@ -258,7 +255,7 @@
   };
 
   // 文件选择回调：读取 Base64 并嵌入封面
-  CM._onCoverFileSelected = function() {
+  CM._onCoverFileSelected = function () {
     if (!_tagCtx || _tagCtx.mode !== 'single') return;
     const file = els.tagCoverFile.files[0];
     if (!file) return;
