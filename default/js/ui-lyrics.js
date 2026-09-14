@@ -98,18 +98,50 @@
     var path = CM.trackPath(CM.currentTrack);
     var loadId = ++CM._lyricLoadId;
     CM.api('lyrics.get', path ? { path: path } : {}).then(function(r) {
-      if (loadId !== CM._lyricLoadId) return; // 已被更新的切歌请求取代
-      // 外部文件歌词：优先用 file.read 读取原始字节并做编码探测，
-      // 修复插件只认 UTF-8/16-BOM 导致 ANSI(GBK) 歌词乱码的问题。
-      // 文件在白名单外（如与音频同目录）不可读时，回退插件解码结果（UTF-8/16 仍正常）。
+      if (loadId !== CM._lyricLoadId) return;
       if (r && r.available && r.source === 'file' && r.sourcePath) {
+        console.log('[lyrics] source=file, sourcePath=', r.sourcePath, 'hasLyrics=', !!r.lyrics);
         CM.api('file.read', { path: r.sourcePath, encoding: 'binary' }).then(function(fr) {
           if (loadId !== CM._lyricLoadId) return;
-          CM._renderLyrics(r, fr && fr.success && fr.content ? CM.decodeTextBytes(fr.content) : r.lyrics);
+          console.log('[lyrics] file.read result:', fr ? ('keys=' + Object.keys(fr).join(',') + ' hasContent=' + (typeof fr.content === 'string')) : 'NULL');
+          if (fr && fr.content) {
+            var decoded = CM.decodeTextBytes(fr.content);
+            console.log('[lyrics] decoded len=', decoded.length);
+            CM._renderLyrics(r, decoded);
+          } else {
+            CM._renderLyrics(r, r.lyrics);
+          }
+        }).catch(function(e) {
+          console.log('[lyrics] file.read ERROR:', e && e.message);
+          CM._renderLyrics(r, r && r.lyrics);
         });
         return;
       }
-      CM._renderLyrics(r, r && r.lyrics);
+      if (r && r.available) {
+        console.log('[lyrics] non-file source, lyricsLen=', r.lyrics ? r.lyrics.length : 0);
+        CM._renderLyrics(r, r && r.lyrics);
+        return;
+      }
+      // lyrics.get 失败（如 GBK LRC 导致 JSON 序列化错误），直接从音频路径推导 LRC 路径
+      console.log('[lyrics] lyrics.get failed, trying direct LRC read');
+      if (path) {
+        var lrcPath = path.replace(/\.\w+$/i, '.lrc');
+        CM.api('file.read', { path: lrcPath, encoding: 'binary' }).then(function(fr) {
+          if (loadId !== CM._lyricLoadId) return;
+          console.log('[lyrics] direct file.read:', fr ? ('hasContent=' + (typeof fr.content === 'string')) : 'NULL');
+          if (fr && fr.content) {
+            var decoded = CM.decodeTextBytes(fr.content);
+            console.log('[lyrics] direct decoded len=', decoded.length);
+            CM._renderLyrics({ available: true, source: 'file', sourcePath: lrcPath }, decoded);
+          } else {
+            CM.renderLyricsEmpty('暂无歌词');
+          }
+        }).catch(function() {
+          CM.renderLyricsEmpty('暂无歌词');
+        });
+        return;
+      }
+      CM.renderLyricsEmpty('暂无歌词');
     });
   };
 
