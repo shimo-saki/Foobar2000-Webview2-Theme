@@ -66,12 +66,17 @@
 @keyframes ctx-out{to{opacity:0;transform:scale(0.96)}}
 
 /* ============ Modal ============ */
-.modal-mask{
-  position:fixed;inset:0;z-index:2500;display:flex;align-items:center;justify-content:center;
-  background:rgba(8,8,10,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  opacity:0;pointer-events:none;visibility:hidden;transition:opacity var(--t-mid),visibility var(--t-mid);
+.modal-mask {
+  position:fixed;inset:0;z-index:2500;display:none;align-items:center;justify-content:center;
+  background:rgba(8, 8, 10, 0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  opacity:0;pointer-events:none;
+  /* display 参与过渡，并应用离散动画 */
+  transition:opacity var(--t-mid), display var(--t-mid) allow-discrete;
 }
-.modal-mask.open{opacity:1;pointer-events:auto;visibility:visible}
+.modal-mask.open{display:flex;opacity:1;pointer-events:auto}
+@starting-style {
+  .modal-mask.open{opacity:0}
+}
 .modal{
   width:380px;max-width:88vw;background:var(--bg-2);
   border:1px solid var(--border-strong);border-radius:var(--r-xl);

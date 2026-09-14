@@ -440,11 +440,15 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 /* ============== Immersive NowPlaying Overlay ============== */
 .np-overlay{
   position:fixed;inset:0;z-index:200;
-  display:flex;flex-direction:column;
-  opacity:0;pointer-events:none;visibility:hidden;
-  transition:opacity 0.45s var(--ease),visibility 0.45s;
+  display:none;flex-direction:column;
+  opacity:0;pointer-events:none;
+  /* display 参与过渡，并应用离散动画 */
+  transition:opacity 0.45s var(--ease), display 0.45s allow-discrete;
 }
-.np-overlay.open{opacity:1;pointer-events:auto;visibility:visible}
+.np-overlay.open{display:flex;opacity:1;pointer-events:auto}
+@starting-style{
+  .np-overlay.open{opacity:0}
+}
 .np-drag-handle{
   position:absolute;top:0;left:0;right:0;height:36px;z-index:5;
   cursor:move;
@@ -660,14 +664,18 @@ body.is-playing .np-overlay .np-tonearm{transform:rotate(6deg)}
 /* ============================================
  * Tag Editor Overlay
  * ============================================ */
-.tag-editor-overlay{
+.tag-editor-overlay {
   position:fixed;inset:0;z-index:2400;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(8,8,10,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  opacity:0;pointer-events:none;visibility:hidden;
-  transition:opacity var(--t-mid),visibility var(--t-mid);
+  display:none;align-items:center;justify-content:center;
+  background:rgba(8, 8, 10, 0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  opacity:0;pointer-events:none;
+  /* display 参与过渡，并应用离散动画 */
+  transition:opacity var(--t-mid), display var(--t-mid) allow-discrete;
 }
-.tag-editor-overlay.open{opacity:1;pointer-events:auto;visibility:visible}
+.tag-editor-overlay.open{display:flex;opacity:1;pointer-events:auto}
+@starting-style{
+  .tag-editor-overlay.open{opacity:0}
+}
 .tag-editor{
   width:520px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;
   background:var(--bg-2);border:1px solid var(--border-strong);
