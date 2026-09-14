@@ -12,61 +12,13 @@
   /* ============================================
    * 歌词
    * ============================================ */
-  // 歌词文本健壮解码：base64 原始字节 → BOM 探测 → 严格 UTF-8 → 多编码专有码位评分
-  // 评分辅助：对某个遗留编码解码后，依据"语言专有码位"(假名/谚文)加权、U+FFFD/控制符扣分，返回合理性分。
-  CM._scoreEnc = function(bytes, enc) {
-    var txt, i, c, n, score = 0;
-    try { txt = new TextDecoder(enc).decode(bytes); } catch (e) { return -1e9; }
-    n = txt.length;
-    for (i = 0; i < n; i++) {
-      c = txt.charCodeAt(i);
-      if (c === 0xFFFD) { score -= 50; continue; }
-      if (c < 0x20 && c !== 0x0A && c !== 0x0D && c !== 0x09) { score -= 20; continue; }
-      // 大片平/片假名：GB18030/Big5 的中文字节几乎不产出这些码位，是 Shift_JIS 的可靠信号，
-      // 中日混排假名占比很低时也能判准。注意：半角片假名(FF65-FF9F)与谚文(AC00-D7A3)
-      // 会被中文 GBK 字节反射出来，绝不能用强信号（否则中文被误判日/韩），统一按基础分。
-      if ((c >= 0x3040 && c <= 0x30FF) || (c >= 0x31F0 && c <= 0x31FF)) score += 8;
-      else score += 1;
-    }
-    return score;
-  };
-
-  CM.decodeTextBytes = function(b64) {
+  // 健壮解码：base64 raw bytes → detectEncoding + TextDecoder
+  CM.decodeTextBytes = function(b64, fileKey) {
     var raw = atob(b64);
     var bytes = new Uint8Array(raw.length);
     for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-    if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF)
-      return new TextDecoder('utf-8').decode(bytes.subarray(3));
-    if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE)
-      return new TextDecoder('utf-16le').decode(bytes.subarray(2));
-    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF)
-      return new TextDecoder('utf-16be').decode(bytes.subarray(2));
-    // 无 BOM 的 UTF-16 启发探测：ASCII 字符在双字节编码中高字节恒为 0，
-    // 若奇数位（LE）或偶数位（BE）的 0x00 占比超过 1/3，判定为 UTF-16。
-    if (bytes.length >= 4) {
-      var nullOdd = 0, nullEven = 0;
-      for (var zi = 0; zi < bytes.length; zi += 2) { if (bytes[zi] === 0) nullEven++; }
-      for (var zo = 1; zo < bytes.length; zo += 2) { if (bytes[zo] === 0) nullOdd++; }
-      var half = bytes.length / 2;
-      if (nullOdd > half * 0.35) return new TextDecoder('utf-16le').decode(bytes);
-      if (nullEven > half * 0.35) return new TextDecoder('utf-16be').decode(bytes);
-    }
-    // 严格 UTF-8（含纯 ASCII）
-    try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
-    catch (e) {
-      // —— 多字节遗留编码，采用"大片假名信号 + 中文优先"评分制 ——
-      // 仅大片平/片假名作为日文硬判定（中文不会映射到这些码位），避免原"首个无 U+FFFD 即返"
-      // 让 GB18030 把日文假名吞成中文乱码；候选并列时分不服，按中文优先顺序裁决。
-      var CAND = ['gb18030', 'big5', 'shift_jis', 'euc-kr'];
-      var best = '', bestScore = -1e9;
-      for (var bi = 0; bi < CAND.length; bi++) {
-        var sc = CM._scoreEnc(bytes, CAND[bi]);
-        if (sc > bestScore) { bestScore = sc; best = CAND[bi]; }
-      }
-      // 负分说明全部候选都是垃圾（多为二进制/非文本），退回 Latin-1 保底显示
-      if (bestScore < 0) return new TextDecoder('iso-8859-1').decode(bytes);
-      return new TextDecoder(best).decode(bytes);
-    }
+    var result = CM.lyric.decodeBytes(bytes, fileKey);
+    return result.text;
   };
 
   CM._renderLyrics = function(r, lyricsText) {
@@ -96,43 +48,36 @@
     if (!CM.currentTrack) { CM.renderLyricsEmpty('暂无歌词'); return; }
     els.lyricsScroll.innerHTML = CM.loadingHTML('歌词加载中...');
     var path = CM.trackPath(CM.currentTrack);
+    var fileKey = path ? (path.length + '|' + path.slice(-32)) : '';
     var loadId = ++CM._lyricLoadId;
     CM.api('lyrics.get', path ? { path: path } : {}).then(function(r) {
       if (loadId !== CM._lyricLoadId) return;
+      // 文件源歌词：用 file.read 读取原始字节，自行编码探测
       if (r && r.available && r.source === 'file' && r.sourcePath) {
-        console.log('[lyrics] source=file, sourcePath=', r.sourcePath, 'hasLyrics=', !!r.lyrics);
         CM.api('file.read', { path: r.sourcePath, encoding: 'binary' }).then(function(fr) {
           if (loadId !== CM._lyricLoadId) return;
-          console.log('[lyrics] file.read result:', fr ? ('keys=' + Object.keys(fr).join(',') + ' hasContent=' + (typeof fr.content === 'string')) : 'NULL');
           if (fr && fr.content) {
-            var decoded = CM.decodeTextBytes(fr.content);
-            console.log('[lyrics] decoded len=', decoded.length);
-            CM._renderLyrics(r, decoded);
+            CM._renderLyrics(r, CM.decodeTextBytes(fr.content, fileKey));
           } else {
             CM._renderLyrics(r, r.lyrics);
           }
-        }).catch(function(e) {
-          console.log('[lyrics] file.read ERROR:', e && e.message);
+        }).catch(function() {
           CM._renderLyrics(r, r && r.lyrics);
         });
         return;
       }
+      // 非文件源（内嵌/在线）：直接用插件解码结果
       if (r && r.available) {
-        console.log('[lyrics] non-file source, lyricsLen=', r.lyrics ? r.lyrics.length : 0);
         CM._renderLyrics(r, r && r.lyrics);
         return;
       }
-      // lyrics.get 失败（如 GBK LRC 导致 JSON 序列化错误），直接从音频路径推导 LRC 路径
-      console.log('[lyrics] lyrics.get failed, trying direct LRC read');
+      // lyrics.get 失败 → 从音频路径推导 LRC 路径，自行读取
       if (path) {
         var lrcPath = path.replace(/\.\w+$/i, '.lrc');
         CM.api('file.read', { path: lrcPath, encoding: 'binary' }).then(function(fr) {
           if (loadId !== CM._lyricLoadId) return;
-          console.log('[lyrics] direct file.read:', fr ? ('hasContent=' + (typeof fr.content === 'string')) : 'NULL');
           if (fr && fr.content) {
-            var decoded = CM.decodeTextBytes(fr.content);
-            console.log('[lyrics] direct decoded len=', decoded.length);
-            CM._renderLyrics({ available: true, source: 'file', sourcePath: lrcPath }, decoded);
+            CM._renderLyrics({ available: true, source: 'file', sourcePath: lrcPath }, CM.decodeTextBytes(fr.content, fileKey));
           } else {
             CM.renderLyricsEmpty('暂无歌词');
           }
