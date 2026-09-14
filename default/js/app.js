@@ -51,8 +51,7 @@
     CM.currentTrack = null;
     CM._renderQueueNow(); // 隐藏队列抽屉"正在播放"卡片
     CM.state.playingTrackIndex = -1;
-    CM.state.position = 0;
-    CM.state.duration = 0;
+    CM.state.position = CM.state.duration = 0;
     CM.updateTrackInfo(null);
     CM.setArtwork(null);
     CM.updateSeekUI();
@@ -91,8 +90,8 @@
     });
     CM.api('playback.getStopAfterCurrent').then(r => {
       if (!r) return;
-      CM.state.stopAfterCurrent = !!(r.enabled != null ? r.enabled : r.stopAfterCurrent);
-      CM.updateStopAfterIcon();
+      CM.state.stopAfterCurrent = !!(r.enabled ?? r.stopAfterCurrent);
+      CM.updateStopIcon();
     });
     CM.refreshQueueBadge();
   }
@@ -160,8 +159,8 @@
     });
 
     fb.on('playback:stopAfterCurrentChanged', data => {
-      CM.state.stopAfterCurrent = !!(data && data.enabled);
-      CM.updateStopAfterIcon();
+      CM.state.stopAfterCurrent = !!data?.enabled;
+      CM.updateStopIcon();
     });
 
     fb.on('playback:queueChanged', () => {
@@ -225,7 +224,7 @@
     CM.setVisualizerActive(CM.state.visualizerActive);
     CM.updateOrderIcon();
     CM.updateVolumeIcon();
-    CM.updateStopAfterIcon();
+    CM.updateStopIcon();
     // 未播放启动：底栏 / 歌词 / 沉浸式封面先填占位图（有曲目时会被真实封面覆盖）
     CM.setArtwork(null);
 

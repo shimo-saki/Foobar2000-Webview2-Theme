@@ -49,7 +49,7 @@
     bottomTitle: CM.$('bottomTitle'), bottomArtist: CM.$('bottomArtist'),
     btnOrder: CM.$('btnOrder'),
     btnPrev: CM.$('btnPrev'), btnPlayPause: CM.$('btnPlayPause'), iconPlay: CM.$('iconPlay'), iconPause: CM.$('iconPause'),
-    btnNext: CM.$('btnNext'), btnStopAfter: CM.$('btnStopAfter'),
+    btnNext: CM.$('btnNext'), btnStop: CM.$('btnStop'),
     seekBar: CM.$('seekBar'), seekCurrent: CM.$('seekCurrent'), seekTotal: CM.$('seekTotal'),
     miniSpectrum: CM.$('miniSpectrum'), btnVisualizer: CM.$('btnVisualizer'),
     volBtn: CM.$('volBtn'), volIcon: CM.$('volIcon'), volSlider: CM.$('volSlider'),

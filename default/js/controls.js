@@ -186,13 +186,18 @@
       });
     });
 
+    // 停止播放
+    els.btnStop.addEventListener('click', () => {
+      fb2k.invoke('playback.stop');
+      CM.showToast('已停止播放', null, 'success');
+    });
+
     // 播完当前停止
-    els.btnStopAfter.addEventListener('click', () => {
-      CM.api('playback.toggleStopAfterCurrent').then((r) => {
-        if (r?.enabled !== undefined) state.stopAfterCurrent = !!r.enabled;
-        else if (r?.success !== false) state.stopAfterCurrent = !state.stopAfterCurrent;
-        else return CM.showToast('操作失败', null, 'error');
-        CM.updateStopAfterIcon();
+    els.btnStop.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      CM.api('playback.toggleStopAfterCurrent').then(r => {
+        state.stopAfterCurrent = r.enabled;
+        CM.updateStopIcon();
         CM.showToast(state.stopAfterCurrent ? '将在当前曲目播完后停止' : '已取消单曲停止', null);
       });
     });

@@ -322,7 +322,7 @@
     CM.$('capMin').addEventListener('click', () => CM.api('window.minimize'));
     CM.$('capMax').addEventListener('click', () => CM.api('window.toggleMaximize'));
     CM.$('capClose').addEventListener('click', () => CM.api('window.close'));
-    els.titlebarDrag.addEventListener('mousedown', (e) => { if (e.button === 0) CM.api('window.startDrag'); });
+    els.titlebarDrag.addEventListener('mousedown', e => { if (e.button === 0) CM.api('window.startDrag'); });
     els.titlebarDrag.addEventListener('dblclick', () => CM.api('window.toggleMaximize'));
     CM.updateMaxIcon();
     fb.on('window:stateChanged', () => CM.updateMaxIcon());
@@ -402,8 +402,8 @@
     CM._updateSeekBar(els.seekBar, els.seekCurrent, els.seekTotal, '--seek-pct', 'seeking');
   };
 
-  CM.updateStopAfterIcon = function () {
-    els.btnStopAfter.classList.toggle('active', state.stopAfterCurrent);
+  CM.updateStopIcon = function () {
+    els.btnStop.classList.toggle('active', state.stopAfterCurrent);
   };
 
   /* ============================================
