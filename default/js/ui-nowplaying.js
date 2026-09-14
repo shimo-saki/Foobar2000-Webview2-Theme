@@ -36,16 +36,10 @@
     els.npTrackArtist.textContent = els.bottomArtist.textContent;
     CM.updateNpFormat();
     CM.loadNpWaveform(CM.trackPath(CM.currentTrack));
-    // 同步播放按钮状态
-    const playing = !!(fb.state && fb.state.isPlaying);
-    els.npBtnPlay.classList.toggle('playing', playing);
-    els.npLcPlay.classList.toggle('playing', playing);
     // 同步进度条
     CM.updateNpSeekUI();
     // 初始化频谱
     CM.initNpSpectrum();
-    // 更新唱片动画
-    CM.updateNpVinylState();
     // 设置初始模式
     els.npOverlay.classList.toggle('lyrics-only', state.npMode === 'lyrics');
     CM.updateNpModeIcon();
@@ -152,12 +146,6 @@
     state.npMode = state.npMode === 'vinyl' ? 'lyrics' : 'vinyl';
     els.npOverlay.classList.toggle('lyrics-only', state.npMode === 'lyrics');
     CM.updateNpModeIcon();
-  };
-
-  CM.updateNpVinylState = function () {
-    const playing = !!fb.state?.isPlaying;
-    els.npVinylDisc.classList.toggle('playing', playing);
-    els.npTonearm.classList.toggle('playing', playing);
   };
 
   CM.updateNpSeekUI = function () {

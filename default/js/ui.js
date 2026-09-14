@@ -368,11 +368,6 @@
   /* ============================================
    * 底栏图标状态
    * ============================================ */
-  CM.updatePlayPauseIcon = function (isPlaying) {
-    els.iconPlay.classList.toggle('hidden', isPlaying);
-    els.iconPause.classList.toggle('hidden', !isPlaying);
-  };
-
   CM.updateOrderIcon = function () {
     const order = CM.ORDERS[CM.orderIndexOf(state.order)];
     els.btnOrder.innerHTML = `<span class="icon font-size-16">${order.icon}</span>`

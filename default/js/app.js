@@ -10,15 +10,8 @@
    * 播放/暂停可视状态（图标 + 表格均衡器动画 + 任务栏）
    * ============================================ */
   function setPlayingVisual(isPlaying) {
-    CM.updatePlayPauseIcon(isPlaying);
     document.body.classList.toggle('is-playing', isPlaying);
     CM.updateTaskbarProgress();
-    // 更新沉浸式唱片旋转 + 播放按钮状态
-    if (CM.state.npOpen) {
-      CM.updateNpVinylState();
-      CM.els.npBtnPlay.classList.toggle('playing', !!isPlaying);
-      CM.els.npLcPlay.classList.toggle('playing', !!isPlaying);
-    }
   }
 
   /* ============================================
@@ -119,7 +112,7 @@
     });
 
     fb.on('playback:paused', data => {
-      setPlayingVisual(!(data && data.paused));
+      setPlayingVisual(!data?.paused);
     });
 
     // 高分辨率进度事件 — 驱动进度条 + 歌词高亮 + 任务栏进度
