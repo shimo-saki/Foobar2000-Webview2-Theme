@@ -5,8 +5,8 @@
  * ============================================ */
 (function () {
   'use strict';
-  const CM = window.CloudMusic;
-  const els = CM.els, state = CM.state;
+  const CM = window.CloudMusic,
+    els = CM.els, state = CM.state;
 
   /* ============================================
    * 导航 / Tab
@@ -762,7 +762,7 @@
 
       const items = [
         { label: 'CloudMusic 主题', isLabel: true },
-        info('版本', 'v2.4.1'),
+        info('版本', 'v2.5.0'),
         info('作者', '灵芝含'),
         info('foobar2000', esc(ver.foobar2000 || '--')),
         info('WebView2 组件', `v${esc(pluginVer || '--')}`),

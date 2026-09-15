@@ -5,8 +5,8 @@
 
 (function () {
   'use strict';
-  const CM = window.CloudMusic;
-  const els = CM.els, state = CM.state, esc = CM.escHtml;
+  const CM = window.CloudMusic,
+    els = CM.els, state = CM.state, esc = CM.escHtml;
 
   /* ============================================
    * 播放队列抽屉

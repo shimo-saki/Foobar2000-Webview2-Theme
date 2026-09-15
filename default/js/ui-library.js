@@ -6,9 +6,8 @@
 
 (function () {
   'use strict';
-  const CM = window.CloudMusic;
-  const els = CM.els, state = CM.state, esc = CM.escHtml;
-  const wildValue = CM.wildValue;
+  const CM = window.CloudMusic,
+    els = CM.els, state = CM.state, esc = CM.escHtml;
 
   /* ============================================
    * 媒体库
@@ -693,7 +692,7 @@
     const retry = () => CM.renderLibraryArtistDetail(artist);
 
     // 艺术家名含引号：宿主 getArtistTracks 内部查询无法转义必然返回空，直接走 ? 通配查询
-    const wild = artist.includes('"') ? wildValue(artist) : null;
+    const wild = artist.includes('"') ? CM.wildValue(artist) : null;
 
     if (wild) {
       CM._renderLibraryDetail(
@@ -719,8 +718,8 @@
     const retry = () => CM.renderLibraryAlbumDetail(arg);
 
     // 专辑名或艺术家名含引号：宿主 getAlbumTracks 内部查询无法转义必然返回空，直接走 ? 通配查询
-    const wild = arg.album.includes('"') ? wildValue(arg.album) : null;
-    const wildArtist = (arg.artist || '').includes('"') ? wildValue(arg.artist) : null;
+    const wild = arg.album.includes('"') ? CM.wildValue(arg.album) : null;
+    const wildArtist = (arg.artist || '').includes('"') ? CM.wildValue(arg.artist) : null;
 
     if (wild || wildArtist) {
       let q = wild ? `album IS "${wild}"` : `album HAS "${arg.album}"`;
@@ -751,7 +750,7 @@
     const retry = () => CM.renderLibraryGenreDetail(genre);
 
     // 流派名含引号：查询无法转义，用 ? 通配替换 + 客户端精确过滤
-    const wild = genre.includes('"') ? wildValue(genre) : null;
+    const wild = genre.includes('"') ? CM.wildValue(genre) : null;
     const query = wild ? `genre IS "${wild}"` : `genre HAS "${genre}"`;
 
     CM._renderLibraryDetail(

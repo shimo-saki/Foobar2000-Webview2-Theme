@@ -6,8 +6,8 @@
 
 (function () {
   'use strict';
-  const CM = window.CloudMusic;
-  const els = CM.els;
+  const CM = window.CloudMusic,
+    els = CM.els;
 
   CM._lyricLoadId = 0;
   CM.loadLyrics = function () {
@@ -22,21 +22,6 @@
       CM.currentLyrics = parsed;
       CM.player.setLyricLines(parsed);
     });
-  };
-
-  // parseLRC 缓存：同一曲目重复解析（切换歌词视图/重新进入）时直接命中。
-  const lrcCache = new Map();
-  const MAX_CACHE_SIZE = 50;
-  const EMPTY_LYRIC = [{ startTime: 0, endTime: Infinity, words: [{ startTime: 0, endTime: Infinity, word: '暂无歌词' }] }];
-  CM.parseLRCCached = function (key, lrcText) {
-    if (!lrcText) return EMPTY_LYRIC;
-    if (lrcCache.has(key)) return lrcCache.get(key);
-
-    const parsed = CM.parseLRC(lrcText);
-    lrcCache.set(key, parsed);
-
-    if (lrcCache.size > MAX_CACHE_SIZE) lrcCache.delete(lrcCache.keys().next().value);
-    return parsed;
   };
 
   CM.changePlayerState = function (state) {

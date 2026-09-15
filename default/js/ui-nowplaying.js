@@ -5,9 +5,8 @@
 
 (function () {
   'use strict';
-  const CM = window.CloudMusic;
-  const els = CM.els, state = CM.state;
-  const DEFAULT_TRACK_COVER = CM.DEFAULT_TRACK_COVER;
+  const CM = window.CloudMusic,
+    els = CM.els, state = CM.state;
 
   /* ============================================
    * 沉浸式 NowPlaying
@@ -28,7 +27,7 @@
 
   CM.renderNpOverlay = function () {
     // 同步封面（getAttribute 判断：未设置 src 时 .src 返回页面基址 URL，恒为 truthy）
-    const artUrl = els.bottomArt.getAttribute('src') || DEFAULT_TRACK_COVER;
+    const artUrl = els.bottomArt.getAttribute('src') || CM.DEFAULT_TRACK_COVER;
     els.npArtwork.src = artUrl;
     els.npBgBlur.style.backgroundImage = `url("${artUrl}")`;
     // 同步曲目信息

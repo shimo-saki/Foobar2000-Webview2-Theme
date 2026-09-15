@@ -5,8 +5,8 @@
 
 (function () {
   'use strict';
-  const CM = window.CloudMusic;
-  const els = CM.els, esc = CM.escHtml;
+  const CM = window.CloudMusic,
+    els = CM.els, esc = CM.escHtml;
 
   /* ============================================
    * 标签编辑器（单曲 + 批量）

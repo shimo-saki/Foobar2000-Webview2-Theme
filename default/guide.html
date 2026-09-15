@@ -173,7 +173,7 @@
   <h1>CloudMusic 主题功能指南</h1>
   <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">版本 <b>v2.4.1</b></div>
+    <div class="hero-meta-item">版本 <b>v2.5.0</b></div>
     <div class="hero-meta-item">作者 <b>灵芝含</b></div>
     <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.13.0</b></div>
   </div>
@@ -216,11 +216,24 @@
       <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
     </div>
     <div>
-      <div class="section-title">更新日志 · v2.4.1</div>
-      <div class="section-desc">ESLyric 桌面歌词增强、更多菜单重构、多项已有 bug 修复</div>
+      <div class="section-title">更新日志 · v2.5.0</div>
+      <div class="section-desc">多编码歌词引擎 · 歌词解析重构 · LRC 编码自动识别</div>
     </div>
   </div>
   <div class="section-body">
+    <strong>v2.5.0 · 多编码歌词引擎</strong>
+    <ul>
+      <li><strong>新增 lyric-core.js 模块</strong>：独立的多编码歌词引擎，包含 8 层编码检测流水线和模块化 LRC/ESLRC 解析器。</li>
+      <li><strong>编码自动检测</strong>：支持 GBK/GB18030、UTF-8、UTF-16 等常见歌词编码的自动识别。确定性路径（BOM / 全 ASCII / 严格 UTF-8）覆盖大多数场景，Big5/Shift_JIS/EUC 等亚洲双字节编码采用评分制区分，准确率受样本分布影响。</li>
+      <li><strong>GBK 歌词原生支持</strong>：不再需要手动转 UTF-8。GBK 编码的 LRC 文件（如从千千静听下载的中文歌词）可直接被识别并正确显示。</li>
+      <li><strong>解析器重构</strong>：模块化为 <code>parseLRC</code>（标准 LRC）、<code>parseESLRC</code>（ESLyric 逐字格式），统一输出 LyricLine 结构。支持多时间标签展开、翻译/音译行 ±10ms 归并、背景和声识别。</li>
+    </ul>
+    <strong>v2.5.0 · 歌词加载链路修复</strong>
+    <ul>
+      <li><strong>三层回退加载</strong>：lyrics.get → file.read 自行解码 → 从音频路径推导 LRC 直接读取。修复了 ESLyric 报告 GBK 歌词时 JSON 序列化失败导致歌词完全不显示的 bug。</li>
+      <li><strong>用户编码记忆</strong>：手动选择的编码按文件 hash 记住，下次同文件直接使用。</li>
+    </ul>
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:18px 0">
     <strong>v2.4.1 · ESLyric 功能增强</strong>
     <ul>
       <li><strong>更多菜单重构</strong>：新增「歌词」折叠面板，桌面歌词扩展为 显示 / 置顶 / 锁定 / 重置位置 四项，ESLyric 工具新增 搜索歌词 / 重载歌词 / 脚本测试。</li>
@@ -491,6 +504,7 @@
       <li><strong>纯文本歌词</strong>：无时间轴的歌词以静态文本展示</li>
       <li><strong>点击跳转</strong>：点击任意歌词行可跳转到对应时间点播放</li>
       <li><strong>歌词来源</strong>：通过 ESLyric 组件获取，需安装 foo_uie_eslyric</li>
+      <li><strong>多编码支持</strong>：内置编码检测引擎，基本可正确识别 GBK/UTF-8/UTF-16 编码的 LRC 文件，其他亚洲双字节编码（Big5/Shift_JIS/EUC）为评分制区分</li>
     </ul>
   </div>
 </div>
