@@ -151,6 +151,14 @@
 .tab-content.active{display:flex;flex-direction:column;animation:tab-in 0.18s ease-out}
 @keyframes tab-in{from{opacity:0}to{opacity:1}}
 #tabDiscover.active{display:block;overflow-y:auto;overscroll-behavior:contain}
+#position{
+  display:inline-flex;align-items:center;justify-content:center;
+  position:absolute;right:12px;bottom:12px;overflow:hidden;
+  width:40px;height:40px;border-radius:50%;
+  background:var(--bg-0);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  transform:translateX(200%);transition:transform 0.26s var(--ease);
+}
+.tab-content.active:has(.playing) > #position{transform:translateX(0)}
 
 /* ============ Right Panel (Lyrics) ============ */
 .right-panel{

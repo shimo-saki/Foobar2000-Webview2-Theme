@@ -37,6 +37,7 @@
     playlistHeaderTag: CM.$('playlistHeaderTag'),
     btnPlayAll: CM.$('btnPlayAll'), btnPlaylistMore: CM.$('btnPlaylistMore'),
     trackTableWrap: CM.$('trackTableWrap'), trackTable: CM.$('trackTable'), trackTbody: CM.$('trackTbody'),
+    position: CM.$('position'), 
     // Library / Search
     libraryTree: CM.$('libraryTree'), libraryDetail: CM.$('libraryDetail'),
     searchInput: CM.$('searchInput'), searchResults: CM.$('searchResults'),

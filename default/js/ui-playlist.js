@@ -620,10 +620,6 @@
     const botDelta = (state.trackCache.length - selIdxs.at(-1) - 1) || 0;
     const items = [
       {
-        label: '跳转到当前播放', icon: CM.icons.position, disabled: !CM.currentTrack || ctx?.playlist !== state.playingPlaylistIndex,
-        action: () => els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-      },
-      {
         label: '播放', icon: CM.icons.play,
         action: () => {
           if (ctx?.playlist != null) {

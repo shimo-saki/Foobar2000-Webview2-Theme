@@ -145,6 +145,10 @@
     });
   };
 
+  CM.els.position.addEventListener('click', () =>
+    els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  );
+
   /* ============================================
    * 通用 seekbar 绑定（主进度条 + 沉浸式进度条共用）
    * ============================================ */
