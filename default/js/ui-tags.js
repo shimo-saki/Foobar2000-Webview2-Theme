@@ -28,6 +28,13 @@
   // 标签编辑器内部状态
   var _tagCtx = null; // { mode: 'single'|'batch', tracks: [], original: {} }
 
+  // 标签值 → 输入框文本。多值标签（metadata.readByPath 对多值字段返回数组，如
+  // GENRE: ["流行","电子"]）统一以 "; " 连接：既符合 foobar2000 的编辑习惯，
+  // 也保证"显示 → 未改动 → 保存"不会把多值压成一个值。
+  function tagText(v) {
+    return Array.isArray(v) ? v.join('; ') : (v == null ? '' : String(v));
+  }
+
   CM.showTagEditor = function(track) {
     var path = CM.trackPath(track);
     if (!path) { CM.showToast('无法编辑', '未获取到文件路径', 'error'); return; }
@@ -87,7 +94,7 @@
         '</div></div>');
     }
     TAG_FIELDS.forEach(function(f) {
-      var val = tags[f.key] || '';
+      var val = tagText(tags[f.key]);
       if (isBatch) {
         parts.push('<div class="tag-field batch">' +
           '<input type="checkbox" class="tag-field-check" data-field="' + f.key + '">' +
@@ -134,14 +141,18 @@
   };
 
   function _saveSingleTags() {
-    var path = _tagCtx.path;
+    var ctx = _tagCtx;
+    if (!ctx) return;
+    var path = ctx.path;
     var tags = {};
     var changed = false;
     TAG_FIELDS.forEach(function(f) {
       var input = els.tagEditorBody.querySelector('.tag-field-input[data-field="' + f.key + '"]');
       if (!input) return;
       var newVal = input.value.trim();
-      var oldVal = (_tagCtx.original && _tagCtx.original[f.key]) || '';
+      // 与原值比较前统一取文本：多值字段原值是数组，直接比较会恒判为"已改动"，
+      // 于是未改动的多值标签也被写回成单值（多值语义被压掉）
+      var oldVal = tagText(ctx.original && ctx.original[f.key]);
       if (newVal !== oldVal) {
         tags[f.key] = newVal || null; // 空值设为 null 以清除标签
         changed = true;
@@ -151,13 +162,13 @@
     els.tagEditorHint.textContent = '正在写入...';
     CM.api('metadata.write', { path: path, tags: tags }).then(function(r) {
       if (!r || r.success === false) {
+        if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
         CM.showToast('写入失败', '标签写入出错', 'error');
-        els.tagEditorHint.textContent = '写入失败，请重试';
         return;
       }
-      CM.showToast('标签已保存', CM.trackName(_tagCtx.tracks[0]), 'success');
-      // 更新本地缓存
-      var track = _tagCtx.tracks[0];
+      var track = ctx.tracks[0];
+      CM.showToast('标签已保存', track ? CM.trackName(track) : null, 'success');
+      // 更新本地缓存（写入已完成，即使编辑器已在写入期间被关闭也要刷新列表）
       if (track) {
         if (tags.TITLE != null) track.title = tags.TITLE;
         if (tags.ARTIST != null) track.artist = tags.ARTIST;
@@ -169,11 +180,14 @@
         if (tags.DISCNUMBER != null) track.discNumber = parseInt(tags.DISCNUMBER, 10) || 0;
         CM.renderTrackTable();
       }
-      CM.hideTagEditor();
+      // 期间用户可能已关闭本编辑器（甚至打开了另一首）：只在仍是同一个上下文时关闭
+      if (_tagCtx === ctx) CM.hideTagEditor();
     });
   }
 
   function _saveBatchTags() {
+    var ctx = _tagCtx;
+    if (!ctx) return;
     var tags = {};
     var hasChecked = false;
     TAG_FIELDS.forEach(function(f) {
@@ -186,14 +200,14 @@
     });
     if (!hasChecked) { CM.showToast('未选择字段', '请勾选要批量修改的标签字段', 'error'); return; }
     els.tagEditorHint.textContent = '正在批量写入...';
-    var items = _tagCtx.tracks.map(function(t) {
+    var items = ctx.tracks.map(function(t) {
       var p = CM.trackPath(t);
       return p ? { path: p, tags: tags } : null;
     }).filter(Boolean);
     CM.api('metadata.writeBatch', { items: items }).then(function(r) {
       if (!r || r.success === false) {
+        if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
         CM.showToast('批量写入失败', '标签写入出错', 'error');
-        els.tagEditorHint.textContent = '写入失败，请重试';
         return;
       }
       var ok = r.successCount || 0, fail = r.failCount || 0;
@@ -203,7 +217,7 @@
         CM.showToast('批量保存成功', ok + '首曲目标签已更新', 'success');
       }
       // 更新本地缓存
-      _tagCtx.tracks.forEach(function(track) {
+      ctx.tracks.forEach(function(track) {
         if (!track) return;
         if (tags.TITLE != null) track.title = tags.TITLE;
         if (tags.ARTIST != null) track.artist = tags.ARTIST;
@@ -215,7 +229,7 @@
         if (tags.DISCNUMBER != null) track.discNumber = parseInt(tags.DISCNUMBER, 10) || 0;
       });
       CM.renderTrackTable();
-      CM.hideTagEditor();
+      if (_tagCtx === ctx) CM.hideTagEditor();
     });
   }
 

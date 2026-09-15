@@ -573,6 +573,69 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .np-overlay.lyrics-only .np-mode-btn .np-mode-vinyl{display:none}
 .np-overlay.lyrics-only .np-mode-btn .np-mode-lyrics{display:inline}
 
+/* 歌词 3D 倾斜开关：紧邻"显示模式"的小圆钮，开启时点亮强调色 */
+.np-tilt-btn{
+  position:absolute;top:20px;right:74px;z-index:10;
+  width:34px;height:34px;border-radius:50%;
+  background:rgba(255,255,255,0.06);color:var(--text-3);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:background var(--t-fast),color var(--t-fast),box-shadow var(--t-fast);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
+.np-tilt-btn:hover{background:rgba(255,255,255,0.14);color:var(--text)}
+.np-tilt-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.np-tilt-btn.on{color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent-glow)}
+
+/* ============ 歌词 3D 斜墙（可选，右上角开关切换） ============
+   整块歌词像贴在一面斜墙上：对歌词包裹层做一次真正的 CSS 3D 平面旋转（父级 perspective
+   提供透视，墙面朝左前方即封面那一侧）。旋转挂在包裹层 .np-lyric-wall 上，不挂在滚动
+   容器 .np-lyrics 上 —— 滚动条几何、scrollHeight、offsetTop 全都保持原样，
+   因此 _updateLyricHighlight 的 scrollTo 居中逻辑与遮罩渐隐完全不受影响。
+   调手感只需改下面这几个变量。 */
+.np-overlay.tilt3d{
+  --np-wall-y:-26deg;          /* 墙面绕竖轴的角度：负值=左侧向后收、墙面朝左前方（朝封面） */
+  --np-wall-x:0deg;            /* 想要再加一点俯仰就改这里，如 -4deg */
+  --np-wall-depth:900px;       /* 透视距离：越小透视越强 */
+  --np-wall-origin:50% 50%;    /* 透视原点：想让灭点更偏向封面一侧可改 20% 50% */
+  --np-wall-pop:36px;          /* 活动行"鼓出来"的量（0=不鼓） */
+  /* 活动行的柔和投影 + 外发光（可只留一半：删掉逗号后的那段即为纯投影） */
+  --np-wall-pop-shadow:0 2px 14px rgba(0,0,0,0.45), 0 0 26px var(--accent-glow);
+}
+.np-overlay.tilt3d .np-lyrics{
+  perspective:var(--np-wall-depth);
+  perspective-origin:var(--np-wall-origin);
+  /* 旋转后横向会略微溢出，隐藏横向滚动（纵向滚动照旧），避免出现"能把墙左右拖动"的感觉 */
+  overflow-x:hidden;
+}
+/* 斜墙模式下面板本身也拉大（更宽 = 远近边缘的深度差更明显；更高 = 墙面更"铺满"） */
+.np-overlay.tilt3d .np-lyrics-side{max-width:760px}
+.np-overlay.lyrics-only.tilt3d .np-lyrics-side{max-width:960px}
+.np-overlay.tilt3d .np-container{padding-top:34px;padding-bottom:6px}
+.np-overlay.tilt3d .np-lyric-wall{
+  transform:rotateX(var(--np-wall-x)) rotateY(var(--np-wall-y));
+  transform-origin:center center;
+  transition:transform 0.4s var(--ease);
+}
+/* 正在播放的那一行"从墙面鼓出来"。
+   没有用 translateZ + preserve-3d：那会把整面墙变成多平面 3D 场景，滚动动画每帧都要
+   重新投影整面墙（表现为卡顿）。由于墙面角度固定，沿法线凸出 p 在屏幕上的投影等价于
+   "朝封面方向平移 p·sin|y| + 放大 d/(d − p·cos|y|)"，所以直接用 2D 变换表达 ——
+   旋转仍由合成器完成，滚动成本与平面模式相同。
+   若改了 --np-wall-y / --np-wall-depth，下面两个系数要跟着换算：
+     0.44   = sin(26°)            平移系数（负号=朝封面那侧）
+     0.0011 = cos(26°) / 900px    放大系数 */
+.np-overlay.tilt3d .np-lyric-line{
+  transition:transform 0.25s var(--ease),color 0.3s ease,font-size 0.3s var(--ease),font-weight 0.3s ease;
+}
+.np-overlay.tilt3d .np-lyric-line.active{
+  transform:translateX(calc(var(--np-wall-pop) * -0.44))
+            scale(calc(1 + var(--np-wall-pop) * 0.0011));
+  /* 鼓起行绘制在相邻行之上（放大后边缘不与邻行互相压住） */
+  position:relative;z-index:1;
+  /* 柔和投影 + 随封面主色调的外发光（不参与过渡：模糊阴影逐帧动画开销大） */
+  text-shadow:var(--np-wall-pop-shadow);
+}
+
 .np-container{
   flex:1;display:flex;align-items:center;justify-content:center;
   gap:60px;padding:60px 80px 20px;min-height:0;
@@ -701,6 +764,12 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .np-lyric-line .lyric-word{transition:color 0.15s ease}
 .np-lyric-line.active .lyric-word{color:var(--text-4)}
 .np-lyric-line.active .lyric-word.sung{color:var(--accent,var(--text))}
+/* 同刻副行（翻译/音译）：随主行整体高亮，字号更小、常态更暗 */
+.np-lyric-line .lyric-sub{
+  font-size:0.62em;font-weight:400;color:var(--text-4);
+  line-height:1.6;margin-top:2px;transition:color 0.3s ease;
+}
+.np-lyric-line.active .lyric-sub{color:var(--text-3)}
 
 /* Lyrics-only mode */
 .np-overlay.lyrics-only .np-vinyl-side{opacity:0;transform:scale(0.8);pointer-events:none;width:0;overflow:hidden;margin:0;gap:0}
@@ -877,6 +946,8 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .batch-btn:hover{background:var(--bg-4);color:var(--text)}
 .batch-btn.primary{background:var(--accent);color:var(--on-accent);border-color:transparent}
 .batch-btn.primary:hover{opacity:0.88}
+.batch-btn.danger{color:#ff6b6b;border-color:rgba(255,107,107,0.35)}
+.batch-btn.danger:hover{background:rgba(255,107,107,0.12);color:#ff6b6b}
 
 /* Multi-select row highlight */
 tr.batch-selected{background:var(--accent-soft) !important}

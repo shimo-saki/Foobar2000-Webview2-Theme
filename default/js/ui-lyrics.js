@@ -12,17 +12,19 @@
   /* ============================================
    * 歌词
    * ============================================ */
-  // 健壮解码：base64 raw bytes → detectEncoding + TextDecoder
-  CM.decodeTextBytes = function(b64, fileKey) {
+  // 健壮解码：base64 raw bytes → 编码探测 + TextDecoder
+  CM.decodeTextBytes = function(b64) {
     var raw = atob(b64);
     var bytes = new Uint8Array(raw.length);
     for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-    var result = CM.lyric.decodeBytes(bytes, fileKey);
-    return result.text;
+    return CM.lyric.decodeBytes(bytes).text;
   };
 
   CM._renderLyrics = function(r, lyricsText) {
     if (!r || r.success === false || !r.available || !lyricsText) {
+      // 清掉旧歌词：沉浸页与主面板共用 currentLyrics，否则会停留在上一首
+      CM.currentLyrics = [];
+      CM._lyricsSynced = false;
       CM.renderLyricsEmpty('暂无歌词');
       return;
     }
@@ -31,24 +33,30 @@
       CM.makeLRCCacheKey(r.sourcePath || (CM.currentTrack && CM.trackPath(CM.currentTrack)), lyricsText),
       lyricsText
     );
-    // 只要解析出时间戳即按同步歌词渲染，不依赖插件 synced 判定
-    // （带 [ti:]/[ar:]/[offset:] 等元数据标签的文件可能被插件误判为不同步）
-    if (parsed.length) {
-      CM.currentLyrics = parsed;
-      CM.renderSyncedLyrics(parsed);
-    } else {
-      CM.renderPlainLyrics(lyricsText, parsed);
+    // 只有解析出时间戳才按同步歌词渲染/高亮。整首无时间轴的纯文本歌词若走同步分支，
+    // 高亮的二分查找会把 null 当作 0 而永远命中最后一行 —— 表现为末行固定高亮、
+    // 面板被滚到底部、点击任意行都无法跳转。
+    // 纯文本仍放入 currentLyrics（沉浸页据此显示歌词正文），仅关闭时间轴高亮。
+    var timed = false;
+    for (var i = 0; i < parsed.length; i++) {
+      if (parsed[i].time != null) { timed = true; break; }
     }
+    CM.currentLyrics = parsed;
+    CM._lyricsSynced = timed;
+    if (timed) CM.renderSyncedLyrics(parsed);
+    else CM.renderPlainLyrics(lyricsText, parsed);
+    CM._syncNpLyrics();
   };
 
   CM._lyricLoadId = 0;
+  CM._lyricsSynced = false;   // 当前歌词是否带时间轴（纯文本时不做时间高亮）
   CM.loadLyrics = function() {
     CM.currentLyrics = [];
+    CM._lyricsSynced = false;
     CM.activeLyricIndex = -1;
     if (!CM.currentTrack) { CM.renderLyricsEmpty('暂无歌词'); return; }
     els.lyricsScroll.innerHTML = CM.loadingHTML('歌词加载中...');
     var path = CM.trackPath(CM.currentTrack);
-    var fileKey = path ? (path.length + '|' + path.slice(-32)) : '';
     var loadId = ++CM._lyricLoadId;
     CM.api('lyrics.get', path ? { path: path } : {}).then(function(r) {
       if (loadId !== CM._lyricLoadId) return;
@@ -57,7 +65,7 @@
         CM.api('file.read', { path: r.sourcePath, encoding: 'binary' }).then(function(fr) {
           if (loadId !== CM._lyricLoadId) return;
           if (fr && fr.content) {
-            CM._renderLyrics(r, CM.decodeTextBytes(fr.content, fileKey));
+            CM._renderLyrics(r, CM.decodeTextBytes(fr.content));
           } else {
             CM._renderLyrics(r, r.lyrics);
           }
@@ -77,7 +85,7 @@
         CM.api('file.read', { path: lrcPath, encoding: 'binary' }).then(function(fr) {
           if (loadId !== CM._lyricLoadId) return;
           if (fr && fr.content) {
-            CM._renderLyrics({ available: true, source: 'file', sourcePath: lrcPath }, CM.decodeTextBytes(fr.content, fileKey));
+            CM._renderLyrics({ available: true, source: 'file', sourcePath: lrcPath }, CM.decodeTextBytes(fr.content));
           } else {
             CM.renderLyricsEmpty('暂无歌词');
           }
@@ -90,17 +98,31 @@
     });
   };
 
-  CM.renderLyricsEmpty = function(text) {
+  CM.renderLyricsEmpty = function(text, keepNp) {
     els.lyricsScroll.innerHTML =
       '<div class="lyrics-empty">' + CM.icons.note + '<span>' + esc(text) + '</span></div>';
+    if (!keepNp) CM._syncNpLyrics();
+  };
+
+  // 沉浸式页与主面板共用 CM.currentLyrics：歌词异步到达（可能晚于沉浸页打开或
+  // 晚于 onTrackChanged 里 200ms 的延迟重绘）时必须重绘，否则沉浸页会一直停在
+  // 打开瞬间的空态「暂无歌词」，直到下次手动打开沉浸页。
+  CM._syncNpLyrics = function() {
+    if (state.npOpen && typeof CM.renderNpLyrics === 'function') CM.renderNpLyrics();
   };
 
   // 通用歌词 HTML 生成（主歌词面板 + 沉浸式共用）
-  CM._renderLyricHTML = function(lines, lineClass, topPadPct) {
+  // 同一时刻的多行（翻译/音译）由解析层归为一组：主行照常渲染，副行以 .lyric-sub
+  // 依次附在同一容器内，整组共享 active 高亮与滚动定位，任何一行都不会被丢弃。
+  // wrapClass：可选，把整段歌词包进一个包裹层 —— 沉浸式用它实现"整块歌词像贴在一面
+  // 斜墙上"的 3D 透视（旋转挂在包裹层、不挂在滚动容器上，故滚动/居中/遮罩全不受影响）。
+  CM._renderLyricHTML = function(lines, lineClass, topPadPct, wrapClass) {
     var parts = ['<div style="height:' + topPadPct + '%"></div>'];
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
-      parts.push('<div class="' + lineClass + (line.words ? ' has-words' : '') + '" data-idx="' + i + '" data-time="' + line.time + '">');
+      parts.push('<div class="' + lineClass + (line.words ? ' has-words' : '') +
+        (line.subs && line.subs.length ? ' has-subs' : '') +
+        '" data-idx="' + i + '" data-time="' + line.time + '">');
       if (line.words) {
         for (var w = 0; w < line.words.length; w++) {
           parts.push('<span class="lyric-word" data-time="' + line.words[w].time + '">' + esc(line.words[w].text) + '</span>');
@@ -108,10 +130,16 @@
       } else {
         parts.push(esc(line.text));
       }
+      if (line.subs) {
+        for (var s = 0; s < line.subs.length; s++) {
+          parts.push('<div class="lyric-sub">' + esc(line.subs[s]) + '</div>');
+        }
+      }
       parts.push('</div>');
     }
     parts.push('<div style="height:40%"></div>');
-    return parts.join('');
+    var html = parts.join('');
+    return wrapClass ? '<div class="' + wrapClass + '">' + html + '</div>' : html;
   };
 
   // 通用歌词点击跳转：事件委托（一次性绑定在容器上，避免逐行 addEventListener）
@@ -135,7 +163,9 @@
   CM._npWordCache = null;          // 沉浸式逐字节点
   CM._updateLyricHighlight = function(container, lineSelector, activeIdxField, force, pos, cacheKey, wordCacheKey) {
     var lines = CM.currentLyrics;
-    if (!lines.length) return;
+    // 纯文本歌词（无时间轴）不做时间高亮：lines[i].time 为 null，
+    // 二分查找会把 null 当 0 而恒命中最后一行
+    if (!CM._lyricsSynced || !lines.length) return;
     // 二分查找最后一个 time <= pos 的行（行按时间升序），超长歌词（播客/长音频）下避免每帧从头线性扫描
     var idx = -1, lo = 0, hi = lines.length - 1;
     while (lo <= hi) {
@@ -175,7 +205,10 @@
   };
 
   CM.renderPlainLyrics = function(raw, parsed) {
-    // 无时间轴：按行静态展示（若解析出文本行则用解析结果）
+    // 无时间轴：按行静态展示（若解析出文本行则用解析结果）。
+    // 同时清掉同步渲染的节点缓存，避免纯文本模式下残留上一首的节点引用。
+    CM._lyricNodesCache = null;
+    CM._wordCache = null;
     var lines = parsed.length ? parsed.map(function(l) { return l.text; })
       : raw.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
     if (!lines.length) { CM.renderLyricsEmpty('暂无歌词'); return; }

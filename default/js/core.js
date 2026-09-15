@@ -71,7 +71,7 @@
     npTrackFormat: CM.$('npTrackFormat'), npWaveform: CM.$('npWaveform'),
     npSpectrum: CM.$('npSpectrum'), npLyrics: CM.$('npLyrics'),
     npSeekBar: CM.$('npSeekBar'), npTimeCurrent: CM.$('npTimeCurrent'), npTimeTotal: CM.$('npTimeTotal'),
-    npCloseBtn: CM.$('npCloseBtn'), npModeBtn: CM.$('npModeBtn'),
+    npCloseBtn: CM.$('npCloseBtn'), npModeBtn: CM.$('npModeBtn'), npTiltBtn: CM.$('npTiltBtn'),
     npBtnPrev: CM.$('npBtnPrev'), npBtnPlay: CM.$('npBtnPlay'), npBtnNext: CM.$('npBtnNext'),
     npLcPrev: CM.$('npLcPrev'), npLcPlay: CM.$('npLcPlay'), npLcNext: CM.$('npLcNext'),
     rpImmersiveBtn: CM.$('rpImmersiveBtn'),
@@ -83,7 +83,7 @@
     tagCoverFile: CM.$('tagCoverFile'),
     // Batch Bar
     batchBar: CM.$('batchBar'), batchBarCount: CM.$('batchBarCount'),
-    batchEditTags: CM.$('batchEditTags'), batchClear: CM.$('batchClear')
+    batchEditTags: CM.$('batchEditTags'), batchDeleteTracks: CM.$('batchDeleteTracks'), batchClear: CM.$('batchClear')
   };
 
   /* ============================================
@@ -143,7 +143,7 @@
    * 设置持久化（localStorage）
    * ============================================ */
   var SETTINGS_KEY = 'cloudmusic-settings-v2';
-  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null };
+  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, tilt3d: false };
   CM.loadSettings = function() {
     try {
       var raw = localStorage.getItem(SETTINGS_KEY);
@@ -277,115 +277,7 @@
     }
   };
 
-  // 把 [mm:ss(.xx)] / [h:mm:ss(.xx)] / [mm:ss:xx] 括号内时间文本解析成秒（浮点），无效返回 null
-  // LRC 分母：2位为厘秒、3位为毫秒；统一前补"0"到 3 位按毫秒算（"50"→0.5s、"05"→0.05s、"500"→0.5s）
-  function _legacy_clockFrac(p) { return p ? parseInt(p.padEnd(3, '0'), 10) / 1000 : 0; }
-  function _legacy_parseClock(s) {
-    var m;
-    // 含 "." 小数时可能是小时制 h:mm:ss.xx（如长音频/播客）
-    if (s.indexOf('.') !== -1) {
-      if ((m = /^(\d{1,2}):([0-5]?\d):([0-5]?\d)\.(\d{1,3})$/.exec(s)))
-return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + _legacy_clockFrac(m[4]);
-	    }
-	    // 传统厘秒格式 mm:ss:cs（旧版LRC惯用，如 [00:12:50]）
-	    if ((m = /^(\d{1,2}):(\d{1,2}):(\d{1,3})$/.exec(s)))
-	      return (+m[1]) * 60 + (+m[2]) + _legacy_clockFrac(m[3]);
-	    // 常规 mm:ss(.xx)
-	    if ((m = /^(\d{1,2}):([0-5]?\d)(?:\.(\d{1,3}))?$/.exec(s)))
-	      return (+m[1]) * 60 + (+m[2]) + _legacy_clockFrac(m[3]);
-    return null;
-  }
-  // 提取行内全部 LRC 时间戳（含小时前缀），返回 [{ time, start, end }]（start/end 为行内下标）
-  function _legacy_collectTimeTags(line) {
-    var out = [], re = /\[([^\]\[]+)\]/g, m, t;
-    while ((m = re.exec(line)) !== null) {
-      t = _legacy_parseClock(m[1]);
-      if (t !== null) out.push({ time: t, start: m.index, end: re.lastIndex });
-    }
-    return out;
-  }
-
-  // 逐字歌词（word-level）：把 [mm:ss.xx]字[mm:ss.xx]字... 拆成 {time, text} 片段对。
-  // 语义：时间戳前的文本在其后那个时间戳吟唱；前导文本归第一个时间戳、尾部文本归末个时间戳。
-  // 仅保留非空文本片段，避免"带空格的多时间戳普通歌词行"被误判成逐字歌词。
-  function _legacy_parseWordLevelPairs(line, tags) {
-    var pairs = [], t = tags || _legacy_collectTimeTags(line);
-    if (!t.length) return pairs;
-    // 去掉片段内可能残留的元数据/注释方括号（如 [hash:]），其余逻辑不变
-    var frag = function(s) { return s.replace(/\[[^\]]*\]/g, '').trim(); };
-    var lead = frag(line.slice(0, t[0].start));
-    if (lead) pairs.push({ time: t[0].time, text: lead });
-    for (var i = 0; i < t.length - 1; i++) {
-      var chunk = frag(line.slice(t[i].end, t[i + 1].start));
-      if (chunk) pairs.push({ time: t[i].time, text: chunk });
-    }
-    var tail = frag(line.slice(t[t.length - 1].end));
-    if (tail) pairs.push({ time: t[t.length - 1].time, text: tail });
-    return pairs;
-  }
-
-  // 逐字片段按句读边界分组为显示行，避免整段逐字全部挤成一行
-  function trimLine(cur) {
-    while (cur.words.length && /^\s*$/.test(cur.words[cur.words.length - 1].text)) cur.words.pop();
-    cur.text = cur.text.replace(/\s+$/, '');
-    return cur;
-  }
-  function _legacy_groupWordLevelPairs(pairs) {
-    // 借鉴 befeast/karaoke 的成行模型：不按时间阈值激进重组句子（业界主流均不自动断句）。
-    //   - 仅在强句读标点后开启新句；
-    //   - 单行总跨度不得超过 MAX_LINE_SPAN 秒，超限则贪心在"最大且 >= MIN_SPLIT_GAP 的词间空隙"处拆成两段。
-    var MAX_SPAN = 12.0, MIN_SPLIT_GAP = 1.0;
-    var PUNCT_RE = /[。！？!?；;]$/;
-    var lines = [], cur = null;
-    for (var i = 0; i < pairs.length; i++) {
-      var p = pairs[i];
-      // 上一条结尾是强标点 → 新句
-      if (i > 0 && cur && PUNCT_RE.test(pairs[i - 1].text)) { lines.push(trimLine(cur)); cur = null; }
-      if (!cur) cur = { time: p.time, text: '', words: [] };
-      cur.words.push({ text: p.text, time: p.time });
-      cur.text += p.text;
-    }
-    if (cur) lines.push(trimLine(cur));
-    // 超长行保护：跨度 > MAX_SPAN 的行在最大(且 >= MIN_SPLIT_GAP)空隙处拆开，贪心最大间隙优先，递归到无超限
-    var splitOverlong = function(line) {
-      var span = line.words[line.words.length - 1].time - line.words[0].time;
-      if (span <= MAX_SPAN) return [line];
-      var best = -1, bestGap = -1;
-      for (var j = 0; j < line.words.length - 1; j++) {
-        var g = line.words[j + 1].time - line.words[j].time;
-        if (g >= MIN_SPLIT_GAP && g > bestGap) { bestGap = g; best = j; }
-      }
-      if (best < 0) return [line];
-      var a = { time: line.words[0].time, text: '', words: line.words.slice(0, best + 1) };
-      var b = { time: line.words[best + 1].time, text: '', words: line.words.slice(best + 1) };
-      a.text = a.words.map(function(w) { return w.text; }).join('');
-      b.text = b.words.map(function(w) { return w.text; }).join('');
-      return splitOverlong(trimLine(a)).concat(splitOverlong(trimLine(b)));
-    };
-    var out = [];
-    for (var k = 0; k < lines.length; k++) out = out.concat(splitOverlong(lines[k]));
-    return out;
-  }
-
-  CM.parseLRC = function(lrcText) {
-    var lines = CM.lyric.parseLRC(lrcText);
-    // 新解析器返回毫秒，渲染层期望秒
-    for (var i = 0; i < lines.length; i++) {
-      lines[i].time = lines[i].time != null ? lines[i].time / 1000 : null;
-      lines[i].startTime = lines[i].startTime / 1000;
-      if (lines[i].endTime != null) lines[i].endTime = lines[i].endTime / 1000;
-      if (lines[i].words) {
-        for (var w = 0; w < lines[i].words.length; w++) {
-          lines[i].words[w].time /= 1000;
-          lines[i].words[w].startTime /= 1000;
-          lines[i].words[w].endTime /= 1000;
-        }
-      }
-    }
-    return lines;
-  };
-
-  // parseLRC 缓存: path|encoding → { lines, ts }
+  // 歌词解析缓存（歌词面板热路径）：key = 路径 + 长度 + 头部 64 字符
   var _lrcCache = {}, _lrcKeys = [];
   CM.parseLRCCached = function(key, lrcText) {
     if (!lrcText) return [];

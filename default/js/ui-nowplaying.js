@@ -58,6 +58,7 @@
     // 设置初始模式
     els.npOverlay.classList.toggle('lyrics-only', state.npMode === 'lyrics');
     CM.updateNpModeIcon();
+    CM.applyNpTilt();   // 同步 3D 倾斜开关的类与按钮状态（设置可能来自上次会话）
   };
 
   // 曲目编码信息栏（编码 · 比特率 · 采样率 · 声道）
@@ -128,6 +129,22 @@
     }
   };
 
+  /* 歌词 3D 倾斜（纯 CSS 效果，仅切换 #npOverlay 上的 tilt3d 类）
+   * applyNpTilt 只同步界面，toggleNpTilt 额外落盘到 settings（与 visualizer 同一套持久化） */
+  CM.applyNpTilt = function() {
+    var on = !!CM.settings.tilt3d;
+    if (els.npOverlay) els.npOverlay.classList.toggle('tilt3d', on);
+    if (els.npTiltBtn) {
+      els.npTiltBtn.classList.toggle('on', on);
+      els.npTiltBtn.title = '歌词 3D 倾斜：' + (on ? '开' : '关');
+    }
+  };
+  CM.toggleNpTilt = function() {
+    CM.settings.tilt3d = !CM.settings.tilt3d;
+    CM.saveSettings();
+    CM.applyNpTilt();
+  };
+
   CM.toggleNpMode = function() {
     state.npMode = state.npMode === 'vinyl' ? 'lyrics' : 'vinyl';
     els.npOverlay.classList.toggle('lyrics-only', state.npMode === 'lyrics');
@@ -148,7 +165,7 @@
       els.npLyrics.innerHTML = '<div class="lyrics-empty" style="padding:40px;text-align:center;color:var(--text-3)"><svg viewBox="0 0 24 24" style="width:40px;height:40px;margin:0 auto 12px;stroke:var(--text-4);fill:none"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>暂无歌词</span></div>';
       return;
     }
-    els.npLyrics.innerHTML = CM._renderLyricHTML(lines, 'np-lyric-line', 30);
+    els.npLyrics.innerHTML = CM._renderLyricHTML(lines, 'np-lyric-line', 30, 'np-lyric-wall');
     CM._npLyricNodesCache = null;
     CM._npWordCache = null;
     CM._bindLyricClicks(els.npLyrics, '.np-lyric-line');

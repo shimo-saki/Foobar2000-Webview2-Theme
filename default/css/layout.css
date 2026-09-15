@@ -210,6 +210,12 @@
 .lyric-word{transition:color 0.15s ease}
 .lyric-line.active .lyric-word{color:var(--text-4)}
 .lyric-line.active .lyric-word.sung{color:var(--text)}
+/* 同刻副行（翻译/音译）：随主行整体高亮，但字号更小、常态更暗 */
+.lyric-line .lyric-sub{
+  font-size:0.85em;font-weight:400;color:var(--text-4);
+  line-height:1.5;margin-top:1px;transition:color 0.35s ease;
+}
+.lyric-line.active .lyric-sub{color:var(--text-2)}
 .lyrics-empty{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   height:100%;min-height:160px;color:var(--text-3);gap:14px;padding:40px;

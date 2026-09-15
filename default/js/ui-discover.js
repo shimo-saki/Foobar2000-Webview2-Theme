@@ -81,6 +81,7 @@
   /* ============================================
    * 搜索
    * ============================================ */
+  CM._searchLoadId = 0;
   CM.doSearch = function(query) {
     query = (query || '').trim();
     if (!query) {
@@ -88,8 +89,12 @@
         CM.emptyHTML('输入关键词搜索媒体库', '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>');
       return;
     }
+    // 竞态防护：连续输入/回车会并发多次搜索，旧响应后到会覆盖新结果
+    // （输入框显示"ab"、列表却是"a"的结果），用递增 loadId 只认最新一次
+    var loadId = ++CM._searchLoadId;
     els.searchResults.innerHTML = CM.loadingHTML('搜索中...');
     CM.api('library.search', { query: query, limit: 200 }).then(function(r) {
+      if (loadId !== CM._searchLoadId) return;
       if (!r || r.success === false) {
         els.searchResults.innerHTML = '<div class="section-error">' + CM.icons.error + '<span>搜索失败，媒体库可能未就绪</span></div>';
         return;

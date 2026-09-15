@@ -57,7 +57,8 @@
     CM.state.duration = 0;
     CM.updateTrackInfo(null);
     CM.setArtwork(null);
-    CM.renderLyricsEmpty('暂无播放曲目');
+    // keepNp：切歌时 stopped 会短暂触发，沉浸页保持上一首歌词，避免闪一下空态
+    CM.renderLyricsEmpty('暂无播放曲目', true);
     CM.updateSeekUI();
     setPlayingVisual(false);
     CM.refreshPlayingMarks();

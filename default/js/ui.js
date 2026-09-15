@@ -61,7 +61,7 @@
       // 若当前活动歌单是锁定/自动歌单，replace 会被宿主拒绝（"playlist is lock"），先切到可写歌单
       CM.ensureWritableActivePlaylist().then(function(idx) {
         if (idx < 0) { CM.showToast('播放失败', '没有可写入的播放列表', 'error'); if (onDone) onDone(false); return; }
-        CM.api('playlist.replaceAllAndPlay', { paths: paths, playIndex: 0, autoPlay: true, stop: true }).then(function(res) {
+        CM.api('playlist.replaceAllAndPlay', { paths: paths, playIndex: 0, autoPlay: true, stopFirst: true }).then(function(res) {
           var ok = res && res.success !== false;
           if (ok) {
             if (!onDone) CM.showToast('开始播放', (title || '全部') + ' · ' + paths.length + ' 首', 'success');

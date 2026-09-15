@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CloudMusic</title>
 <link rel="stylesheet" href="css/variables.css?v=23">
-<link rel="stylesheet" href="css/layout.css?v=23">
-<link rel="stylesheet" href="css/components.css?v=23">
+<link rel="stylesheet" href="css/layout.css?v=24">
+<link rel="stylesheet" href="css/components.css?v=33">
 <link rel="stylesheet" href="css/utilities.css?v=23">
 </head>
 <body>
@@ -314,6 +314,9 @@
     <svg viewBox="0 0 24 24" class="np-mode-vinyl"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="5"/></svg>
     <svg viewBox="0 0 24 24" class="np-mode-lyrics"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </div>
+  <div class="np-tilt-btn" id="npTiltBtn" title="歌词 3D 倾斜：关">
+    <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>
+  </div>
   <div class="np-container" id="npContainer">
     <!-- Vinyl / Artwork Side -->
     <div class="np-vinyl-side" id="npVinylSide">
@@ -423,6 +426,7 @@
 <div class="batch-bar hidden" id="batchBar">
   <span class="batch-bar-text"><b id="batchBarCount">0</b> 首已选</span>
   <button class="batch-btn primary" id="batchEditTags">批量编辑标签</button>
+  <button class="batch-btn danger" id="batchDeleteTracks">从歌单删除</button>
   <button class="batch-btn" id="batchClear">取消选择</button>
 </div>
 
@@ -442,17 +446,17 @@
 <script src="sdk/components.global.js?v=1130"></script>
 <script src="sdk/smp-compat.global.js?v=1130"></script>
 <!-- CloudMusic Theme -->
-<script src="js/core.js?v=27"></script>
-<script src="js/lyric-core.js?v=1"></script>
-<script src="js/ui.js?v=27"></script>
-<script src="js/ui-lyrics.js?v=1"></script>
-<script src="js/ui-playlist.js?v=2"></script>
-<script src="js/ui-discover.js?v=1"></script>
+<script src="js/core.js?v=29"></script>
+<script src="js/lyric-core.js?v=3"></script>
+<script src="js/ui.js?v=28"></script>
+<script src="js/ui-lyrics.js?v=4"></script>
+<script src="js/ui-playlist.js?v=3"></script>
+<script src="js/ui-discover.js?v=2"></script>
 <script src="js/ui-library.js?v=6"></script>
 <script src="js/ui-queue.js?v=1"></script>
-<script src="js/ui-nowplaying.js?v=1"></script>
-<script src="js/ui-tags.js?v=1"></script>
-<script src="js/controls.js?v=24"></script>
-<script src="js/app.js?v=24"></script>
+<script src="js/ui-nowplaying.js?v=3"></script>
+<script src="js/ui-tags.js?v=2"></script>
+<script src="js/controls.js?v=28"></script>
+<script src="js/app.js?v=25"></script>
 </body>
 </html>

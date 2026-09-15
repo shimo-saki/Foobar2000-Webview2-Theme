@@ -173,7 +173,7 @@
   <h1>CloudMusic 主题功能指南</h1>
   <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">版本 <b>v2.5.0</b></div>
+    <div class="hero-meta-item">版本 <b>v2.5.1</b></div>
     <div class="hero-meta-item">作者 <b>灵芝含</b></div>
     <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.13.0</b></div>
   </div>
@@ -216,11 +216,38 @@
       <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
     </div>
     <div>
-      <div class="section-title">更新日志 · v2.5.0</div>
-      <div class="section-desc">多编码歌词引擎 · 歌词解析重构 · LRC 编码自动识别</div>
+      <div class="section-title">更新日志 · v2.5.1</div>
+      <div class="section-desc">歌词显示与解析修复 · 多编码识别修正 · 批量删除 · 沉浸式 3D 斜墙</div>
     </div>
   </div>
   <div class="section-body">
+    <strong>v2.5.1 · 歌词显示与解析修复</strong>
+    <ul>
+      <li><strong>GBK 中文歌词不再被误判成乱码</strong>：原评分按“脚本出现即加固定分”，而 LRC 以 ASCII 时间戳为主、基础分被稀释，导致同一段字节流用 euc-kr / windows-874 / windows-1251 解码同样“干净”却能胜出 —— 实测本地 582 个歌词文件（其中 544 个可独立判定）里有 75 个（13.8%）GBK 中文歌词被判成谚文 / 泰文乱码。现改为按脚本<strong>纯度</strong>评分，只对不可伪造的决定性标记（假名占比、谚文纯度 ≥ 0.85）给高权重，其余交给“gb18030 能否无损解释全部字节”与先验；同时把 C1 控制符 / Latin-1 符号从“良字符”分类中拆出（单字节编码靠它们刷虚高分）。同一语料复测：<strong>0 误判</strong>。</li>
+      <li><strong>逐字（精准）歌词支持 <code>&lt;mm:ss.xx&gt;</code></strong>：此前只认方括号写法，尖括号逐字标记会被当正文原样显示（实测 4 个文件、1884 个标记，如 <code>&lt;03:23.23&gt;直&lt;03:23.43&gt;到…</code>）。现两种标记都支持，逐字高亮正常工作。</li>
+      <li><strong>翻译 / 音译不再丢失、也不再“只亮一行”</strong>：同一时间戳下的多行（实测 234 / 582 个文件存在这种成组行）此前各占一行，逐行高亮只会命中其中一行；现归为一组（主行 + 副行 <code>.lyric-sub</code>），整组一起高亮与滚动居中，任何一行都不丢。</li>
+      <li><strong>纯文本歌词不再被当作同步歌词</strong>：整首无时间轴的歌词此前走同步分支，高亮的二分查找把 <code>null</code> 当 0，表现为“末行恒亮、面板被滚到底部、点行不能跳转”；现按是否存在时间戳分流。</li>
+      <li><strong>格式兼容</strong>：<code>[h:mm:ss]</code>、<code>[mm:ss.xx-N]</code> 等变体此前会被整首当纯文本（连时间标签原文都会显示出来），现改为“先尝试解析、有结果即用”；负时间标签（<code>[-00:01.900]</code>）也按负值正确解析。</li>
+      <li><strong>沉浸式歌词晚到不再空到播完</strong>：歌词若晚于沉浸页打开（或晚于切歌后 200ms 的重绘）到达，此前会一直停在「暂无歌词」。</li>
+    </ul>
+    <strong>v2.5.1 · 全主题代码审查修复</strong>
+    <ul>
+      <li><strong>多值标签不再被静默压成单值</strong>（数据完整性）：宿主对多值字段返回数组（如 <code>GENRE: ["流行","电子"]</code>），标签编辑器此前按字符串比较，未改动的多值字段也会被判为“已改动”并写回成 <code>流行,电子</code> 单值。现统一按 <code>; </code> 连接显示与比较，未改动即不写入。</li>
+      <li><strong>保存标签过程中关闭编辑器不再报错</strong>，也不会误关用户新打开的编辑器。</li>
+      <li><strong>搜索竞态</strong>：连续输入 / 回车并发搜索时，旧响应后到会覆盖新结果（输入框是 “ab”、列表却是 “a” 的结果）→ 加响应序号只认最新一次。</li>
+      <li><strong>ESLyric 三个开关连点失效</strong>：命令搜索阶段未上锁，连点会并发执行两次导致开关翻转两次（表现为“点了没反应”）→ 搜索阶段同样上锁。</li>
+      <li><strong>批量删除</strong>：批量操作栏新增「从歌单删除」；右键到已多选的曲目时删除整组（菜单显示首数），锁定 / 自动歌单不再显示该操作（此前点了会静默失败）。</li>
+      <li><strong>其他修复</strong>：<code>playlist.replaceAllAndPlay</code> 参数名（<code>stop</code> → <code>stopFirst</code>）、更多菜单 / 关于面板 / 本指南页脚的版本号不一致。</li>
+      <li><strong>清理</strong>：<code>core.js</code> 移除 137 行无调用者的旧解析残留（<code>_legacy_*</code>、<code>CM.parseLRC</code>）；移除编码记忆层（自动记忆探测结果会让一次误判永久固化）。</li>
+    </ul>
+    <strong>v2.5.1 · 沉浸式 3D 斜墙歌词（新功能）</strong>
+    <ul>
+      <li><strong>斜墙透视</strong>：整块歌词贴在斜墙上（真 CSS 3D 透视，墙面绕竖轴朝封面一侧），面板同时加宽（唱盘模式 760px、纯歌词模式 960px）并压缩上下留白，近大远小更明显。</li>
+      <li><strong>当前行“鼓出来”</strong>：正在播放的那一行沿墙面法线朝观察者凸出，并叠一层柔和投影 + 随封面主色调联动的外发光。</li>
+      <li><strong>性能做法</strong>：凸出没有用 <code>translateZ + preserve-3d</code>（那会把整面墙变成多平面 3D 场景，滚动动画每帧都要重新投影整面墙，实测明显掉帧），而是按“墙面角度固定时，法线位移的屏幕投影 = 平移 p·sin|y| + 放大 d/(d−p·cos|y|)”<strong>换算成 2D 变换</strong>，旋转仍由合成器完成 —— 滚动开销与平面模式相同。</li>
+      <li><strong>开关</strong>：沉浸页右上角（“显示模式”按钮左侧的小圆钮），状态记忆；<strong>默认关闭</strong>，关闭时渲染路径与旧版完全一致。手感参数（角度 / 透视强度 / 灭点 / 鼓起量 / 辉光）都在 <code>css/components.css</code> 的 <code>.np-overlay.tilt3d{}</code> 里以变量集中暴露，改数字即可。</li>
+    </ul>
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:18px 0">
     <strong>v2.5.0 · 多编码歌词引擎</strong>
     <ul>
       <li><strong>新增 lyric-core.js 模块</strong>：独立的多编码歌词引擎，包含 8 层编码检测流水线和模块化 LRC/ESLRC 解析器。</li>
@@ -231,7 +258,7 @@
     <strong>v2.5.0 · 歌词加载链路修复</strong>
     <ul>
       <li><strong>三层回退加载</strong>：lyrics.get → file.read 自行解码 → 从音频路径推导 LRC 直接读取。修复了 ESLyric 报告 GBK 歌词时 JSON 序列化失败导致歌词完全不显示的 bug。</li>
-      <li><strong>用户编码记忆</strong>：手动选择的编码按文件 hash 记住，下次同文件直接使用。</li>
+      <li><strong>用户编码记忆</strong>：<s>手动选择的编码按文件 hash 记住</s>（该机制已在 v2.5.1 移除：自动记忆会把一次误判永久固化，且与"仅手动选择才记忆"的设计不符）。</li>
     </ul>
     <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:18px 0">
     <strong>v2.4.1 · ESLyric 功能增强</strong>
@@ -416,7 +443,7 @@
       <li><strong>快捷键调整顺序</strong>：<kbd>Alt</kbd>+<kbd>&uarr;</kbd> / <kbd>Alt</kbd>+<kbd>&darr;</kbd> 移动聚焦或选中的曲目</li>
       <li><strong>更多操作</strong>：点击歌单封面旁"..."按钮 — 随机排列、按标题/艺术家排序、反转列表、撤销</li>
       <li><strong>添加曲目到歌单</strong>：右键曲目 → "添加到歌单"；右键歌单 → "添加本地文件 / 添加文件夹"（文件夹会自动递归展开其中的音频文件）；或将音频文件 / 文件夹拖放到窗口任意位置</li>
-      <li><strong>从歌单删除</strong>：右键曲目 → "从歌单中删除"</li>
+      <li><strong>从歌单删除</strong>：右键曲目 → "从歌单中删除"；<kbd>Ctrl</kbd> 多选后右键到已选中的曲目会整组删除（菜单会显示「从歌单中删除（N 首）」），或直接用底部批量栏的「从歌单删除」。锁定 / 自动歌单不提供该操作</li>
     </ul>
     <div class="callout">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -500,11 +527,13 @@
   <div class="section-body">
     <ul>
       <li><strong>显示/隐藏</strong>：点击底栏歌词按钮或按 <kbd>L</kbd> 切换歌词面板，状态自动记忆</li>
-      <li><strong>同步歌词</strong>：带时间轴的 LRC 歌词会逐行高亮、平滑滚动居中，支持逐字高亮</li>
-      <li><strong>纯文本歌词</strong>：无时间轴的歌词以静态文本展示</li>
+      <li><strong>同步歌词</strong>：带时间轴的 LRC 歌词会逐行高亮、平滑滚动居中</li>
+      <li><strong>逐字（精准）歌词</strong>：支持 ESLyric 的 <code>&lt;mm:ss.xx&gt;</code> 逐字标记（也兼容 <code>[mm:ss.xx]</code> 写法），当前行内已唱到的字逐个点亮</li>
+      <li><strong>翻译 / 音译</strong>：同一时间戳下的多行（原文 + 译文，或再加音译）会作为一组显示 —— 主行下方以更小更暗的副行呈现，整组一起高亮、一起居中，任何一行都不会被丢弃</li>
+      <li><strong>纯文本歌词</strong>：无时间轴的歌词以静态文本展示（不会误当作同步歌词而“末行恒亮”）</li>
       <li><strong>点击跳转</strong>：点击任意歌词行可跳转到对应时间点播放</li>
       <li><strong>歌词来源</strong>：通过 ESLyric 组件获取，需安装 foo_uie_eslyric</li>
-      <li><strong>多编码支持</strong>：内置编码检测引擎，基本可正确识别 GBK/UTF-8/UTF-16 编码的 LRC 文件，其他亚洲双字节编码（Big5/Shift_JIS/EUC）为评分制区分</li>
+      <li><strong>多编码支持</strong>：内置 8 层编码检测引擎，可正确识别 GBK/GB18030、UTF-8、UTF-16 编码的 LRC 文件；其他亚洲双字节编码（Big5 / Shift_JIS / EUC）按评分制区分。含引号等特殊标签名也能正确定位</li>
     </ul>
   </div>
 </div>
@@ -525,6 +554,7 @@
       <li><strong>进入沉浸模式</strong>：双击右侧面板的封面图，或点击封面左上角沉浸按钮</li>
       <li><strong>黑胶唱片模式</strong>：封面以黑胶唱片形式旋转，唱针动画随播放状态启停</li>
       <li><strong>纯歌词模式</strong>：点击模式切换按钮，全屏显示歌词，适合跟唱</li>
+      <li><strong>3D 斜墙歌词</strong>：点右上角“显示模式”左侧的小圆钮，可把整块歌词切换成“贴在斜墙上”的 3D 透视效果（墙面朝向封面一侧），正在播放的那一行会从墙面微微鼓起，并带一层随封面主色调联动的柔光。开关状态自动记忆，默认关闭（关闭时与旧版渲染完全一致）</li>
       <li><strong>内置控制</strong>：沉浸模式内含播放控制、进度条、频谱可视化</li>
       <li><strong>轻松移动窗口</strong>：顶部新增拖拽条，按住可拖动窗口；双击拖拽条可最大化 / 还原</li>
       <li><strong>退出</strong>：点击关闭按钮或按 <kbd>Esc</kbd></li>
@@ -633,6 +663,7 @@
     <ul>
       <li><strong>取消选择</strong>：点击批量操作栏的"取消选择"，或按 <kbd>Esc</kbd></li>
       <li><strong>右键菜单入口</strong>：有多选时，右键菜单也会显示"批量编辑标签"选项</li>
+      <li><strong>批量删除</strong>：批量操作栏还提供「从歌单删除」，一次把选中的曲目全部移出当前歌单</li>
       <li><strong>写入结果</strong>：保存后显示成功/失败计数，部分失败时会提示</li>
     </ul>
   </div>
@@ -859,7 +890,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p class="footer-author">CloudMusic 主题 v2.4.1 · 作者：灵芝含</p>
+  <p class="footer-author">CloudMusic 主题 v2.5.1 · 作者：灵芝含</p>
   <p>基于 foo_ui_webview2 SDK 1.13.0 · foobar2000 v2</p>
   <p>感谢使用，享受音乐</p>
 </div>

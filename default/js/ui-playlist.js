@@ -339,12 +339,36 @@
    * 宿主完成后 playlist:itemsReordered 事件会自动刷新视图（见 app.js）
    * 注：不提供表格行拖拽 — 会与"拖入外部文件导入歌单"的全局 drop 冲突
    * ============================================ */
-  // 歌单是否允许手动排序（自动歌单/锁定歌单不可编辑）
-  CM.canReorderPlaylist = function(playlistIdx) {
+  // 歌单是否可编辑（锁定 / 自动歌单不可增删改）
+  CM.canEditPlaylist = function(playlistIdx) {
     var idx = playlistIdx != null ? playlistIdx : state.currentPlaylistIndex;
     if (idx < 0) return false;
     var pl = (CM.playlists || []).find(function(p) { return p.index === idx; }) || {};
     return !pl.isAutoplaylist && !pl.isLocked;
+  };
+  // 歌单是否允许手动排序（等同可编辑）
+  CM.canReorderPlaylist = function(playlistIdx) {
+    return CM.canEditPlaylist(playlistIdx);
+  };
+  // 从歌单移除曲目（单曲/批量共用）：成功后清空多选；视图刷新由宿主 itemsRemoved 事件驱动
+  CM.removeTracksFromPlaylist = function(playlistIdx, indices, onDone) {
+    var idx = playlistIdx != null ? playlistIdx : state.currentPlaylistIndex;
+    if (idx < 0 || !indices || !indices.length) { if (onDone) onDone(false); return; }
+    if (!CM.canEditPlaylist(idx)) {
+      CM.showToast('无法删除', '该歌单为锁定或自动播放列表', 'error');
+      if (onDone) onDone(false);
+      return;
+    }
+    var items = indices.slice().sort(function(a, b) { return a - b; });
+    CM.api('playlist.removeTracks', { playlist: idx, items: items }).then(function(r) {
+      if (!r || r.success === false) {
+        CM.showToast('删除失败', (r && r.error) ? r.error : '请稍后重试', 'error');
+        if (onDone) onDone(false);
+        return;
+      }
+      if (state.batchSelected.size > 0) CM.clearBatchSelection();
+      if (onDone) onDone(true);
+    });
   };
   // 参与移动的索引集合：多选集含锚点时返回排序后的整个选择集，否则仅锚点
   CM._selectionIndices = function(anchorIdx) {
@@ -658,10 +682,18 @@
           CM.movePlaylistTracks(selIdxs, botDelta, ['已移到底部', selIdxs.length > 1 ? selIdxs.length + ' 首曲目' : CM.trackName(track)]);
         } });
       }
-      items.push({ divider: true });
-      items.push({ label: '从歌单中删除', icon: CM.icons.trash, danger: true, action: function() {
-        CM.api('playlist.removeTracks', { playlist: ctx.playlist, items: [ctx.index] });
-      } });
+      // 从歌单删除：右键到已多选的曲目时删整组（与"调整顺序"一致的语义），否则只删这一首。
+      // 锁定/自动歌单不可增删，故仅在可编辑歌单显示该项（避免点了静默失败）。
+      if (CM.canEditPlaylist(ctx.playlist)) {
+        var delIdxs = CM._selectionIndices(ctx.index);
+        var delLabel = delIdxs.length > 1 ? '从歌单中删除（' + delIdxs.length + ' 首）' : '从歌单中删除';
+        items.push({ divider: true });
+        items.push({ label: delLabel, icon: CM.icons.trash, danger: true, action: function() {
+          CM.removeTracksFromPlaylist(ctx.playlist, delIdxs, function(ok) {
+            if (ok) CM.showToast('已从歌单删除', delIdxs.length + ' 首曲目', 'success');
+          });
+        } });
+      }
     }
     CM.showCtxMenu(x, y, items);
   };
@@ -780,5 +812,16 @@
       if (state.trackCache[idx]) tracks.push(state.trackCache[idx]);
     });
     if (tracks.length >= 2) CM.showBatchTagEditor(tracks);
+  };
+
+  // 批量删除入口（从 batch bar 触发）：把整组选中曲目从当前歌单移除
+  CM._batchDeleteFromBar = function() {
+    var n = state.batchSelected.size;
+    if (n < 2) return;
+    var indices = [];
+    state.batchSelected.forEach(function(i) { indices.push(i); });
+    CM.removeTracksFromPlaylist(state.currentPlaylistIndex, indices, function(ok) {
+      if (ok) CM.showToast('已从歌单删除', n + ' 首曲目', 'success');
+    });
   };
 })();

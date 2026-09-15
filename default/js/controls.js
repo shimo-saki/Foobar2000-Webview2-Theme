@@ -325,7 +325,7 @@
       '</div>' +
       '<div class="popover-section">' +
       '<div class="popover-label">关于</div>' +
-      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.4.1</span></button>' +
+      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.5.1</span></button>' +
       '<button class="pop-item" id="popHelp">' + CM.icons.info + '<span>使用帮助</span><span class="pop-item-note">功能指南</span></button>' +
       '</div>';
     // 绑定一次，永久有效
@@ -820,6 +820,10 @@
       CM.toggleNpMode();
     });
 
+    // 歌词 3D 倾斜开关（右上角小钮，设置持久化）
+    if (els.npTiltBtn) els.npTiltBtn.addEventListener('click', function() { CM.toggleNpTilt(); });
+    CM.applyNpTilt();
+
     // 播放控制
     els.npBtnPlay.addEventListener('click', function() { CM.api('playback.playOrPause'); });
     els.npBtnPrev.addEventListener('click', function() { CM.api('playback.previous'); });
@@ -881,6 +885,9 @@
       return null;
     };
     if (eslyricCmd) { exec(eslyricCmd); return; }
+    // 搜索阶段同样要上锁：否则搜索返回前的连点会各自发起一次搜索并各执行一次命令，
+    // 开关被翻转两次（表现为"点了没反应"）且弹出两个提示
+    _eslyricBusy = true;
     // includeHidden 避免命令被判为“宿主不显示”而被过滤；type 过滤只取主菜单命令
     CM.api('discovery.searchCommands', { query: '显示桌面歌词', includeHidden: true }).then(function(r) {
       var cmd = findCmd(r);
@@ -890,6 +897,7 @@
         var cmd2 = findCmd(r2);
         if (cmd2) { eslyricCmd = cmd2; exec(cmd2); return; }
         eslyricCmd = null;
+        _eslyricBusy = false;
         CM.showToast('启动失败', '请确认已安装 ESLyric 插件', 'error');
       });
     });
@@ -933,6 +941,7 @@
       return null;
     };
     if (eslyricPinCmd) { exec(eslyricPinCmd); return; }
+    _eslyricPinBusy = true; // 同桌面歌词：搜索阶段也要上锁，避免连点并发执行两次
     CM.api('discovery.searchCommands', { query: '窗口置顶', includeHidden: true }).then(function(r) {
       var cmd = findPinCmd(r);
       if (cmd) { eslyricPinCmd = cmd; exec(cmd); return; }
@@ -940,6 +949,7 @@
         var cmd2 = findPinCmd(r2);
         if (cmd2) { eslyricPinCmd = cmd2; exec(cmd2); return; }
         eslyricPinCmd = null;
+        _eslyricPinBusy = false;
         CM.showToast('启动失败', '未找到置顶命令，请确认 ESLyric 已安装', 'error');
       });
     });
@@ -983,6 +993,7 @@
       return null;
     };
     if (eslyricLockCmd) { exec(eslyricLockCmd); return; }
+    _eslyricLockBusy = true; // 同桌面歌词：搜索阶段也要上锁，避免连点并发执行两次
     CM.api('discovery.searchCommands', { query: '锁定桌面歌词', includeHidden: true }).then(function(r) {
       var cmd = findLockCmd(r);
       if (cmd) { eslyricLockCmd = cmd; exec(cmd); return; }
@@ -990,6 +1001,7 @@
         var cmd2 = findLockCmd(r2);
         if (cmd2) { eslyricLockCmd = cmd2; exec(cmd2); return; }
         eslyricLockCmd = null;
+        _eslyricLockBusy = false;
         CM.showToast('启动失败', '未找到锁定命令，请确认 ESLyric 已安装', 'error');
       });
     });
@@ -1175,7 +1187,7 @@
 
       var items = [
         { label: 'CloudMusic 主题', isLabel: true },
-        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.4.1</span>' },
+        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.5.1</span>' },
         { html: '<span class="ctx-info-label">作者</span><span class="ctx-info-value">灵芝含</span>' },
         { html: '<span class="ctx-info-label">foobar2000</span><span class="ctx-info-value">' + CM.escHtml(ver.foobar2000 || '--') + '</span>' },
         { html: '<span class="ctx-info-label">WebView2 组件</span><span class="ctx-info-value">v' + CM.escHtml(pluginVer || '--') + '</span>' },
@@ -1236,6 +1248,7 @@
 
     // 批量操作栏
     els.batchEditTags.addEventListener('click', CM._batchEditFromBar);
+    els.batchDeleteTracks.addEventListener('click', CM._batchDeleteFromBar);
     els.batchClear.addEventListener('click', CM.clearBatchSelection);
   };
 
