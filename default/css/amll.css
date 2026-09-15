@@ -16,6 +16,6 @@
   padding: 1em 0.4em;
 }
 
-.FmKaba_lyricSubLine {
-  font-size: max(0.8em, 10px);
+.FmKaba_lyricSubLine, .FmKaba_lyricBgLine {
+  font-size: max(0.85em, 12px);
 }

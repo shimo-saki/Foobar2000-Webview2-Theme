@@ -24,23 +24,18 @@
   };
 
   CM.parseLRC = function (lrcText) {
-    if (lrcText.charCodeAt(0) === 0xFEFF) lrcText = lrcText.slice(1);
-
     const offsetMs = ['offset', 'ts'].reduce((sum, key) => {
       const m = new RegExp(`\\[${key}:([+-]?\\d+)\\]`, 'i').exec(lrcText);
       return sum + (m ? +m[1] : 0);
     }, 0);
 
-    const clean = lrcText.replace(/\[(?:ti|ar|al|by|re|ve|length|au|la|language|offset|ts)\s*:\s*[^\]]*\]/gi, '');
+    const lines = lrcText.replace(/\[(?:ti|ar|al|by|re|ve|length|au|la|language|offset|ts)\s*:\s*[^\]]*\]/gi, '').split('\n');
+    const wordReg = /<([^>]*)>([^<]*)(?=<([^>]*)>)/g, bgReg = /^[(（](.+)[)）]$/;
 
     const result = [];
-    const wordReg = /<([^>]*)>([^<]*)(?=<([^>]*)>)/g;
-
-    for (const line of clean.split('\n')) {
-      if (!line) continue;
-
-      const time = /\[(\d+:\d+(?:\.\d+)?)\]/.exec(line)?.[1];
-      let text = line.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+    for (const line of lines) {
+      const time = line.match(/\[(\d+:\d+(?:\.\d+)?)\]/)?.[1];
+      const text = line.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
       if (!time || !text) continue;
 
       const startTime = parseClock(time);
@@ -51,30 +46,16 @@
         continue;
       }
 
-      if (prev?.endTime === Infinity) {
-        prev.endTime = prev.words[0].endTime = startTime;
-      }
+      if (prev?.endTime === Infinity) prev.endTime = prev.words[0].endTime = startTime;
 
       let words = Array.from(text.matchAll(wordReg), ([, start, word, end]) => ({
         word, startTime: parseClock(start), endTime: parseClock(end)
       }));
-
-      if (words.length) {
-        if (words.at(-1).startTime < startTime - 0.05) {
-          const shift = startTime - words[0].startTime;
-          if (Math.abs(shift) > 0.05) {
-            words.forEach(w => {
-              w.startTime += shift;
-              w.endTime += shift;
-            });
-          }
-        }
-
-        text = text.replace(/<[^>]*>/g, '').trim();
-        result.push({ startTime, endTime: words.at(-1).endTime, text, words });
-      } else {
-        result.push({ startTime, endTime: Infinity, text, words: [{ startTime, endTime: Infinity, word: text }] });
-      }
+      if (!words.length) words = [{ startTime, endTime: Infinity, word: text }];
+      result.push({
+        startTime, endTime: words.at(-1).endTime, words,
+        isBG: bgReg.test(text.replace(/<[^>]*>/g, '').trim())
+      });
     }
 
     if (offsetMs) {
