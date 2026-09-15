@@ -37,7 +37,7 @@
     playlistHeaderTag: CM.$('playlistHeaderTag'),
     btnPlayAll: CM.$('btnPlayAll'), btnPlaylistMore: CM.$('btnPlaylistMore'),
     trackTableWrap: CM.$('trackTableWrap'), trackTable: CM.$('trackTable'), trackTbody: CM.$('trackTbody'),
-    position: CM.$('position'), 
+    position: CM.$('position'),
     // Library / Search
     libraryTree: CM.$('libraryTree'), libraryDetail: CM.$('libraryDetail'),
     searchInput: CM.$('searchInput'), searchResults: CM.$('searchResults'),
@@ -396,6 +396,7 @@
     title: '<span class="icon"></span>',
     eq: '<span class="icon"></span>',
     position: '<span class="icon"></span>',
+    window: '<span class="icon"></span>',
     // Popover 专用图标
     desktopLyric: '<span class="icon"></span>',
     pin: '<span class="icon"></span>',

@@ -39,8 +39,7 @@
     els.app.classList.toggle('lyrics-hidden', !visible);
   };
 
-  els.lyricsScroll.addEventListener('contextmenu', e => {
-    e.preventDefault();
+  function contextMenu(e) {
     const hidden = !CM.checkComponent('foo_uie_eslyric');
     const items = [
       {
@@ -49,14 +48,24 @@
       },
       {
         label: '编辑歌词', icon: CM.icons.edit, hidden,
-        action: async () => await fb2k.invoke('discovery.executeMainMenuCommand', await CM.getGuid('编辑歌词')),
+        action: () => CM.getGuid('编辑歌词')
+          .then(guid => fb2k.invoke('discovery.executeMainMenuCommand', guid)),
       },
       { divider: true, hidden },
       {
         label: '搜索歌词…', icon: CM.icons.search, hidden,
-        action: async () => await fb2k.invoke('discovery.executeMainMenuCommand', await CM.getGuid('搜索歌词')),
+        action: () => CM.getGuid('搜索歌词')
+          .then(guid => fb2k.invoke('discovery.executeMainMenuCommand', guid)),
+      },
+      {
+        label: '显示ESLyric面板', icon: CM.icons.window, hidden,
+        action: () => CM.getGuid('ESLyric')
+          .then(({ guid }) => fb2k.invoke('menu.runMainMenuCommand', { command: guid }))
       },
     ];
     CM.showCtxMenu(e.clientX, e.clientY, items);
-  });
+  }
+
+  els.lyricsScroll.addEventListener('contextmenu', e => contextMenu(e));
+  els.npLyrics.addEventListener('contextmenu', e => contextMenu(e));
 })();
