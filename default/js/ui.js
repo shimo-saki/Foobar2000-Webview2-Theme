@@ -546,7 +546,6 @@
       els.mainContent.addEventListener('contextmenu', e => {
         const el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');
         if (!el) return;
-        e.preventDefault();
 
         const { path: absolutePath, title, artist, album } = el.dataset;
         CM.showTrackCtxMenu(e.clientX, e.clientY, { absolutePath, title, artist, album });

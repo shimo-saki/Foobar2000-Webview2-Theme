@@ -254,4 +254,5 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
+  document.addEventListener('contextmenu', e => { if (!e.shiftKey) e.preventDefault(); }, true);
 })();

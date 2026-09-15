@@ -15,10 +15,7 @@
     document.querySelectorAll('.nav-item[data-tab]').forEach(el => {
       el.addEventListener('click', () => CM.switchTab(el.dataset.tab));
       el.addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          CM.switchTab(el.dataset.tab);
-        }
+        if (e.key === 'Enter' || e.key === ' ') CM.switchTab(el.dataset.tab);
       });
     });
     document.querySelectorAll('.main-tab[data-tab]').forEach(el =>
@@ -197,8 +194,7 @@
     });
 
     // 播完当前停止
-    els.btnStop.addEventListener('contextmenu', e => {
-      e.preventDefault();
+    els.btnStop.addEventListener('contextmenu', () => {
       CM.api('playback.toggleStopAfterCurrent').then(r => {
         state.stopAfterCurrent = r.enabled;
         CM.updateStopIcon();

@@ -29,7 +29,6 @@
       els.playlistList.addEventListener('contextmenu', e => {
         const i = itemIndex(e);
         if (i === null) return;
-        e.preventDefault();
         CM.showPlaylistCtxMenu(e.clientX, e.clientY, i);
       });
     });
@@ -375,7 +374,6 @@
   els.trackTbody.addEventListener('contextmenu', e => {
     const tr = e.target.closest('tr[data-index]');
     if (!tr) return;
-    e.preventDefault();
     const idx = +tr.dataset.index;
     state.focusedTrackIndex = idx;
     CM.showTrackCtxMenu(e.clientX, e.clientY, state.trackCache[idx], { playlist: state.currentPlaylistIndex, index: idx });
