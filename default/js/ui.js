@@ -370,7 +370,7 @@
    * ============================================ */
   CM.updateOrderIcon = function () {
     const order = CM.ORDERS[CM.orderIndexOf(state.order)];
-    els.btnOrder.innerHTML = `<span class="icon font-size-16">${order.icon}</span>`
+    els.btnOrder.innerHTML = `<span class="icon font-size-16">${order.icon}</span>`;
     els.btnOrder.title = `播放顺序： ${order.name}`;
     els.btnOrder.classList.toggle('active', order.id !== 0);
   };
@@ -447,11 +447,11 @@
   };
 
   // 竞态防护：快速切歌时旧请求后返回会覆盖新数据，用递增 loadId 确保只有最新请求生效
-  CM._artworkLoadId = 0;
+  let _artworkLoadId = 0;
   CM.loadCurrentArtwork = function () {
-    const loadId = ++CM._artworkLoadId;
+    const loadId = ++_artworkLoadId;
     CM.api('artwork.getFb2kUrl', { type: 'front', maxSize: 600 }).then(r => {
-      if (loadId !== CM._artworkLoadId) return;
+      if (loadId !== _artworkLoadId) return;
       // 宿主响应无 success 字段：{available, dataUrl, type}
       CM.setArtwork(r?.dataUrl && r.available !== false ? r.dataUrl : null);
     });
@@ -695,11 +695,6 @@
         <span class="dc-track-dur">${duration}</span>
       </div>`;
     }).join('');
-    // 登记本次渲染标记的播放行，供 refreshPlayingMarks 切换时清除（避免旧行残留高亮）
-    if (curPath) {
-      const _dc = container.querySelector('.dc-track.playing');
-      if (_dc) CM._lastPlayingDc = _dc;
-    }
     CM.fillArtworkBatch(container, 120);
     CM._ensureMainContentDelegation(); // 事件由 mainContent 统一委托
   };

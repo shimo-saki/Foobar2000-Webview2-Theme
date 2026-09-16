@@ -164,8 +164,8 @@
     els.tagEditorHint.textContent = '正在写入...';
     CM.api('metadata.write', { path, tags }).then(r => {
       if (!r || r.success === false) {
+        if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
         CM.showToast('写入失败', '标签写入出错', 'error');
-        els.tagEditorHint.textContent = '写入失败，请重试';
         return;
       }
       CM.showToast('标签已保存', CM.trackName(_tagCtx.tracks[0]), 'success');
@@ -181,7 +181,8 @@
         }
         CM.renderTrackTable();
       }
-      CM.hideTagEditor();
+      // 期间用户可能已关闭本编辑器（甚至打开了另一首）：只在仍是同一个上下文时关闭
+      if (_tagCtx === ctx) CM.hideTagEditor();
     });
   }
 
@@ -205,8 +206,8 @@
 
     CM.api('metadata.writeBatch', { items }).then(r => {
       if (!r || r.success === false) {
+        if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
         CM.showToast('批量写入失败', '标签写入出错', 'error');
-        els.tagEditorHint.textContent = '写入失败，请重试';
         return;
       }
 
@@ -225,7 +226,7 @@
         }
       }
       CM.renderTrackTable();
-      CM.hideTagEditor();
+      if (_tagCtx === ctx) CM.hideTagEditor();
     });
   }
 
@@ -236,7 +237,7 @@
   };
 
   // 封面管理：移除封面
-  CM._removeCover = () => {
+  CM._removeCover = function () {
     if (!_tagCtx || _tagCtx.mode !== 'single') return;
     const { path } = _tagCtx;
 

@@ -7,14 +7,15 @@
   'use strict';
   const CM = window.CloudMusic,
     els = CM.els, state = CM.state, esc = CM.escHtml;
+  let _queueRebuilding = false;
 
   /* ============================================
    * 播放队列抽屉
    * ============================================ */
   CM.refreshQueueBadge = function () {
-    if (CM._queueRebuilding) return; // 排序重建期间跳过，完成后统一刷新
+    if (_queueRebuilding) return; // 排序重建期间跳过，完成后统一刷新
     CM.api('queue.getCount').then(r => {
-      if (CM._queueRebuilding) return;
+      if (_queueRebuilding) return;
       const n = CM.respCount(r);
       els.queueBadge.textContent = n > 99 ? '99+' : n;
       els.queueBadge.classList.toggle('hidden', n <= 0);
@@ -62,7 +63,7 @@
 
   CM.renderQueue = function () {
     // 队列重建（排序提交）期间宿主会连续广播 queueChanged，此时渲染会读到中间态，跳过
-    if (CM._queueRebuilding) return;
+    if (_queueRebuilding) return;
     // 拖拽进行中禁止重渲染：记下 pending 标记，拖拽结束时统一补渲染
     if (_qDragIndex >= 0) { CM._queueRefreshPending = true; return; }
     CM._renderQueueNow();
@@ -77,7 +78,7 @@
 
     CM.api('queue.get').then(r => {
       cancelLoading();
-      if (CM._queueRebuilding) return;
+      if (_queueRebuilding) return;
       if (_qDragIndex >= 0) { CM._queueRefreshPending = true; return; } // 取数期间用户又开始了拖拽
 
       const items = r?.items || r?.queue || r?.tracks || [];
@@ -188,7 +189,7 @@
       // 重建期间 _queueRebuilding 抑制 queueChanged 引发的中间态渲染（见 renderQueue）。
       els.queueList.addEventListener('pointerdown', e => {
         if (e.button !== 0 || e.pointerType === 'touch') return; // 触屏保留列表滚动
-        if (CM._queueRebuilding || _qPointerDrag) return;
+        if (_queueRebuilding || _qPointerDrag) return;
         if (e.target.closest?.('.queue-item-del')) return;       // 删除按钮不发起拖拽
 
         const qit = e.target.closest?.('.queue-item.can-drag');
@@ -268,13 +269,13 @@
 
   // 按新顺序重建播放队列（SDK 无任意移动接口）：快照 → clear → 按来源分组依次重新入队
   // newOrder[i] = 新位置上原条目的索引；来源信息（歌单引用 / 路径）保持原样
-  CM._queueRebuilding = false;
+  _queueRebuilding = false;
   CM._queueItems = [];
   CM.reorderQueue = async function (newOrder) {
     const items = CM._queueItems || [];
     const n = items.length;
-    if (!n || newOrder.length !== n || CM._queueRebuilding) return null;
-    if (newOrder.every((v, i) => v === i)) return null; // 原地拖拽，不做任何事
+    if (!n || newOrder.length !== n || _queueRebuilding) return;
+    if (newOrder.every((v, i) => v === i)) return; // 原地拖拽，不做任何事
 
     // 歌单引用元数据（兼容裸条目与 {track:...} 包装两种形态），无引用返回 null
     const playlistRef = it =>
@@ -291,7 +292,7 @@
       return pp ? CM.api('queue.addPaths', { paths: [pp] }) : null;
     };
 
-    CM._queueRebuilding = true;
+    _queueRebuilding = true;
     try {
       const clearRes = await CM.api('queue.clear');
       if (clearRes?.success === false) {
@@ -309,10 +310,9 @@
       else CM.showToast('已调整队列顺序', null, 'success');
       return true;
     } catch {
-      CM.showToast('调整失败', '队列重建中断，请重试', 'error');
-      return null;
+      return CM.showToast('调整失败', '队列重建中断，请重试', 'error');
     } finally {
-      CM._queueRebuilding = false;
+      _queueRebuilding = false;
       CM.renderQueue();
       CM.refreshQueueBadge();
     }

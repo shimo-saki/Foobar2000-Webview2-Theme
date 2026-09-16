@@ -180,7 +180,7 @@
     CM.loadPlaylists();
   };
 
-  CM._playlistViewLoadId = 0;
+  let _playlistViewLoadId = 0;
   CM.renderPlaylistView = function (idx) {
     const pl = (CM.playlists || []).find(p => p.index === idx) || {};
     els.playlistHeaderName.textContent = pl.name || '播放列表';
@@ -192,16 +192,16 @@
       CM.saveSettings();
     }
 
-    const loadId = ++CM._playlistViewLoadId;
+    const loadId = ++_playlistViewLoadId;
     const cancelLoading = CM.delayedLoading(() => {
-      if (loadId === CM._playlistViewLoadId) {
+      if (loadId === _playlistViewLoadId) {
         els.trackTbody.innerHTML = `<tr><td colspan="6"><div class="table-loading"><div class="spinner"></div>加载中...</div></td></tr>`;
       }
     });
 
     CM.api('playlist.getTracks', { playlist: idx, start: 0, count: 5000 }).then(r => {
       cancelLoading();
-      if (loadId !== CM._playlistViewLoadId) return;
+      if (loadId !== _playlistViewLoadId) return;
 
       if (!r) {
         els.trackTbody.innerHTML = '<tr><td colspan="6"><div class="table-error">加载失败</div></td></tr>';
@@ -218,7 +218,7 @@
       if (tracks.length) {
         CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[Math.max(state.playingTrackIndex, 0)]), type: 'front', maxSize: 300 })
           .then(ar => {
-            if (loadId !== CM._playlistViewLoadId) return;
+            if (loadId !== _playlistViewLoadId) return;
             const hasCover = ar?.dataUrl && ar.available !== false;
             els.plCover.onerror = hasCover ? () => { els.plCover.onerror = null; els.plCover.src = CM.DEFAULT_TRACK_COVER; } : null;
             els.plCover.src = hasCover ? ar.dataUrl : CM.DEFAULT_TRACK_COVER;
@@ -452,9 +452,11 @@
       }
     });
   };
+
+  let _lastPlayingTr = null;
   CM.renderTrackTable = function () {
     // 清除旧引用与批量选择状态
-    CM._lastPlayingTr = null;
+    _lastPlayingTr = null;
     if (state.batchSelected.size) {
       state.batchSelected.clear();
       CM._updateBatchBar();
@@ -554,25 +556,26 @@
       }
 
       // 记录正在播放的行
-      if (playing) CM._lastPlayingTr = tr;
+      if (playing) _lastPlayingTr = tr;
       frag.appendChild(tr); // 复用节点为 move 操作
     });
 
     tbody.replaceChildren(frag);
   };
 
-  // // 标记表格/发现页/搜索中的"正在播放"行
-  // // 只更新变化的行（旧播放行 → 恢复序号，新播放行 → 显示均衡器），避免全表扫描
+  // 标记表格/发现页/搜索中的"正在播放"行
+  // 只更新变化的行（旧播放行 → 恢复序号，新播放行 → 显示均衡器），避免全表扫描
+  let _lastPlayingDc = null;
   CM.refreshPlayingMarks = function () {
     const isPlayingList = state.currentPlaylistIndex === state.playingPlaylistIndex;
 
     // 清除旧的播放行
-    const tr = CM._lastPlayingTr;
+    const tr = _lastPlayingTr;
     if (tr?.parentNode) {
       tr.classList.remove('playing');
       const num = tr.querySelector('.track-num');
       if (num?.querySelector('.eq-bars')) num.textContent = String(tr.sectionRowIndex + 1);
-      CM._lastPlayingTr = null;
+      _lastPlayingTr = null;
     }
 
     // 设置新的播放行
@@ -582,14 +585,14 @@
         tr.classList.add('playing');
         tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
         tr.querySelector('.track-num').innerHTML = '<span class="eq-bars"><i></i><i></i><i></i></span>';
-        CM._lastPlayingTr = tr;
+        _lastPlayingTr = tr;
       }
     }
 
     // 清除旧的 playing 标记
-    if (CM._lastPlayingDc?.parentNode) {
-      CM._lastPlayingDc.classList.remove('playing');
-      CM._lastPlayingDc = null;
+    if (_lastPlayingDc?.parentNode) {
+      _lastPlayingDc.classList.remove('playing');
+      _lastPlayingDc = null;
     }
 
     // 设置新的 playing 标记
@@ -601,7 +604,7 @@
 
     if (node) {
       node.classList.add('playing');
-      CM._lastPlayingDc = node;
+      _lastPlayingDc = node;
     }
   };
 
@@ -743,13 +746,10 @@
   /* ============================================
    * JIT 无痕试听（不改变播放列表）
    * ============================================ */
+  fb.on('jitQueue:listExhausted', () => CM.state.previewActive = false);
+  fb.on('jitQueue:error', () => CM.state.previewActive = false);
   CM.previewTrack = function (track, path) {
-    if (!path) { return CM.showToast('无法试听', '未找到文件路径', 'error'); }
-    if (!CM._previewBound) {
-      CM._previewBound = true;
-      fb.on('jitQueue:listExhausted', () => CM.state.previewActive = false);
-      fb.on('jitQueue:error', () => CM.state.previewActive = false);
-    }
+    if (!path) return CM.showToast('无法试听', '未找到文件路径', 'error');
     const title = CM.trackName(track);
     CM.api('jitQueue.playNow', { title, trackId: path, url: path }).then(r => {
       if (!r.succes) {
@@ -821,16 +821,24 @@
     CM._updateBatchBar();
   };
 
-  CM._updateBatchBar = () => {
+  CM._updateBatchBar = function () {
     const count = state.batchSelected.size;
     els.batchBarCount.textContent = count;
     els.batchBar.classList.toggle('hidden', count < 2);
   };
 
   // 批量编辑入口（从 batch bar 触发）
-  CM._batchEditFromBar = () => {
+  CM._batchEditFromBar = function () {
     if (state.batchSelected.size < 2) return;
     const tracks = Array.from(state.batchSelected, idx => state.trackCache[idx]).filter(Boolean);
     if (tracks.length >= 2) CM.showBatchTagEditor(tracks);
+  };
+
+  // 批量删除入口（从 batch bar 触发）：把整组选中曲目从当前歌单移除
+  CM._batchDeleteFromBar = function () {
+    const n = state.batchSelected.size;
+    if (n < 2) return;
+    CM.api('playlist.removeTracks', { playlist: state.currentPlaylistIndex, items: [...state.batchSelected] })
+      .then(r => { if (r.success) CM.showToast(`已从歌单删除 ${n} 首曲目`, null, 'success'); });
   };
 })();

@@ -82,7 +82,7 @@
     tagCoverFile: CM.$('tagCoverFile'),
     // Batch Bar
     batchBar: CM.$('batchBar'), batchBarCount: CM.$('batchBarCount'),
-    batchEditTags: CM.$('batchEditTags'), batchClear: CM.$('batchClear')
+    batchEditTags: CM.$('batchEditTags'), batchDeleteTracks: CM.$('batchDeleteTracks'), batchClear: CM.$('batchClear')
   };
 
   /* ============================================

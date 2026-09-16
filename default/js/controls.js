@@ -585,11 +585,12 @@
   };
 
   // 节流：仅当可见进度 1% 变化时才通过 IPC 更新任务栏，避免 timeHighRes 高频事件（~30次/秒）反复调用宿主 API
+  let _lastTaskbarVal = -1, _lastTaskbarState = null
   CM.updateTaskbarProgress = function () {
     if (!CM.taskbarAvailable) return;
     if (!CM.currentTrack || state.duration <= 0) {
-      if (CM._lastTaskbarVal !== -2) {
-        CM._lastTaskbarVal = -2;
+      if (_lastTaskbarVal !== -2) {
+        _lastTaskbarVal = -2;
         CM.api('taskbar.setProgress', { state: 'none' });
       }
       return;
@@ -599,10 +600,10 @@
     const value = Math.min(1, Math.max(0, state.position / state.duration));
     const pct = Math.round(value * 100);
 
-    if (pct === CM._lastTaskbarVal && stateName === CM._lastTaskbarState) return;
+    if (pct === _lastTaskbarVal && stateName === _lastTaskbarState) return;
 
-    CM._lastTaskbarVal = pct;
-    CM._lastTaskbarState = stateName;
+    _lastTaskbarVal = pct;
+    _lastTaskbarState = stateName;
     CM.api('taskbar.setProgress', { state: stateName, value });
   };
 
@@ -762,7 +763,7 @@
 
       const items = [
         { label: 'CloudMusic 主题', isLabel: true },
-        info('版本', 'v2.5.0'),
+        info('版本', 'v2.5.1'),
         info('作者', '灵芝含'),
         info('foobar2000', esc(ver.foobar2000 || '--')),
         info('WebView2 组件', `v${esc(pluginVer || '--')}`),
@@ -817,6 +818,7 @@
 
     // 批量操作栏
     els.batchEditTags.addEventListener('click', CM._batchEditFromBar);
+    els.batchDeleteTracks.addEventListener('click', CM._batchDeleteFromBar);
     els.batchClear.addEventListener('click', CM.clearBatchSelection);
   };
 
