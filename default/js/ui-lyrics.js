@@ -9,24 +9,9 @@
   const CM = window.CloudMusic,
     els = CM.els;
 
-  CM._lyricLoadId = 0;
-  CM.loadLyrics = function () {
-    CM.currentLyrics = [];
-    if (!CM.currentTrack) return;
-    const path = CM.trackPath(CM.currentTrack);
-    const loadId = ++CM._lyricLoadId;
-    CM.api('lyrics.get', path ? { path } : {}).then(r => {
-      if (loadId !== CM._lyricLoadId) return; // 已被更新的切歌请求取代
-      // 以"歌词对应歌曲的路径"为 key 缓存解析结果：切回已播过的曲目时免去重新解析
-      const parsed = CM.parseLRCCached(r.path, r.lyrics);
-      CM.currentLyrics = parsed;
-      CM.player.setLyricLines(parsed);
-    });
-  };
-
   CM.changePlayerState = function (state) {
     CM.player?.[state === "playing" ? "resume" : "pause"]();
-    if (state === 'stopped') CM.player.setLyricLines(EMPTY_LYRIC);
+    if (state === 'stopped') CM.loadLyrics();
   };
 
   /* ============================================
@@ -44,7 +29,7 @@
     const items = [
       {
         label: '重载歌词…', icon: CM.icons.refresh,
-        action: () => { lrcCache.delete(CM.trackPath(CM.currentTrack)); CM.loadLyrics(); }
+        action: () => CM.loadLyrics(false)
       },
       {
         label: '编辑歌词', icon: CM.icons.edit, hidden,

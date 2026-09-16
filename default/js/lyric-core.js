@@ -12,15 +12,31 @@
   const lrcCache = new Map();
   const MAX_CACHE_SIZE = 50;
   const EMPTY_LYRIC = [{ startTime: 0, endTime: Infinity, words: [{ startTime: 0, endTime: Infinity, word: '暂无歌词' }] }];
-  CM.parseLRCCached = function (key, lrcText) {
-    if (!lrcText) return EMPTY_LYRIC;
-    if (lrcCache.has(key)) return lrcCache.get(key);
 
-    const parsed = CM.parseLRC(lrcText);
-    lrcCache.set(key, parsed);
+  function setLyrics(lyrics) {
+    CM.currentLyrics = lyrics;
+    CM.player.setLyricLines(lyrics);
+  }
 
-    if (lrcCache.size > MAX_CACHE_SIZE) lrcCache.delete(lrcCache.keys().next().value);
-    return parsed;
+  let _lyricLoadId = 0;
+  CM.loadLyrics = function (useCache = true) {
+    CM.currentLyrics = [];
+    if (!CM.currentTrack) return setLyrics(EMPTY_LYRIC);
+    const path = CM.trackPath(CM.currentTrack);
+
+    // 命中缓存 切回已播过的曲目时免去重新请求与解析
+    if (useCache && lrcCache.has(path)) return setLyrics(lrcCache.get(path));
+
+    const loadId = ++_lyricLoadId;
+    CM.api('lyrics.get', { path }).then(r => {
+      if (loadId !== _lyricLoadId) return; // 已被新的切歌请求取代
+      if (!r?.lyrics) return setLyrics(EMPTY_LYRIC); // 没有歌词
+
+      const parsed = CM.parseLRC(r.lyrics);
+      lrcCache.set(path, parsed);
+      if (lrcCache.size > MAX_CACHE_SIZE) lrcCache.delete(lrcCache.keys().next().value);
+      setLyrics(parsed);
+    });
   };
 
   CM.parseLRC = function (lrcText) {
