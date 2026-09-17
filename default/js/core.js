@@ -294,72 +294,62 @@
   };
 
   /* ============================================
-   * 动态配色 — 从封面提取活力色写入 HSL 令牌
-   * ============================================ */
-  CM.rgbToHsl = function (r, g, b) {
-    r /= 255; g /= 255; b /= 255;
+ * 动态配色 — 从封面提取活力色写入 HSL 令牌
+ * ============================================ */
+  function _hueOf(r, g, b) {
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    const d = max - min, l = (max + min) / 2;
-    let h = 0, s = 0;
-    if (d) {
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      h = (max === r ? (g - b) / d + (g < b ? 6 : 0)
-        : max === g ? (b - r) / d + 2
-          : (r - g) / d + 4) / 6;
-    }
-    return [h, s, l];
+    const d = max - min;
+    if (!d) return 0; // 灰色，无明确色相
+    return (max === r ? (g - b) / d + (g < b ? 6 : 0)
+      : max === g ? (b - r) / d + 2
+        : (r - g) / d + 4) * 60;
   };
 
   // 按饱和度加权取样，避免平均色发灰
-  // 复用 Image 和 canvas 对象，避免每次切歌都创建新对象
   const _colorSize = 48;
-  const _colorImg = new Image();
-  _colorImg.crossOrigin = 'anonymous';
-  const _colorCanvas = document.createElement('canvas');
-  _colorCanvas.width = _colorCanvas.height = _colorSize;
-  const _colorCtx = _colorCanvas.getContext('2d');
+  const _colorCtx = new OffscreenCanvas(_colorSize, _colorSize)
+    .getContext('2d', { willReadFrequently: true });
 
   CM.extractColorFromImage = function (url) {
     if (!url) return CM.resetAccent();
 
-    _colorImg.onload = () => {
-      try {
-        const { width: w, height: h } = _colorCanvas;
-        _colorCtx.clearRect(0, 0, w, h);
-        _colorCtx.drawImage(_colorImg, 0, 0, w, h);
-        const data = _colorCtx.getImageData(0, 0, w, h).data;
+    fetch(url)
+      .then(res => res.blob())
+      .then(blob => createImageBitmap(
+        blob,
+        { resizeWidth: _colorSize, resizeHeight: _colorSize, resizeQuality: 'low' })
+      )
+      .then(bitmap => {
+        _colorCtx.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        const data = _colorCtx.getImageData(0, 0, _colorSize, _colorSize).data;
 
         let wr = 0, wg = 0, wb = 0, wSum = 0;
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i], g = data[i + 1], b = data[i + 2];
           const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-          const sat = mx ? (mx - mn) / mx : 0;
+          if (!mx) continue; // 纯黑，跳过
+          const sat = (mx - mn) / mx;
           const lum = (mx + mn) / 510;
           // 偏好饱和且亮度适中的像素
-          const w = sat * sat * (1 - Math.abs(lum - 0.5) * 1.2) + 0.02;
-          wr += r * w; wg += g * w; wb += b * w; wSum += w;
+          const wgt = sat * sat * (1 - Math.abs(lum - 0.5) * 1.2) + 0.02;
+          wr += r * wgt; wg += g * wgt; wb += b * wgt; wSum += wgt;
         }
-        if (wSum <= 0) return;
+        if (!wSum) return;
 
-        const hsl = CM.rgbToHsl(wr / wSum, wg / wSum, wb / wSum);
-        const hue = Math.round(hsl[0] * 360);
-        const sat = Math.round(Math.max(0.55, Math.min(0.9, hsl[1])) * 100);
-        const lit = Math.round(Math.max(0.5, Math.min(0.62, hsl[2])) * 100);
+        const hue = Math.round(_hueOf(wr / wSum, wg / wSum, wb / wSum));
+        const sat = 68, lit = 56;
 
         const root = document.documentElement.style;
-        root.setProperty('--accent', `hsl(${hue},${sat}%,${lit}%)`);
         root.setProperty('--accent-h', hue);
         root.setProperty('--accent-s', `${sat}%`);
         root.setProperty('--accent-l', `${lit}%`);
-      } catch (e) { /* 跨域或解码失败时保持默认色 */ }
-    };
-    _colorImg.onerror = () => { };
-    _colorImg.src = url;
+      })
+      .catch(() => { /* 跨域/解码失败时保持默认色 */ });
   };
 
   CM.resetAccent = function () {
     const root = document.documentElement.style;
-    root.setProperty('--accent', '#EC4141');
     root.setProperty('--accent-h', '0');
     root.setProperty('--accent-s', '81%');
     root.setProperty('--accent-l', '59%');

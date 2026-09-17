@@ -407,23 +407,11 @@
   const DEFAULT_TRACK_COVER = CM.DEFAULT_TRACK_COVER = 'static/img/no_cover.svg';
 
   CM.setArtwork = function (url) {
-    const next = (typeof url === 'string' && url.trim()) ? url.trim() : DEFAULT_TRACK_COVER;
+    const next = url?.trim() ?? DEFAULT_TRACK_COVER;
 
-    // 参与 onerror 回退的元素（不含 plCover）
-    const fallback = [els.bottomArt, els.lyricsArt, els.npArtwork].filter(Boolean);
-
-    // 真实封面加载失败时回退占位图，避免无封面时闪空
-    const onErr = next === DEFAULT_TRACK_COVER ? null : () => {
-      fallback.forEach(el => {
-        el.onerror = null;
-        if (el.getAttribute('src') !== DEFAULT_TRACK_COVER) el.src = DEFAULT_TRACK_COVER;
-      });
-    };
-    fallback.forEach(el => el.onerror = onErr);
-
-    // 设置 src（含 plCover，但它不参与 onerror 回退）
     [els.bottomArt, els.lyricsArt, els.plCover, els.npArtwork].forEach(el => {
-      if (el && el.getAttribute('src') !== next) el.src = next;
+      el.src = next;
+      el.onerror = () => el.src = DEFAULT_TRACK_COVER;
     });
 
     els.lyricsBlurBg.style.backgroundImage = `url("${next}")`;

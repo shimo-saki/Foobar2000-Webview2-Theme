@@ -199,7 +199,7 @@
       }
     });
 
-    CM.api('playlist.getTracks', { playlist: idx, start: 0, count: 5000 }).then(r => {
+    CM.api('playlist.getTracks', { playlist: idx, count: 5000 }).then(r => {
       cancelLoading();
       if (loadId !== _playlistViewLoadId) return;
 
@@ -214,20 +214,17 @@
       const totalDur = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
       els.playlistHeaderMeta.textContent = `${state.playlistTracksTotal} 首曲目 · ${CM.formatTime(totalDur)}`;
 
+      els.plCover.onerror = () => els.plCover.src = CM.DEFAULT_TRACK_COVER;
+      els.plCover.style.display = '';
       // 封面处理
       if (tracks.length) {
-        CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[Math.max(state.playingTrackIndex, 0)]), type: 'front', maxSize: 300 })
+        CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[Math.max(state.playingTrackIndex, 0)]), maxSize: 600 })
           .then(ar => {
             if (loadId !== _playlistViewLoadId) return;
-            const hasCover = ar?.dataUrl && ar.available !== false;
-            els.plCover.onerror = hasCover ? () => { els.plCover.onerror = null; els.plCover.src = CM.DEFAULT_TRACK_COVER; } : null;
-            els.plCover.src = hasCover ? ar.dataUrl : CM.DEFAULT_TRACK_COVER;
-            els.plCover.style.display = '';
+            els.plCover.src = ar?.dataUrl ?? CM.DEFAULT_TRACK_COVER;
           });
       } else {
-        els.plCover.onerror = null;
         els.plCover.src = CM.DEFAULT_TRACK_COVER;
-        els.plCover.style.display = '';
       }
 
       CM.renderTrackTable();

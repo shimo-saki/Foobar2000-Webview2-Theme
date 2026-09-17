@@ -49,7 +49,7 @@
     if (!path || !state.queueOpen) return;
 
     // 封面小图；响应到达时校验曲目未变更，避免切歌竞态贴错封面
-    CM.api('artwork.getFb2kUrl', { type: 'front', maxSize: 120 }).then(r => {
+    CM.api('artwork.getFb2kUrl', { maxSize: 120 }).then(r => {
       if (!r?.dataUrl || r.available === false) return;
       if (CM.trackPath(CM.currentTrack) !== path) return;
       const art = box.querySelector('.queue-now-art');

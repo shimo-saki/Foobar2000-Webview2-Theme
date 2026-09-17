@@ -6,7 +6,7 @@
 
 :root{
   /* 动态强调色（由封面提取，JS 写入） */
-  --accent:#EC4141;
+  --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
   --accent-h:0;
   --accent-s:81%;
   --accent-l:59%;
