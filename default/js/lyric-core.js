@@ -692,7 +692,6 @@
    * 这里把它们归成一"组"：主行 + subs（副行文本），渲染层作为整体显示与高亮。
    */
   var _GROUP_TOLERANCE_MS = 10;   // 与"±10ms 归并"一致
-  var _KANA_RE = /[\u3040-\u30FF]/;
 
   // 行的纯文本：逐字行的正文在 words 里，text 可能为空
   function lineText(line) {
@@ -720,20 +719,12 @@
     for (var g = 0; g < groups.length; g++) {
       var ms = groups[g].members;
       if (ms.length === 1) { out.push(ms[0]); continue; }
-      // 主行判定（依次尝试）：
-      //   1) 唯一的逐字行 —— 逐字信息一定属于正在唱的那一行；
-      //   2) 唯一的含假名行 —— 中日文混合时假名出现在日文原文上；
-      //   3) 文件顺序里最后一行 —— 实测 8282 : 288 的双语歌词把翻译写在原文之前。
-      var mainIdx = ms.length - 1, worded = -1, wordedCount = 0, kana = -1, kanaCount = 0;
-      for (var k = 0; k < ms.length; k++) {
-        if (ms[k].words && ms[k].words.length > 1) { worded = k; wordedCount++; }
-        if (_KANA_RE.test(lineText(ms[k]))) { kana = k; kanaCount++; }
-      }
-      if (wordedCount === 1) mainIdx = worded;
-      else if (kanaCount === 1) mainIdx = kana;
-      var main = ms[mainIdx], subs = [];
-      for (var j = 0; j < ms.length; j++) {
-        if (j === mainIdx) continue;
+      // 主行判定：同一时刻的第一行（文件里的自然顺序）为主，之后皆为副行。
+      // 原实现用了"逐字行优先 / 含假名行优先 / 最后一行优先"三重启发式，
+      // 在翻译写在前面的双语歌词中会把译文当主行，且隔行错位的中日歌词无法
+      // 改善配对 —— 不如一个简单一致的可预测规则。
+      var main = ms[0], subs = [];
+      for (var j = 1; j < ms.length; j++) {
         var t = lineText(ms[j]);
         if (t) subs.push(t);
       }
