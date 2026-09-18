@@ -51,6 +51,24 @@
         });
       });
     });
+    els.addPlaylistBtn.addEventListener('contextmenu', e => {
+      const items = [
+        { label: '预设歌单', isLabel: true },
+        {
+          label: '媒体库', icon: CM.icons.note,
+          action: () => fb.playlist.createAutoplaylist('媒体库', 'ALL', '%artist% | %album% | %tracknumber%', true)
+        },
+        {
+          label: '历史记录', icon: CM.icons.history,
+          action: () => fb.playlist.createAutoplaylist('历史记录', '%last_played% DURING LAST 1 WEEK SORT DESCENDING BY %last_played%', '%artist% | %album% | %tracknumber%', true)
+        },
+        {
+          label: '最近添加', icon: CM.icons.recently_added,
+          action: () => fb.playlist.createAutoplaylist('最近添加', '%added% DURING LAST 4 WEEKS SORT DESCENDING BY %added%', '%artist% | %album% | %tracknumber%',true)
+        }
+      ];
+      CM.showCtxMenu(e.clientX, e.clientY, items);
+    });
   };
 
   /* ============================================

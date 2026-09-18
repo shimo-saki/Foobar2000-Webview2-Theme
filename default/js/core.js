@@ -387,6 +387,8 @@
     eq: '<span class="icon"></span>',
     position: '<span class="icon"></span>',
     window: '<span class="icon"></span>',
+    history: '<span class="icon"></span>',
+    recently_added: '<span class="icon"></span>',
     // Popover 专用图标
     desktopLyric: '<span class="icon"></span>',
     pin: '<span class="icon"></span>',
