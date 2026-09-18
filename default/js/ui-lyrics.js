@@ -28,10 +28,14 @@
       CM.renderLyricsEmpty('暂无歌词');
       return;
     }
-    // 以"路径+长度+头部"为 key 缓存解析结果：切回已播过的曲目时免去重新解析
+    // 双语配对模式按"歌词来源路径"记忆（右键菜单可改）；路径同时用于"打开所在文件夹"
+    var srcPath = r.sourcePath || (CM.currentTrack && CM.trackPath(CM.currentTrack)) || '';
+    CM.lyricSourcePath = srcPath;
+    var mode = CM.lyricModeFor(srcPath);
+    // 以"路径+模式+长度+头部"为 key 缓存解析结果：切回已播过的曲目时免去重新解析
     var parsed = CM.parseLRCCached(
-      CM.makeLRCCacheKey(r.sourcePath || (CM.currentTrack && CM.trackPath(CM.currentTrack)), lyricsText),
-      lyricsText
+      CM.makeLRCCacheKey(srcPath, lyricsText, mode),
+      lyricsText, mode
     );
     // 只有解析出时间戳才按同步歌词渲染/高亮。整首无时间轴的纯文本歌词若走同步分支，
     // 高亮的二分查找会把 null 当作 0 而永远命中最后一行 —— 表现为末行固定高亮、
@@ -50,6 +54,7 @@
 
   CM._lyricLoadId = 0;
   CM._lyricsSynced = false;   // 当前歌词是否带时间轴（纯文本时不做时间高亮）
+  CM.lyricSourcePath = '';    // 当前歌词来源路径（右键菜单：模式记忆键 + 打开所在文件夹）
   CM.loadLyrics = function() {
     CM.currentLyrics = [];
     CM._lyricsSynced = false;
@@ -57,6 +62,7 @@
     if (!CM.currentTrack) { CM.renderLyricsEmpty('暂无歌词'); return; }
     els.lyricsScroll.innerHTML = CM.loadingHTML('歌词加载中...');
     var path = CM.trackPath(CM.currentTrack);
+    CM.lyricSourcePath = path || CM.lyricSourcePath;
     var loadId = ++CM._lyricLoadId;
     CM.api('lyrics.get', path ? { path: path } : {}).then(function(r) {
       if (loadId !== CM._lyricLoadId) return;
@@ -101,6 +107,9 @@
   CM.renderLyricsEmpty = function(text, keepNp) {
     els.lyricsScroll.innerHTML =
       '<div class="lyrics-empty">' + CM.icons.note + '<span>' + esc(text) + '</span></div>';
+    // 空态一并清掉判定结果：否则切到没有歌词的曲目后，右键菜单仍会显示上一个文件的
+    // 「翻译对齐方式 / 识别为：X」，像是这首歌识别出来的
+    CM.lyric.lastVerdict = 'none';
     if (!keepNp) CM._syncNpLyrics();
   };
 
@@ -290,4 +299,87 @@
     }
     if (visible) setTimeout(function() { CM.updateLyricHighlight(true); }, 300);
   };
+
+  /* ============================================
+   * 歌词面板右键菜单
+   *
+   * 双语配对协议在真实歌词里没有统一规范（同刻 / 译文晚一行，还有部分翻译、
+   * 未翻译原词夹在中间等混合形态），自动判据不可能全覆盖。这里给用户一条权限：
+   * 按文件（歌词来源路径）指定配对方式，另外放上几个常用操作。
+   * 文案用日常说法：同刻 = 译文跟原文同时；延后 = 译文晚一行。
+   * ============================================ */
+  // 三种对齐方式：自动识别 / 标准双语（译文与原文同刻）/ 兼容旧版（译文写在下一句时间上）
+  var _MODE_LABEL = { auto: '自动识别', same: '标准双语', offset: '兼容旧版' };
+  function _verdictText() {
+    switch (CM.lyric.lastVerdict) {
+      case 'delay': return '兼容旧版';
+      case 'same': return '标准双语';
+      case 'none': return '没有双语行';
+      default: return '没认出来';
+    }
+  }
+
+  CM.showLyricMenu = function(x, y) {
+    var path = CM.lyricSourcePath || '';
+    var cur = CM.lyricModeFor(path);
+    // 只有存在"重复时间戳"（同一时刻多行）才可能有对齐问题：单语言、纯文本、
+    // 逐字（ESLyric）歌词的 lastVerdict 为 'none'。此时不显示这一项，
+    // 但若该文件已被手动指定过方式，仍显示（否则用户无法改回自动）
+    var hasAlign = CM.lyric.lastVerdict !== 'none' || cur !== 'auto';
+    function apply(mode) { CM.setLyricMode(path, mode); CM.loadLyrics(); }
+    var items = [{ label: '歌词', isLabel: true }];
+    if (hasAlign) {
+      items.push({ label: '翻译对齐方式：' + (_MODE_LABEL[cur] || _MODE_LABEL.auto), submenu: [
+        { label: '自动识别：', desc: '自动判断歌词格式', checked: cur === 'auto', action: function() { apply('auto'); } },
+        { label: '标准双语：', desc: '原词和翻译在同一时间戳', checked: cur === 'same', action: function() { apply('same'); } },
+        { label: '兼容旧版：', desc: '翻译在下一时间戳', checked: cur === 'offset', action: function() { apply('offset'); } }
+      ] });
+      // 手动指定时父项已写明方式，再报"自动识别结果"反而绕；只在使用自动时给出识别结果
+      if (cur === 'auto') items.push({ label: '识别为：' + _verdictText(), isLabel: true });
+    }
+    items.push({ divider: true },
+      { label: '刷新歌词', action: function() { CM.loadLyrics(); } },
+      { label: '复制歌词', disabled: !CM.currentLyrics.length, action: function() { CM.copyLyrics(); } },
+      { label: '打开所在文件夹', disabled: !path, action: function() { CM.api('shell.showInExplorer', { path: path }); } });
+    CM.showCtxMenu(x, y, items);
+  };
+
+  // 复制歌词为纯文本（主行与副行各占一行），便于分享
+  CM.copyLyrics = function() {
+    var ls = CM.currentLyrics || [];
+    if (!ls.length) return;
+    var out = [], i, s;
+    for (i = 0; i < ls.length; i++) {
+      if (ls[i].text) out.push(ls[i].text);
+      if (ls[i].subs) for (s = 0; s < ls[i].subs.length; s++) out.push(ls[i].subs[s]);
+    }
+    var txt = out.join('\n');
+    function done() { CM.showToast('已复制歌词', ls.length + ' 行', 'success'); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); }
+      catch (e) { CM.showToast('复制失败', '', 'error'); }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done).catch(fallback);
+    } else fallback();
+  };
+
+  CM.runOnce('lyricPanelMenu', function() {
+    var bind = function(el) {
+      if (!el) return;
+      el.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        CM.showLyricMenu(e.clientX, e.clientY);
+      });
+    };
+    bind(els.rightPanel);   // 右侧歌词面板
+    bind(els.npLyrics);     // 沉浸式页面的歌词区
+  });
 })();

@@ -151,39 +151,121 @@
 
   /* ============================================
    * 右键菜单
-   * items: [{label, icon?, html?, danger?, checked?, action?} | {divider:true} | {label:..., isLabel:true}]
+   * items: [{label, desc?, icon?, html?, danger?, checked?, disabled?, action?, submenu?:[...]} | {divider:true} | {label:..., isLabel:true}]
+   *   desc：第二行小字说明（两行式菜单项，用于"名称 + 说明"的选项）
+   *   submenu：鼠标悬停时在它右侧展开二级菜单（Windows 菜单栏式）
    * ============================================ */
-  // 事件委托：一次性绑定在 ctxMenu 上，避免每次 showCtxMenu 都逐项 addEventListener
-  var _ctxMenuItems = null; // 当前菜单项引用（供委托回调使用）
+  // 菜单项 → HTML。父项带 submenu 时追加箭头与 data-sub 标记；
+  // 菜单内只要有一项带勾选，就给所有项留出勾选列（否则勾选会把该项文字顶偏）
+  function ctxItemsHtml(items) {
+    var html = '', hasCheck = false, i;
+    for (i = 0; i < items.length; i++) if (items[i].checked) { hasCheck = true; break; }
+    items.forEach(function(item, i) {
+      if (item.divider) { html += '<div class="ctx-divider"></div>'; return; }
+      if (item.isLabel) { html += '<div class="ctx-label">' + esc(item.label) + '</div>'; return; }
+      var sub = item.submenu && item.submenu.length;
+      var body = item.html || (item.desc
+        ? '<span class="ctx-text"><span class="ctx-name">' + esc(item.label) + '</span>' +
+          '<span class="ctx-desc">' + esc(item.desc) + '</span></span>'
+        : '<span>' + esc(item.label) + '</span>');
+      html += '<div class="ctx-item' + (item.danger ? ' danger' : '') + (item.checked ? ' checked' : '') +
+        (item.disabled ? ' disabled' : '') + (sub ? ' has-sub' : '') + '" data-idx="' + i + '"' +
+        (sub ? ' data-sub="1"' : '') + '>' +
+        (hasCheck ? '<span class="ctx-check">' + (item.checked ? '✓' : '') + '</span>' : '') +
+        (item.icon || '') + body +
+        (sub ? '<span class="ctx-arrow">›</span>' : '') + '</div>';
+    });
+    return html;
+  }
+
+  // 事件委托：一次性绑定，避免每次 showCtxMenu 都逐项 addEventListener
+  var _ctxMenuItems = null;  // 主菜单项引用（供委托回调使用）
+  var _ctxSubItems = null;   // 二级菜单项引用
+  var _subParentEl = null;   // 当前展开二级菜单的父项节点（避免重复重建）
+  var _subHideTimer = null;  // 二级菜单延迟关闭：鼠标从父项斜向移入子菜单时不能立刻收起
   function ensureCtxMenuDelegation() {
     CM.runOnce('ctxMenuDelegation', function() {
-    els.ctxMenu.addEventListener('click', function(e) {
-      var el = e.target.closest('.ctx-item');
-      if (!el || !_ctxMenuItems) return;
-      if (el.classList.contains('disabled')) return; // 禁用项不触发也不关闭菜单
-      e.stopPropagation();
-      CM.hideCtxMenu();
-      var item = _ctxMenuItems[parseInt(el.dataset.idx, 10)];
-      if (item && item.action) item.action();
+    var onClick = function(getItems) {
+      return function(e) {
+        var el = e.target.closest('.ctx-item');
+        if (!el) return;
+        if (el.classList.contains('disabled')) return; // 禁用项不触发也不关闭菜单
+        e.stopPropagation();
+        var item = (getItems() || [])[parseInt(el.dataset.idx, 10)];
+        if (el.dataset.sub) { showSubMenu(el, item && item.submenu); return; } // 父项：点击也展开
+        CM.hideCtxMenu();
+        if (item && item.action) item.action();
+      };
+    };
+    els.ctxMenu.addEventListener('click', onClick(function() { return _ctxMenuItems; }));
+    els.ctxSubMenu.addEventListener('click', onClick(function() { return _ctxSubItems; }));
+    // 悬停父项即展开；移到普通项上则收起
+    els.ctxMenu.addEventListener('mouseover', function(e) {
+      var el = e.target.closest('.ctx-item[data-sub]');
+      if (!el) { hideSubMenu(); return; }
+      if (el === _subParentEl) return;
+      showSubMenu(el, (_ctxMenuItems || [])[parseInt(el.dataset.idx, 10)].submenu);
     });
+    els.ctxMenu.addEventListener('mouseleave', function() { scheduleHideSub(); });
+    // 主菜单受 max-height 限制可滚动：滚动时子菜单不跟随父项会悬空错位，直接收起
+    els.ctxMenu.addEventListener('scroll', function() { hideSubMenu(); });
+    els.ctxSubMenu.addEventListener('mouseenter', function() {
+      if (_subHideTimer) { clearTimeout(_subHideTimer); _subHideTimer = null; }
+    });
+    els.ctxSubMenu.addEventListener('mouseleave', function() { scheduleHideSub(); });
     });
   }
+
+  function showSubMenu(parentEl, items) {
+    if (!parentEl || !items || !items.length) return;
+    var sub = els.ctxSubMenu;
+    if (_subParentEl === parentEl && !sub.classList.contains('hidden')) return;
+    if (_subHideTimer) { clearTimeout(_subHideTimer); _subHideTimer = null; }
+    _ctxSubItems = items;
+    _subParentEl = parentEl;
+    sub.innerHTML = ctxItemsHtml(items);
+    sub.classList.remove('hidden', 'removing');
+    sub.style.left = '0px';
+    sub.style.top = '0px';
+    var GAP = 8;
+    sub.style.maxHeight = Math.max(160, Math.min(window.innerHeight - GAP * 2, 460)) + 'px';
+    var pr = parentEl.getBoundingClientRect();
+    var sr = sub.getBoundingClientRect();
+    var left = pr.right + 2;                                   // 默认贴父项右侧
+    if (left + sr.width + GAP > window.innerWidth)              // 右侧放不下 → 翻到左侧
+      left = Math.max(GAP, pr.left - sr.width - 2);
+    var top = pr.top - 6;                                      // 与父项顶部对齐（补菜单内边距）
+    if (top + sr.height + GAP > window.innerHeight)
+      top = Math.max(GAP, window.innerHeight - sr.height - GAP);
+    sub.style.left = left + 'px';
+    sub.style.top = top + 'px';
+  }
+
+  function hideSubMenu() {
+    var sub = els.ctxSubMenu;
+    if (_subHideTimer) { clearTimeout(_subHideTimer); _subHideTimer = null; }
+    _subParentEl = null;
+    _ctxSubItems = null;
+    if (sub.classList.contains('hidden')) return;
+    sub.classList.add('hidden');
+    sub.innerHTML = '';
+  }
+
+  function scheduleHideSub() {
+    if (_subHideTimer) clearTimeout(_subHideTimer);
+    _subHideTimer = setTimeout(function() { _subHideTimer = null; hideSubMenu(); }, 180);
+  }
+
   var _ctxHideTimer = null; // hideCtxMenu 的隐藏定时器：showCtxMenu 时须清除，否则嵌套菜单会被延迟隐藏（添加到歌单闪退）
   // 菜单贴近视口边缘时自动翻转定位 + 限制高度可滚动，确保任何触发点都不会让菜单底部/顶部组件超出视口被遮挡
   CM.showCtxMenu = function(x, y, items) {
     if (_ctxHideTimer) { clearTimeout(_ctxHideTimer); _ctxHideTimer = null; }
+    hideSubMenu();
     ensureCtxMenuDelegation();
     _ctxMenuItems = items;
     var menu = els.ctxMenu;
     // 构建 HTML 字符串一次性写入，避免逐项 createElement + appendChild
-    var html = '';
-    items.forEach(function(item, i) {
-      if (item.divider) { html += '<div class="ctx-divider"></div>'; return; }
-      if (item.isLabel) { html += '<div class="ctx-label">' + esc(item.label) + '</div>'; return; }
-      html += '<div class="ctx-item' + (item.danger ? ' danger' : '') + (item.checked ? ' checked' : '') + (item.disabled ? ' disabled' : '') + '" data-idx="' + i + '">' +
-        (item.icon || '') + (item.html || '<span>' + esc(item.label) + '</span>') + '</div>';
-    });
-    menu.innerHTML = html;
+    menu.innerHTML = ctxItemsHtml(items);
     menu.classList.remove('hidden', 'removing');
     menu.style.left = '0px'; menu.style.top = '0px';
     // 高度限制随视口自适应，超长内容始终可滚动到达
@@ -202,6 +284,7 @@
     menu.style.top = top + 'px';
   };
   CM.hideCtxMenu = function() {
+    hideSubMenu();
     var menu = els.ctxMenu;
     if (menu.classList.contains('hidden')) return;
     menu.classList.add('removing');
@@ -209,7 +292,7 @@
     _ctxHideTimer = setTimeout(function() { _ctxHideTimer = null; menu.classList.add('hidden'); menu.classList.remove('removing'); }, 110);
   };
   document.addEventListener('mousedown', function(e) {
-    if (!els.ctxMenu.contains(e.target)) CM.hideCtxMenu();
+    if (!els.ctxMenu.contains(e.target) && !els.ctxSubMenu.contains(e.target)) CM.hideCtxMenu();
   });
   window.addEventListener('blur', function() { CM.hideCtxMenu(); });
 

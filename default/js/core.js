@@ -63,7 +63,7 @@
     morePopover: CM.$('morePopover'), rgPopover: CM.$('rgPopover'),
     modalMask: CM.$('modalMask'), modalTitle: CM.$('modalTitle'), modalDesc: CM.$('modalDesc'),
     modalInput: CM.$('modalInput'), modalOk: CM.$('modalOk'), modalCancel: CM.$('modalCancel'),
-    toastContainer: CM.$('toastContainer'), ctxMenu: CM.$('ctxMenu'), dropOverlay: CM.$('dropOverlay'),
+    toastContainer: CM.$('toastContainer'), ctxMenu: CM.$('ctxMenu'), ctxSubMenu: CM.$('ctxSubMenu'), dropOverlay: CM.$('dropOverlay'),
     // Immersive NowPlaying
     npOverlay: CM.$('npOverlay'), npBgBlur: CM.$('npBgBlur'), npVinylDisc: CM.$('npVinylDisc'),
     npTonearm: CM.$('npTonearm'), npArtwork: CM.$('npArtwork'),
@@ -143,7 +143,7 @@
    * 设置持久化（localStorage）
    * ============================================ */
   var SETTINGS_KEY = 'cloudmusic-settings-v2';
-  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, tilt3d: false };
+  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, tilt3d: false, lyricModes: {} };
   CM.loadSettings = function() {
     try {
       var raw = localStorage.getItem(SETTINGS_KEY);
@@ -152,9 +152,30 @@
         for (var k in CM.settings) if (s[k] !== undefined) CM.settings[k] = s[k];
       }
     } catch (e) {}
+    // 设置可能被手工改坏或来自旧版本：lyricModes 必须是普通对象，
+    // 否则下面按路径读写会抛 TypeError（严格模式下给字符串/数字/ null 挂属性即报错）
+    if (!CM.settings.lyricModes || typeof CM.settings.lyricModes !== 'object' || Array.isArray(CM.settings.lyricModes)) {
+      CM.settings.lyricModes = {};
+    }
   };
   CM.saveSettings = function() {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(CM.settings)); } catch (e) {}
+  };
+
+  // 双语配对模式：按文件（歌词来源路径）记忆用户的手动选择，
+  // 'auto' 不落盘（删除该项即回到自动判定）。上限 500 条，超出按插入顺序淘汰。
+  CM.lyricModeFor = function(path) {
+    var m = CM.settings.lyricModes;
+    return (path && m && typeof m[path] === 'string' && m[path]) || 'auto';
+  };
+  CM.setLyricMode = function(path, mode) {
+    if (!path) return;
+    var m = CM.settings.lyricModes;
+    if (!m || typeof m !== 'object' || Array.isArray(m)) m = CM.settings.lyricModes = {};
+    if (mode === 'auto') delete m[path]; else m[path] = mode;
+    var keys = Object.keys(m);
+    for (var i = 0; keys.length - i > 500; i++) delete m[keys[i]];
+    CM.saveSettings();
   };
 
   /* ============================================
@@ -277,13 +298,19 @@
     }
   };
 
-  // 歌词解析缓存（歌词面板热路径）：key = 路径 + 长度 + 头部 64 字符
-  var _lrcCache = {}, _lrcKeys = [];
-  CM.parseLRCCached = function(key, lrcText) {
+  // 歌词解析缓存（歌词面板热路径）：key = 路径 + 模式 + 长度 + 头部 64 字符
+  // 模式必须进 key：同一文件切换"同刻/延后"后需要重新解析，否则会命中旧结果
+  var _lrcCache = {}, _lrcKeys = [], _lrcVerdicts = {};
+  CM.parseLRCCached = function(key, lrcText, mode) {
     if (!lrcText) return [];
     var hit = _lrcCache[key];
-    if (hit) return hit;
-    var parsed = CM.lyric.parse(lrcText);
+    if (hit) {
+      // 命中缓存时一并恢复判定结果，否则右键菜单会显示上一个文件的识别状态
+      CM.lyric.lastVerdict = _lrcVerdicts[key] || 'none';
+      return hit;
+    }
+    var parsed = CM.lyric.parse(lrcText, null, mode);
+    _lrcVerdicts[key] = CM.lyric.lastVerdict;
     // 新解析器返回毫秒，渲染层期望秒
     for (var i = 0; i < parsed.length; i++) {
       parsed[i].time = parsed[i].time != null ? parsed[i].time / 1000 : null;
@@ -299,11 +326,11 @@
     }
     _lrcCache[key] = parsed;
     _lrcKeys.push(key);
-    if (_lrcKeys.length > 8) delete _lrcCache[_lrcKeys.shift()];
+    if (_lrcKeys.length > 8) { var old = _lrcKeys.shift(); delete _lrcCache[old]; delete _lrcVerdicts[old]; }
     return parsed;
   };
-  CM.makeLRCCacheKey = function(path, lrcText) {
-    return (path || '') + '|' + lrcText.length + '|' + lrcText.slice(0, 64);
+  CM.makeLRCCacheKey = function(path, lrcText, mode) {
+    return (path || '') + '|' + (mode || 'auto') + '|' + lrcText.length + '|' + lrcText.slice(0, 64);
   };
 
   /* ============================================

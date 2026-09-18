@@ -325,7 +325,7 @@
       '</div>' +
       '<div class="popover-section">' +
       '<div class="popover-label">关于</div>' +
-      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.5.1</span></button>' +
+      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.5.2</span></button>' +
       '<button class="pop-item" id="popHelp">' + CM.icons.info + '<span>使用帮助</span><span class="pop-item-note">功能指南</span></button>' +
       '</div>';
     // 绑定一次，永久有效
@@ -1187,7 +1187,7 @@
 
       var items = [
         { label: 'CloudMusic 主题', isLabel: true },
-        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.5.1</span>' },
+        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.5.2</span>' },
         { html: '<span class="ctx-info-label">作者</span><span class="ctx-info-value">灵芝含</span>' },
         { html: '<span class="ctx-info-label">foobar2000</span><span class="ctx-info-value">' + CM.escHtml(ver.foobar2000 || '--') + '</span>' },
         { html: '<span class="ctx-info-label">WebView2 组件</span><span class="ctx-info-value">v' + CM.escHtml(pluginVer || '--') + '</span>' },

@@ -60,6 +60,14 @@
 .ctx-item .ctx-check{width:14px;flex-shrink:0;font-size:11px;color:var(--accent);text-align:center}
 .ctx-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .ctx-item .ctx-stars{color:var(--accent);letter-spacing:1px;font-size:11px}
+/* 两行式菜单项：名称 + 小字说明（选项含义难以望文生义时使用） */
+.ctx-item .ctx-text{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.ctx-item .ctx-desc{font-size:11px;color:var(--text-3);margin-top:1px}
+.ctx-item.checked .ctx-desc{color:var(--text-2)}
+/* 二级菜单：父项显示箭头，子菜单用独立容器（主菜单可滚动，嵌套子项会被裁切） */
+.ctx-item.has-sub .ctx-arrow{margin-left:auto;padding-left:12px;color:var(--text-3);font-size:12px;line-height:1}
+.ctx-item.has-sub:hover .ctx-arrow{color:var(--text)}
+.ctx-menu.ctx-sub{z-index:2001;animation:none;min-width:216px}
 .ctx-divider{height:1px;background:var(--border);margin:5px 8px}
 .ctx-label{padding:6px 12px 3px;font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--text-3)}
 .ctx-info-label{color:var(--text-3);margin-right:auto}
