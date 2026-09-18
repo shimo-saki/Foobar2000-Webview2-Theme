@@ -419,33 +419,20 @@
    * 拖放（宿主 dnd API，回退 HTML5 提示）
    * ============================================ */
   const AUDIO_EXT = /\.(mp3|flac|wav|aac|m4a|mp4|opus|ogg|oga|wma|ape|wv|alac|aiff|aif|dsf|dff|tak|tta|mpc|mka|m4b|m4r)$/i;
-
-  // 把拖入的路径展开成可播放的音频文件：
-  // 目录用 utils.ListFiles 递归枚举其下音频文件，普通文件保留（仅音频）。宿主 addPathsAsync
-  // 不会展开文件夹，会把文件夹当一个音轨直接加入导致"无法打开（文件格式不支持）"。
-  CM.expandDroppedPaths = async function (raw) {
-    const paths = (raw || [])
-      .map(f => typeof f === 'string' ? f : (f.path || f.name || ''))
-      .filter(Boolean);
-
-    const expandOne = async p => {
-      try {
-        if (!utils?.IsDirectory || !utils?.ListFiles) return AUDIO_EXT.test(p) ? [p] : [];
-        if (!await utils.IsDirectory(p)) return AUDIO_EXT.test(p) ? [p] : [];
-        const files = await utils.ListFiles(p, true);
-        return (files || []).filter(f => AUDIO_EXT.test(f));
-      } catch {
-        return AUDIO_EXT.test(p) ? [p] : [];
-      }
-    };
-
-    const groups = await Promise.all(paths.map(expandOne));
-    return groups.flat();
+  // 把拖入的路径展开成可播放的音频文件
+  CM.expandPaths = async function (raw) {
+    return (await Promise.all(
+      raw.filter(Boolean).map(async path => {
+        const info = await fb2k.invoke('file.getInfo', { path });
+        if (info.isFile) return [path];
+        if (info.isDirectory) return (await fb2k.invoke('file.list', { path, pattern: '*.*', recursive: true })).files ?? [];
+      })
+    )).flat().filter(f => AUDIO_EXT.test(f));
   };
 
   // 统一入口：把拖进来的（文件/文件夹）路径加到当前歌单
   CM.addDroppedPaths = function (raw) {
-    CM.expandDroppedPaths(raw).then(paths => {
+    CM.expandPaths(raw).then(paths => {
       if (!paths.length) return;
 
       const params = { paths };
@@ -480,8 +467,7 @@
     fb.on('dnd:drop', data => {
       showOverlay(false);
       if (!claimDrop()) return;
-      const sessionId = data?.sessionId;
-      CM.api('dnd.getPathsAsync', sessionId ? { sessionId } : {}).then(r => {
+      CM.api('dnd.getPathsAsync', { sessionId: data?.sessionId }).then(r => {
         let paths = r?.paths || r?.files || [];
         if (!paths.length && data?.paths) paths = data.paths;
         CM.addDroppedPaths(paths);
@@ -585,7 +571,7 @@
   };
 
   // 节流：仅当可见进度 1% 变化时才通过 IPC 更新任务栏，避免 timeHighRes 高频事件（~30次/秒）反复调用宿主 API
-  let _lastTaskbarVal = -1, _lastTaskbarState = null
+  let _lastTaskbarVal = -1, _lastTaskbarState = null;
   CM.updateTaskbarProgress = function () {
     if (!CM.taskbarAvailable) return;
     if (!CM.currentTrack || state.duration <= 0) {

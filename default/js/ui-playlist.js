@@ -95,8 +95,8 @@
     CM.api('dialog.openFolder', { title: '选择要添加的音乐文件夹' }).then(r => {
       if (r.canceled || !r.folderPath) return;
       // 宿主 addPathsAsync 不会展开文件夹，会把它当单音轨加入导致"格式不支持"，
-      // 这里复用 expandDroppedPaths 递归枚举文件夹内的音频文件后再添加。
-      CM.expandDroppedPaths([r.folderPath]).then(paths => {
+      // 这里复用 expandPaths 递归枚举文件夹内的音频文件后再添加。
+      CM.expandPaths([r.folderPath]).then(paths => {
         if (paths.length) CM._addPaths(playlistIdx, paths, `正在添加 ${paths.length} 个文件`);
       });
     });
