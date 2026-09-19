@@ -61,9 +61,9 @@
     queueDrawer: CM.$('queueDrawer'), queueCount: CM.$('queueCount'), queueList: CM.$('queueList'), queueNow: CM.$('queueNow'),
     queueClear: CM.$('queueClear'), queueClose: CM.$('queueClose'),
     // Overlays
-    modalMask: CM.$('modalMask'), modalTitle: CM.$('modalTitle'), modalDesc: CM.$('modalDesc'),
+    modal: CM.$('modal'), modalTitle: CM.$('modalTitle'), modalDesc: CM.$('modalDesc'),
     modalInput: CM.$('modalInput'), modalOk: CM.$('modalOk'), modalCancel: CM.$('modalCancel'),
-    toastContainer: CM.$('toastContainer'), ctxMenu: CM.$('ctxMenu'), dropOverlay: CM.$('dropOverlay'),
+    toastContainer: CM.$('toastContainer'), ctxMenu: CM.$('ctxMenu'), drop: CM.$('drop'),
     // Immersive NowPlaying
     npOverlay: CM.$('npOverlay'), npBgBlur: CM.$('npBgBlur'), npVinylDisc: CM.$('npVinylDisc'),
     npTonearm: CM.$('npTonearm'), npArtwork: CM.$('npArtwork'),
@@ -76,7 +76,7 @@
     npLcPrev: CM.$('npLcPrev'), npLcPlay: CM.$('npLcPlay'), npLcNext: CM.$('npLcNext'),
     rpImmersiveBtn: CM.$('rpImmersiveBtn'),
     // Tag Editor
-    tagEditorOverlay: CM.$('tagEditorOverlay'), tagEditorTitle: CM.$('tagEditorTitle'),
+    tagEditor: CM.$('tagEditor'), tagEditorTitle: CM.$('tagEditorTitle'),
     tagEditorTrack: CM.$('tagEditorTrack'), tagEditorBody: CM.$('tagEditorBody'),
     tagEditorHint: CM.$('tagEditorHint'), tagEditorSave: CM.$('tagEditorSave'),
     tagEditorCancel: CM.$('tagEditorCancel'), tagEditorClose: CM.$('tagEditorClose'),

@@ -64,7 +64,7 @@
         },
         {
           label: '最近添加', icon: CM.icons.recently_added,
-          action: () => fb.playlist.createAutoplaylist('最近添加', '%added% DURING LAST 4 WEEKS SORT DESCENDING BY %added%', '%artist% | %album% | %tracknumber%',true)
+          action: () => fb.playlist.createAutoplaylist('最近添加', '%added% DURING LAST 4 WEEKS SORT DESCENDING BY %added%', '%artist% | %album% | %tracknumber%', true)
         }
       ];
       CM.showCtxMenu(e.clientX, e.clientY, items);
@@ -179,7 +179,7 @@
       const seconds = pct * state.duration;
       // 不在此处更新 state.position，交给 playback:seeked / timeHighRes 事件统一处理，
       // 避免因 API 返回 undefined/null 时误把旧位置覆盖掉 seeked 事件已写入的正确位置。
-      CM.api('playback.setPosition', { seconds }).then(r => {
+      CM.api('playback.setPosition', { seconds }).then(() => {
         state[seekingKey] = false;
         updateFn();
       });
@@ -478,64 +478,22 @@
   CM.initDragDrop = function () {
     // v1.12.0 起 dnd 改为主机原生观察，不再注册 drop zone；
     // 读路径统一走 dnd.getPathsAsync（await 安全、不依赖消息顺序）。
-    let lastDropAt = 0;
-    // 宿主 dnd:drop 与 HTML5 window drop 先后顺序不定，谁先处理谁生效，
-    // 另一路在 500ms 内直接跳过，避免同一批文件被重复添加
-    const claimDrop = () => {
-      const now = Date.now();
-      if (now - lastDropAt < 500) return false;
-      lastDropAt = now;
-      return true;
-    };
-    const showOverlay = on => els.dropOverlay.classList.toggle('active', on);
-    const isFileDrag = e => {
-      const t = e.dataTransfer?.types;
-      return !!t && (t.includes('Files') || t.includes('files'));
-    };
-
-    fb.on('dnd:enter', () => showOverlay(true));
-    fb.on('dnd:leave', () => showOverlay(false));
+    fb.on('dnd:enter', () => els.drop.showModal());
+    fb.on('dnd:leave', () => els.drop.close());
     fb.on('dnd:drop', data => {
-      showOverlay(false);
-      if (!claimDrop()) return;
+      els.drop.close()
+      if (!CM.playlists.length) return CM.showToast('请先添加歌单', null, 'error');
+      if (CM.playlists?.find(p => p.index === CM.state.currentPlaylistIndex)?.isLocked)
+        return CM.showToast('当前歌单已锁定，无法添加项目', null, 'error');
+      
       CM.api('dnd.getPathsAsync', { sessionId: data?.sessionId }).then(r => {
-        let paths = r?.paths || r?.files || [];
-        if (!paths.length && data?.paths) paths = data.paths;
+        const paths = r.paths?.length ? r.paths : data?.paths;
         CM.addDroppedPaths(paths);
       });
     });
 
-    // 视觉反馈（WebView2 内 dragover 依然会触发）
-    let dragDepth = 0;
-    window.addEventListener('dragenter', e => {
-      if (!isFileDrag(e)) return;
-      e.preventDefault();
-      dragDepth++;
-      showOverlay(true);
-    });
-    window.addEventListener('dragleave', e => {
-      if (!isFileDrag(e)) return;
-      e.preventDefault();
-      if (--dragDepth <= 0) {
-        dragDepth = 0;
-        showOverlay(false);
-      }
-    });
-    window.addEventListener('dragover', e => { if (isFileDrag(e)) e.preventDefault(); });
-    window.addEventListener('drop', e => {
-      if (!isFileDrag(e)) return;
-      e.preventDefault();
-      dragDepth = 0;
-      showOverlay(false);
-      if (!claimDrop()) return;
-      // 文档推荐在 HTML5 drop handler 内用 getPathsAsync 读取宿主会话的真实路径
-      //（同步 getPaths 在快速拖放时会读到空数组，故不用它做唯一来源）。
-      // 文件夹路径由宿主端 addPathsAsync 自动展开其中的音频文件。
-      CM.api('dnd.getPathsAsync').then(r => {
-        const paths = r?.paths || r?.files || [];
-        if (paths.length) CM.addDroppedPaths(paths);
-      });
-    });
+    window.addEventListener('dragover', e => e.preventDefault());
+    window.addEventListener('drop', e => e.preventDefault());
   };
 
   /* ============================================
@@ -582,7 +540,7 @@
           if (state.queueOpen) CM.toggleQueue(false);
           CM.hideCtxMenu();
           // 关闭标签编辑器
-          if (CM.$('tagEditorOverlay')?.classList.contains('open')) CM.hideTagEditor();
+          if (CM.tagEditor.open) CM.hideTagEditor();
           // 清除批量选择
           if (state.batchSelected.size > 0) CM.clearBatchSelection();
           break;
@@ -816,8 +774,8 @@
     els.tagEditorClose.addEventListener('click', CM.hideTagEditor);
     els.tagEditorCancel.addEventListener('click', CM.hideTagEditor);
     // 点击遮罩关闭
-    els.tagEditorOverlay.addEventListener('mousedown', e => {
-      if (e.target === els.tagEditorOverlay) CM.hideTagEditor();
+    els.tagEditor.addEventListener('mousedown', e => {
+      if (e.target === els.tagEditor) CM.hideTagEditor();
     });
     // 保存
     els.tagEditorSave.addEventListener('click', CM._saveTagEditor);

@@ -27,7 +27,6 @@
 
   // 标签编辑器内部状态
   let _tagCtx = null; // { mode: 'single'|'batch', tracks: [], original: {} }
-
   CM.showTagEditor = function (track) {
     const path = CM.trackPath(track);
     if (!path) { return CM.showToast('无法编辑', '未获取到文件路径', 'error'); }
@@ -42,7 +41,7 @@
       <div style="text-align:center;padding:32px;color:var(--text-3);font-size:13px">
         <div class="spinner" style="margin:0 auto 10px"></div>正在读取标签...
       </div>`;
-    els.tagEditorOverlay.classList.add('open');
+    els.tagEditor.showModal();
 
     // 读取元数据（扁平格式，大写键名）
     CM.api('metadata.readByPath', { path }).then(r => {
@@ -64,8 +63,7 @@
     _tagCtx = { mode: 'batch', tracks };
 
     const { length } = tracks;
-    let names = tracks.slice(0, 3).map(CM.trackName).join('、');
-    if (length > 3) names += ` 等${length}首`;
+    const names = tracks.slice(0, 3).map(CM.trackName).join('、') + (length > 3 ? ` 等${length}首` : '');
 
     els.tagEditorTitle.textContent = `批量编辑标签（${length}首）`;
     els.tagEditorTrack.textContent = names;
@@ -77,11 +75,11 @@
     const coverSec = els.tagEditorBody.querySelector('.tag-cover-section');
     if (coverSec) coverSec.style.display = 'none';
 
-    els.tagEditorOverlay.classList.add('open');
+    els.tagEditor.showModal();
   };
 
   CM.hideTagEditor = function () {
-    els.tagEditorOverlay.classList.remove('open');
+    els.tagEditor.close();
     _tagCtx = null;
   };
 

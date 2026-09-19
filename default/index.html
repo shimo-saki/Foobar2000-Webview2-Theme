@@ -320,7 +320,7 @@
 </div>
 
 <!-- Modal -->
-<div class="modal-mask" id="modalMask">
+<dialog id="modal">
   <div class="modal">
     <div class="modal-title" id="modalTitle">标题</div>
     <div class="modal-desc" id="modalDesc"></div>
@@ -330,10 +330,10 @@
       <button class="modal-btn primary" id="modalOk">确定</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <!-- Tag Editor -->
-<div class="tag-editor-overlay" id="tagEditorOverlay">
+<dialog id="tagEditor">
   <div class="tag-editor">
     <div class="tag-editor-header">
       <div class="tag-editor-title" id="tagEditorTitle">编辑标签</div>
@@ -350,7 +350,7 @@
     </div>
   </div>
   <input type="file" id="tagCoverFile" accept="image/*" style="display:none">
-</div>
+</dialog>
 
 <!-- Batch Action Bar -->
 <div class="batch-bar hidden" id="batchBar">
@@ -363,12 +363,12 @@
 <!-- Toast / ContextMenu / DropOverlay -->
 <div class="toast-container" id="toastContainer"></div>
 <div class="ctx-menu hidden" id="ctxMenu"></div>
-<div class="drop-overlay" id="dropOverlay">
+<dialog id="drop">
   <div class="drop-overlay-inner">
     <span class="icon" style="font-size: 48px"></span>
     <div class="drop-overlay-sub">支持音频文件与文件夹</div>
   </div>
-</div>
+</dialog>
 
 <!-- foo_ui_webview2 SDK v1.13.0 -->
 <script src="sdk/bridge.global.js?v=1130"></script>

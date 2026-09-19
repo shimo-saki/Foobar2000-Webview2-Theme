@@ -662,27 +662,13 @@ body.is-playing .np-overlay .np-tonearm{transform:rotate(6deg)}
 .rp-immersive-btn:hover{background:rgba(255,255,255,0.18);color:var(--text);transform:scale(1.08)}
 
 /* ============================================
- * Tag Editor Overlay
+ * Tag Editor
  * ============================================ */
-.tag-editor-overlay {
-  position:fixed;inset:0;z-index:2400;
-  display:none;align-items:center;justify-content:center;
-  background:rgba(8, 8, 10, 0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  opacity:0;pointer-events:none;
-  /* display 参与过渡，并应用离散动画 */
-  transition:opacity var(--t-mid), display var(--t-mid) allow-discrete;
-}
-.tag-editor-overlay.open{display:flex;opacity:1;pointer-events:auto}
-@starting-style{
-  .tag-editor-overlay.open{opacity:0}
-}
 .tag-editor{
   width:520px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;
   background:var(--bg-2);border:1px solid var(--border-strong);
   border-radius:var(--r-xl);box-shadow:var(--shadow-pop);
-  transform:translateY(14px) scale(0.97);transition:transform var(--t-mid);
 }
-.tag-editor-overlay.open .tag-editor{transform:none}
 .tag-editor-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:18px 22px 14px;border-bottom:1px solid var(--border);

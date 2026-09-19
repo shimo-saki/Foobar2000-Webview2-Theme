@@ -131,7 +131,7 @@
   let modalResolve = null;
   CM.showModal = function (opts) {
     return new Promise(resolve => {
-      if (modalResolve) modalResolve(null);
+      modalResolve?.(null);
       modalResolve = resolve;
 
       els.modalTitle.textContent = opts.title || '';
@@ -143,7 +143,7 @@
       els.modalInput.value = hasInput ? (opts.input || '') : '';
       els.modalOk.textContent = opts.okText || '确定';
       els.modalOk.className = `modal-btn ${opts.danger ? 'danger' : 'primary'}`;
-      els.modalMask.classList.add('open');
+      els.modal.showModal();
 
       if (hasInput) {
         setTimeout(() => {
@@ -154,11 +154,9 @@
     });
   };
   CM.closeModal = function (result) {
-    els.modalMask.classList.remove('open');
-    if (modalResolve) {
-      modalResolve(result);
-      modalResolve = null;
-    }
+    els.modal.close();
+    modalResolve?.(result);
+    modalResolve = null;
   };
 
   els.modalOk.addEventListener('click', () => {
@@ -166,7 +164,7 @@
     CM.closeModal(hasInput ? els.modalInput.value.trim() : true);
   });
   els.modalCancel.addEventListener('click', () => CM.closeModal(null));
-  els.modalMask.addEventListener('mousedown', e => { if (e.target === els.modalMask) CM.closeModal(null); });
+  els.modal.addEventListener('mousedown', e => { if (e.target === els.modal) CM.closeModal(null); });
   els.modalInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') CM.closeModal(els.modalInput.value.trim());
     else if (e.key === 'Escape') CM.closeModal(null);
