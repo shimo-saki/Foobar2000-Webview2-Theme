@@ -346,6 +346,22 @@
       { divider: true },
       { label: '关于', isLabel: true },
       {
+        label: '更新', icon: CM.icons.refresh,
+        submenu: [
+          {
+            label: '检查更新', icon: CM.icons.refresh,
+            action: () => CM.checkUpdate(true)
+          },
+          {
+            label: '启动时检查更新', checked: CM.settings.autoUpdate,
+            action: () => {
+              CM.settings.autoUpdate = !CM.settings.autoUpdate;
+              CM.saveSettings();
+            }
+          },
+        ]
+      },
+      {
         label: 'CloudMusic 主题', icon: CM.icons.info,
         action: () => CM.showAbout()
       },
@@ -755,10 +771,6 @@
       CM.api('config.getOutputConfig'),
       CM.api('audio.getStreamInfo')
     ]).then(([ver = {}, stats = {}, out = {}, stream = {}]) => {
-      // plugin 可能是字符串或 {name,version} 对象
-      let pluginVer = ver.plugin;
-      if (pluginVer && typeof pluginVer === 'object') pluginVer = pluginVer.version || pluginVer.name;
-
       const info = (label, value, disabled) => ({
         disabled,
         html: `<span class="ctx-info-label">${label}</span><span class="ctx-info-value">${value}</span>`
@@ -767,10 +779,10 @@
 
       const items = [
         { label: 'CloudMusic 主题', isLabel: true },
-        info('版本', 'v2.5.1'),
-        info('作者', '灵芝含'),
-        info('foobar2000', esc(ver.foobar2000 || '--')),
-        info('WebView2 组件', `v${esc(pluginVer || '--')}`),
+        info('版本', CM.version),
+        info('作者', '灵芝含、shimo-saki'),
+        info('foobar2000', esc(ver.version || '--')),
+        info('WebView2 组件', `v${esc(ver.plugin.version || '--')}`),
         { divider: true },
         { label: '媒体库', isLabel: true },
         info('总曲目', stats.totalTracks || 0),
@@ -868,5 +880,4 @@
       menu.append(divider, item);
     }, 0);
   }, true); // 捕获阶段，确保在原 handler 之前执行
-
 })();

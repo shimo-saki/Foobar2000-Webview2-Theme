@@ -5,6 +5,7 @@
 (function () {
   'use strict';
   const CM = window.CloudMusic = window.CloudMusic || {};
+  CM.version = 'V2.5.1-modify';
 
   /* ============================================
    * API 包装器 — 出错时resolve null，调用方只需判空
@@ -141,7 +142,7 @@
    * 设置持久化（localStorage）
    * ============================================ */
   const SETTINGS_KEY = 'cloudmusic-settings-v2';
-  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null };
+  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, autoUpdate: true };
 
   CM.loadSettings = function () {
     try {

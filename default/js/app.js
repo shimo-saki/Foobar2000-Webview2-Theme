@@ -250,9 +250,44 @@
         });
       });
     }).catch(() => {/* 宿主桥接未就绪，以受限模式运行 */ });
+    // 检测更新
+    if (CM.settings.autoUpdate) CM.checkUpdate();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
   document.addEventListener('contextmenu', e => { if (!e.shiftKey) e.preventDefault(); }, true);
+
+  /* ============================================
+   * 版本更新检测
+   * ============================================ */
+  function compareVersion(a, b) {
+    const parse = v => (String(v).match(/^v?(\d+(?:\.\d+)*)/i)?.[1] || '0').split('.').map(Number);
+    const x = parse(a), y = parse(b);
+
+    for (let i = 0, n = Math.max(x.length, y.length); i < n; i++) {
+      const d = (x[i] ?? 0) - (y[i] ?? 0);
+      if (d) return Math.sign(d);
+    }
+    return 0;
+  };
+
+  CM.checkUpdate = function (show = false) {
+    const off = fb.on('http:response', res => {
+      off();
+      if (!res.success) return CM.showToast('检测更新失败', '请求失败，请检查网络设置', 'error');
+      if (res.headers["X-RateLimit-Remaining"] === "0")
+        return CM.showToast('检测更新失败', '请求频率过高，请稍后再试', 'error');
+
+      const { name: version } = JSON.parse(res.body);
+      if (compareVersion(version, CM.version) > 0) {
+        CM.showToast(`发现新版本 ${version}`, '可前往 Github 下载更新', 'success');
+        if (show) window.open('https://github.com/shimo-saki/Foobar2000-Webview2-Theme/releases/latest');
+      } else if (show) {
+        CM.showToast('已经是最新版本', '', 'success');
+      }
+    });
+
+    fb2k.invoke('http.get', { url: 'https://api.github.com/repos/shimo-saki/Foobar2000-Webview2-Theme/releases/latest' });
+  };
 })();
