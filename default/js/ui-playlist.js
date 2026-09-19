@@ -188,8 +188,7 @@
 
     // 记忆最近打开的歌单
     if (CM.settings.lastPlaylist !== (pl.name || '')) {
-      CM.settings.lastPlaylist = pl.name || '';
-      CM.saveSettings();
+      CM.setSettings('lastPlaylist', pl.name || '');
     }
 
     const loadId = ++_playlistViewLoadId;

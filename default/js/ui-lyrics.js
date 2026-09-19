@@ -18,8 +18,8 @@
    * 歌词面板显隐
    * ============================================ */
   CM.setLyricsVisible = function (visible) {
-    CM.state.lyricsVisible = CM.settings.lyricsVisible = visible;
-    CM.saveSettings();
+    CM.state.lyricsVisible = visible;
+    CM.setSettings('lyricsVisible', visible);
     els.btnLyricsToggle.classList.toggle('active', visible);
     els.app.classList.toggle('lyrics-hidden', !visible);
   };

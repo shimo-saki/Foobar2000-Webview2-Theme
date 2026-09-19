@@ -139,20 +139,23 @@
   CM.currentLyrics = [];
 
   /* ============================================
-   * 设置持久化（localStorage）
+   * 设置持久化
    * ============================================ */
-  const SETTINGS_KEY = 'cloudmusic-settings-v2';
   CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, autoUpdate: true };
-
   CM.loadSettings = function () {
-    try {
-      const s = JSON.parse(localStorage.getItem(SETTINGS_KEY));
-      if (s) for (const k in CM.settings) if (s[k] !== undefined) CM.settings[k] = s[k];
-    } catch (e) { }
+    fb2k.invoke('config.getAll').then(({ success, items }) => {
+      if (!success) return CM.showToast('获取配置失败', null, 'error');
+      Object.assign(CM.settings, items);
+    });
   };
+  CM.loadSettings();
 
-  CM.saveSettings = function () {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(CM.settings)); } catch (e) { }
+  CM.setSettings = function (key, value) {
+    if (CM.settings[key] === value) return;
+    fb2k.invoke('config.set', { key, value }).then(({ success }) => {
+      if (!success) return CM.showToast('保存配置失败', `${key}: ${value}`, 'error');
+      CM.settings[key] = value;
+    });
   };
 
   /* ============================================

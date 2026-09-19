@@ -354,10 +354,7 @@
           },
           {
             label: '启动时检查更新', checked: CM.settings.autoUpdate,
-            action: () => {
-              CM.settings.autoUpdate = !CM.settings.autoUpdate;
-              CM.saveSettings();
-            }
+            action: () => CM.setSettings('autoUpdate', !CM.settings.autoUpdate)
           },
         ]
       },
@@ -428,7 +425,7 @@
 
   CM.setVisualizerActive = function (active) {
     state.visualizerActive = CM.settings.visualizer = active;
-    CM.saveSettings();
+    CM.setSettings('visualizer', active);
     els.btnVisualizer.classList.toggle('active', active);
     els.miniSpectrum.style.display = active ? '' : 'none';
     if (active) CM.startSpectrum();

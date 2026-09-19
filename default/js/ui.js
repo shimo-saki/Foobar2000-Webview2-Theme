@@ -344,8 +344,8 @@
   CM.switchTab = function (tab) {
     if (!TAB_IDS[tab]) return;
 
-    state.currentTab = CM.settings.tab = tab;
-    CM.saveSettings();
+    state.currentTab = tab;
+    CM.setSettings('tab', tab);
 
     // 三组导航元素懒查询 + 统一同步 active 状态
     _tabNavItems ||= document.querySelectorAll('.nav-item[data-tab]');

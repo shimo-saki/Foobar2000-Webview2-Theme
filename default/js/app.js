@@ -40,28 +40,11 @@
     }).catch(() => { /* 静默忽略 */ });
   }
 
-  function onStopped() {
-    CM.currentTrack = null;
-    CM._renderQueueNow(); // 隐藏队列抽屉"正在播放"卡片
-    CM.state.playingTrackIndex = -1;
-    CM.state.position = CM.state.duration = 0;
-    CM.updateTrackInfo(null);
-    CM.setArtwork(null);
-    CM.updateSeekUI();
-    setPlayingVisual(false);
-    CM.refreshPlayingMarks();
-    // 不关闭沉浸式页面 — 切歌时 stopped 会短暂触发，关闭会导致闪烁退出
-  }
-
   /* ============================================
    * 初始状态同步（fb.ready 之后）
    * ============================================ */
   function syncInitialState() {
-    CM.api('playback.getState').then(async r => {
-      const position = await fb2k.invoke('playback.getPosition');
-      CM.state.duration = position.duration || 0;
-      CM.state.position = position.position || 0;
-      CM.updateSeekUI();
+    CM.api('playback.getState').then(r => {
       CM.changePlayerState(r.state);
       setPlayingVisual(r.state === "playing");
     });
@@ -69,21 +52,23 @@
       const track = r && (r.track || (r.title || r.path ? r : null));
       if (track) onTrackChanged(track);
     });
+    CM.api('playback.getPosition').then(r => {
+      CM.state.position = r.position || 0;
+      CM.state.duration = r.duration || 0;
+      CM.updateSeekUI();
+    });
     CM.api('playback.getVolume').then(r => {
-      if (!r) return;
-      if (r.volume != null) CM.state.volume = r.volume;
-      if (r.isMuted != null) CM.state.muted = r.isMuted;
+      CM.state.volume = Math.round(r.volume);
+      CM.state.muted = r.isMuted;
       if (CM.els.volSlider) CM.els.volSlider.value = CM.state.volume;
       CM.updateVolumeIcon();
     });
     CM.api('playback.getPlaybackOrder').then(r => {
-      if (!r) return;
-      CM.state.order = r.order != null ? r.order : (r.index != null ? r.index : 0);
+      CM.state.order = r.order;
       CM.updateOrderIcon();
     });
     CM.api('playback.getStopAfterCurrent').then(r => {
-      if (!r) return;
-      CM.state.stopAfterCurrent = !!(r.enabled ?? r.stopAfterCurrent);
+      CM.state.stopAfterCurrent = r.enabled;
       CM.updateStopIcon();
     });
     CM.refreshQueueBadge();
@@ -94,21 +79,18 @@
    * ============================================ */
   function subscribeEvents() {
     fb.on('playback:trackChanged', data => {
-      const track = data && (data.track || data);
-      onTrackChanged(track);
+      onTrackChanged(data);
       if (CM.state.npOpen) { CM.updateNpFormat(); CM.loadNpWaveform(CM.trackPath(CM.currentTrack)); }
       setPlayingVisual(true);
     });
 
     fb.on('playback:stateChanged', data => {
-      if (!data) return;
       CM.changePlayerState(data.state);
       // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
-      const dur = data.duration || data.length;
-      if (dur != null) CM.state.duration = dur;
-      if (data.position != null && !CM.state.seeking) CM.state.position = data.position;
+      CM.state.duration = data.duration;
+      if (!CM.state.seeking) CM.state.position = data.position;
       CM.updateSeekUI();
-      if (data.state != null) setPlayingVisual(data.state === 'playing' || data.state === 1);
+      setPlayingVisual(data.state === 'playing');
     });
 
     fb.on('playback:paused', data => {
@@ -117,7 +99,6 @@
 
     // 高分辨率进度事件 — 驱动进度条 + 歌词高亮 + 任务栏进度
     fb.on('playback:timeHighRes', data => {
-      if (!data || data.position == null) return;
       if (!CM.state.seeking) {
         CM.state.position = data.position;
         CM.updateSeekUI();
@@ -127,7 +108,7 @@
     });
 
     fb.on('playback:seeked', data => {
-      if (data && data.position != null) CM.state.position = data.position;
+      CM.state.position = data.position;
       CM.player.setCurrentTime(data.position * 1000, true);
       CM.state.seeking = false;
       CM.state.npSeeking = false;
@@ -136,13 +117,11 @@
     });
 
     fb.on('playback:volumeChanged', data => {
-      if (!data) return;
-      if (data.volume != null) CM.state.volume = data.volume;
-      if (data.isMuted != null) CM.state.muted = data.isMuted;
+      CM.state.volume = Math.round(data.volume);
+      CM.state.muted = data.isMuted;
       if (CM.els.volSlider) CM.els.volSlider.value = CM.state.volume;
       CM.updateVolumeIcon();
-      CM.settings.volume = CM.state.volume;
-      CM.saveSettings();
+      CM.setSettings('volume', CM.state.volume);
     });
 
     fb.on('playback:orderChanged', data => {
@@ -152,7 +131,7 @@
     });
 
     fb.on('playback:stopAfterCurrentChanged', data => {
-      CM.state.stopAfterCurrent = !!data?.enabled;
+      CM.state.stopAfterCurrent = data.enabled;
       CM.updateStopIcon();
     });
 
@@ -169,7 +148,17 @@
       CM.startSpectrum();
     });
 
-    fb.on('playback:stopped', onStopped);
+    fb.on('playback:stopped', () => {
+      CM.currentTrack = null;
+      CM._renderQueueNow(); // 隐藏队列抽屉"正在播放"卡片
+      CM.state.playingTrackIndex = -1;
+      CM.state.position = CM.state.duration = 0;
+      CM.updateTrackInfo(null);
+      CM.setArtwork(null);
+      CM.updateSeekUI();
+      setPlayingVisual(false);
+      CM.refreshPlayingMarks();
+    });
 
     // 播放列表结构变化 → 刷新侧栏 + 当前列表视图
     const refreshPlaylistUI = CM.debounce(() => {
@@ -198,7 +187,6 @@
    * 启动
    * ============================================ */
   function boot() {
-    CM.loadSettings();
     CM.state.lyricsVisible = CM.settings.lyricsVisible ?? true;
     CM.state.visualizerActive = CM.settings.visualizer ?? true;
 
