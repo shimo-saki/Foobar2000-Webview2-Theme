@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LRC 双语歌词编辑器 · CloudMusic 主题</title>
+<style>
+  :root{
+    --bg-0:#101013; --bg-1:#16161b; --bg-2:#1e1e25; --bg-3:#26262f; --bg-4:#2f2f3a;
+    --text:#f4f4f6; --text-2:rgba(244,244,246,0.66); --text-3:rgba(244,244,246,0.38);
+    --accent:#EC4141; --accent-soft:hsla(0,81%,59%,0.14);
+    --main:#5ea9ff; --sub:#c9a227;
+    --border:rgba(255,255,255,0.08); --r:10px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI','Microsoft YaHei',system-ui,sans-serif;background:var(--bg-0);color:var(--text);line-height:1.6;height:100vh;display:flex;flex-direction:column}
+  header{padding:14px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+  h1{font-size:17px;font-weight:700;display:inline-block;margin-right:10px}
+  .sub{font-size:12px;color:var(--text-3)}
+  .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  button{font-family:inherit;font-size:12.5px;padding:6px 12px;cursor:pointer;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:6px;transition:.15s}
+  button:hover:not(:disabled){background:var(--accent);border-color:var(--accent);color:#fff}
+  button:disabled{opacity:.4;cursor:default}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  select{font-family:inherit;font-size:12.5px;padding:6px 8px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:6px}
+  main{flex:1;display:flex;min-height:0}
+  #left{width:52%;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0}
+  #right{flex:1;display:flex;flex-direction:column;min-width:0}
+  .pane-head{padding:8px 14px;font-size:12px;color:var(--text-3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .list{flex:1;overflow:auto;padding:6px 8px}
+  .row{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:12.5px}
+  .row:hover{background:var(--bg-1)}
+  .row.sel{background:var(--accent-soft)}
+  .row input.t{width:78px;font-family:Consolas,monospace;font-size:11.5px;background:var(--bg-2);color:var(--text-2);border:1px solid transparent;border-radius:4px;padding:2px 4px}
+  .row input.t:focus{outline:none;border-color:var(--accent);color:var(--text)}
+  .role{font-size:10.5px;padding:1px 7px;border-radius:20px;flex-shrink:0;cursor:pointer;user-select:none;border:1px solid transparent}
+  .role.main{background:rgba(94,169,255,.16);color:var(--main)}
+  .role.sub{background:rgba(201,162,39,.16);color:var(--sub)}
+  .role.other{background:var(--bg-3);color:var(--text-3)}
+  .txt{flex:1;min-width:0;word-break:break-all;cursor:text}
+  .txt:hover{color:var(--text);text-decoration:underline dotted var(--border)}
+  .txt.other{color:var(--text-3)}
+  .row input.edit{flex:1;min-width:0;font-family:inherit;font-size:12.5px;background:var(--bg-0);color:var(--text);border:1px solid var(--accent);border-radius:4px;padding:2px 6px}
+  .row input.edit:focus{outline:none}
+  #dropHint{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(16,16,19,.82);z-index:99;font-size:15px;color:var(--text);pointer-events:none}
+  .files span .x{opacity:.5;margin-left:4px}
+  .files span .x:hover{opacity:1;color:var(--accent)}
+  .acts{display:flex;gap:3px;opacity:.4;flex-shrink:0}
+  .row:hover .acts{opacity:1}
+  .acts button{padding:2px 7px;font-size:11px}
+  #preview{flex:1;overflow:auto;padding:12px 16px;font-size:13px}
+  .g{margin-bottom:8px}
+  .g .m{color:var(--text)}
+  .g .s{color:var(--text-3);font-size:12px;padding-left:16px}
+  .g .tag{font-family:Consolas,monospace;font-size:10.5px;color:var(--text-3);margin-right:8px}
+  #drop{padding:40px;text-align:center;color:var(--text-3);font-size:13px;border:1.5px dashed var(--border);border-radius:var(--r);margin:24px;cursor:pointer}
+  #drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
+  .files{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .files span{font-size:12px;padding:3px 10px;border-radius:20px;background:var(--bg-3);color:var(--text-3);cursor:pointer}
+  .files span.on{background:var(--accent-soft);color:var(--accent)}
+  footer{padding:8px 18px;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);flex-shrink:0;display:flex;gap:14px;flex-wrap:wrap}
+  .callout{background:var(--bg-1);border-left:3px solid var(--accent);padding:8px 12px;border-radius:0 6px 6px 0;font-size:12px;color:var(--text-2);margin:10px 16px}
+  .callout b{color:var(--text)}
+  .empty{padding:28px;text-align:center;color:var(--text-3);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>LRC 双语歌词编辑器</h1>
+  <span class="sub">像改代码一样改歌词：标记主/译文、上下移动、改时间戳，右侧实时预览主题里的显示效果</span>
+  <div class="bar">
+    <button id="btnOpen">打开 .lrc</button>
+    <input type="file" id="fileInput" accept=".lrc,.txt" multiple hidden>
+    <button id="btnAuto" title="按机械规则重新分配主/译文（逐时间戳块）">一键识别</button>
+    <button id="btnAdd" title="在末尾添加一行（时间 = 最后一行 +3 秒），加完直接输入正文">＋ 添加行</button>
+    <button id="btnUndo">撤销</button>
+    <button id="btnRedo">重做</button>
+    <button id="btnClear" title="清空当前文件与文件列表，回到初始状态（不用刷新页面）">清空</button>
+    <span style="flex:1"></span>
+    <select id="selOut">
+      <option value="same">导出为：标准双语（原文在前、译文紧随同刻）→ 主题里选「标准双语」</option>
+      <option value="lag">导出为：兼容旧版（译文写在下一句原文时间戳上）→ 主题里选「兼容旧版」</option>
+    </select>
+    <button id="btnSave" class="primary">下载规范化文件</button>
+  </div>
+  <div class="files" id="files"></div>
+</header>
+
+<main>
+  <div id="left">
+    <div class="pane-head">
+      <span>歌词行（点角色徽标可切换，悬停行出现操作按钮）</span>
+      <span style="flex:1"></span>
+      <span id="stat"></span>
+    </div>
+    <div class="list" id="list"></div>
+    <div id="drop">把 .lrc 文件拖到这里，或点上方「打开 .lrc」（可多选，之后在文件列表里切换）</div>
+  </div>
+  <div id="right">
+    <div class="pane-head">
+      <span>主题里的显示效果（实时）</span>
+      <span style="flex:1"></span>
+      <span id="outstat"></span>
+    </div>
+    <div id="preview"></div>
+    <div class="callout">
+      <b>怎么用</b>：① 先「一键识别」，看右侧预览对不对；② 不对就手动改 —— 点行首角色徽标切 <b>主/译文</b>，
+      <b>↑ ↓</b> 调整位置（例如把译文挪到它真正的原文后面），<b>时间戳和正文都直接点着改</b>（回车提交 / Esc 取消），
+      可删掉多余行；③ 满意后选导出的写法并下载，覆盖原歌词文件（建议先备份），主题里选对应的「翻译对齐方式」即可。
+      <br>调完一个直接再拖一个文件进来就行，或者点 <b>清空</b> 回到初始状态 —— <b>都不用刷新页面</b>。
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>规则（机械，不做语义判断）：译文 = 挂在它上面最近一条「主歌词」后面；导出时「标准双语」把译文时间改成主歌词的时间，「兼容旧版」把译文改成下一句主歌词的时间。</span>
+</footer>
+<div id="dropHint">松开鼠标即可载入歌词文件</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var TAG_RE = /\[(\d{1,3}:\d{2}(?:[.:]\d{1,3})?)\]/g;
+  var PLACEHOLDER = /^[\s\-—–·…,，.。、/\\|*]+$/;
+  var CREDIT_RE = /^(?:作词|作詞|作曲|编曲|編曲|制作|製作|监制|監製|混音|母带|母帶|录音|錄音|吉他|贝斯|鼓|键盘|和声|出品|发行|發行|策划|统筹|翻译|校对|配唱|合声|词|詞|曲|OP|SP|ISRC|商务|企划|联合|鸣谢|Produced by|Arranged by|Written by|Composed by|Lyrics by|Mixed by|Mastered by|Backing Vocals)[^:：\n]{0,10}[:：]/;
+  var NOTICE_RE = /著作权|翻译作品|未经许可|以下歌词翻译/;
+  var LABEL_RE = /^[^:：\n]{1,16}[:：]$/;
+  var TOL = 10;
+
+  function pad(n,w){ n=String(n); while(n.length<w) n='0'+n; return n; }
+  function msToTag(ms){ var t=Math.max(0,Math.round(ms)); return pad(Math.floor(t/60000),2)+':'+pad(Math.floor(t%60000/1000),2)+'.'+pad(t%1000,3); }
+  function toMs(s){ var neg=false; s=String(s).trim(); if(s.charAt(0)==='-'){neg=true;s=s.slice(1);} var sec=0,p=s.split(':'); for(var i=0;i<p.length;i++) sec=sec*60+parseFloat(p[i]); var ms=Math.round(sec*1000); return neg?-ms:ms; }
+  var TITLE_RE = /^.{0,45}\s[-–]\s.{0,45}$/;   // 曲名行（只在前 3 行内判定，与主题一致）
+  function isCredit(t, idx){ return !!t && (LABEL_RE.test(t) || (t.length<=40 && CREDIT_RE.test(t)) || NOTICE_RE.test(t) || (idx < 3 && TITLE_RE.test(t))); }
+  function decodeBytes(buf){
+    try { return new TextDecoder('utf-8',{fatal:true}).decode(buf); } catch(e){}
+    var encs=['gb18030','big5','shift_jis','euc-kr'];
+    for (var i=0;i<encs.length;i++){ try { return new TextDecoder(encs[i],{fatal:true}).decode(buf); } catch(e){} }
+    return new TextDecoder('gb18030').decode(buf);
+  }
+
+  // 解析：元信息行单独存放（导出时原样写回）；正文行变成可编辑的 rows
+  // row = { t, text, role: 'main'|'sub'|'other' }
+  function parseLRC(text){
+    var head=[], rows=[], emptyTimes={};
+    if (text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+    var lines=text.split(/\r?\n/);
+    for (var i=0;i<lines.length;i++){
+      var line=lines[i].trim();
+      if(!line) continue;
+      TAG_RE.lastIndex=0;
+      var m, tags=[];
+      while((m=TAG_RE.exec(line))!==null) tags.push({t:toMs(m[1]),s:m.index,e:m.index+m[0].length});
+      if(!tags.length){ head.push(line); continue; }
+      var body=line;
+      for(var k=tags.length-1;k>=0;k--) body=body.slice(0,tags[k].s)+body.slice(tags[k].e);
+      body=body.replace(/\s+/g,' ').trim();
+      for(var j=0;j<tags.length;j++){
+        var t=tags[j].t;
+        if(!body||PLACEHOLDER.test(body)){ emptyTimes[t]=1; continue; }
+        rows.push({ t:t, text:body, role: isCredit(body, rows.length)?'other':'main', emptySlot:false });
+      }
+    }
+    rows.sort(function(a,b){ return a.t-b.t; });
+    for(var r=0;r<rows.length;r++) if(emptyTimes[rows[r].t]) rows[r].emptySlot=true;
+    return { head:head, rows:rows };
+  }
+
+  /* 一键识别：逐时间戳块套机械规则（与主题的「兼容旧版」完全一致）
+   *   块内有空槽 / 作品信息 → 块内正文都是主歌词
+   *   块内多行正文且首行是"上一句的译文"（前面已有主歌词）→ 首行标为 sub，其余 main
+   *   单行 → main
+   */
+  function autoAssign(rows){
+    var out=[], i=0;
+    while(i<rows.length && rows[i].role==='other'){ out.push(rows[i]); i++; }
+    var lastMain=-1, hasMain=false;
+    while(i<rows.length){
+      if(rows[i].role==='other'){ out.push(rows[i]); i++; continue; }
+      var j=i+1;
+      while(j<rows.length && Math.abs(rows[j].t-rows[i].t)<=TOL) j++;
+      var block=rows.slice(i,j), content=[], slotFilled=false;
+      for(var b=0;b<block.length;b++){
+        // emptySlot 只表示"该时间戳下有一个空槽"（译文的槽是空的），
+        // 不能把与空槽同刻的那行正文也排除掉 —— 否则 [空槽][原词] 这种块会变成"没有正文"
+        if(block[b].role==='other') slotFilled=true; else content.push(block[b]);
+        if(block[b].emptySlot) slotFilled=true;
+      }
+      if(content.length>=2 && !slotFilled && hasMain){
+        content[0].role='sub';
+        for(var c=1;c<content.length;c++) content[c].role='main';
+        hasMain=true;
+      } else {
+        for(var c2=0;c2<content.length;c2++) content[c2].role='main';
+        if(content.length) hasMain=true;
+      }
+      for(var b2=0;b2<block.length;b2++) out.push(block[b2]);
+      i=j;
+    }
+    return out;
+  }
+
+  // 分组：每个 sub 归属"它上面最近的一条 main"
+  function groupRows(rows){
+    var groups=[];
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i];
+      if(!r.text) continue;                        // 空行不参与分组（新增但还没填内容）
+      if(r.role==='other'){ groups.push({ main:r, subs:[], other:true }); continue; }
+      if(r.role==='main'||!groups.length||groups[groups.length-1].other){
+        groups.push({ main:r, subs:[] });
+      } else {
+        groups[groups.length-1].subs.push(r);
+      }
+    }
+    return groups;
+  }
+
+  // 导出：正文行按分组与目标写法输出；信息行原样保留
+  function exportText(state, mode){
+    var groups=groupRows(state.rows), rows=[], i, g, s, nt;
+    for(i=0;i<state.rows.length;i++){
+      var r0=state.rows[i];
+      if(!r0.text) continue;                        // 空行（新增但还没填内容）不写进文件
+      if(r0.role==='other') rows.push({ t:r0.t, text:r0.text });
+    }
+    for(g=0;g<groups.length;g++){
+      if(groups[g].other) continue;
+      rows.push({ t:groups[g].main.t, text:groups[g].main.text });
+      nt = (mode==='same') ? groups[g].main.t : (function(){
+        for(var k=g+1;k<groups.length;k++) if(!groups[k].other) return groups[k].main.t;
+        return groups[g].main.t;
+      })();
+      for(s=0;s<groups[g].subs.length;s++) rows.push({ t:nt, text:groups[g].subs[s].text });
+    }
+    rows.sort(function(a,b){ return a.t-b.t; });
+    var lines=state.head.slice();
+    for(i=0;i<rows.length;i++) lines.push('['+msToTag(rows[i].t)+']'+rows[i].text);
+    return '\uFEFF'+lines.join('\r\n')+'\r\n';
+  }
+
+  /* ---------- 界面 ---------- */
+  var state=null;                 // { name, head:[], rows:[] }
+  var files=[];                   // { name, buf }
+  var curIdx=-1;
+  var undoStack=[], redoStack=[];
+  var listEl=document.getElementById('list'), pvEl=document.getElementById('preview');
+  var dropEl=document.getElementById('drop'), filesEl=document.getElementById('files');
+  var statEl=document.getElementById('stat'), outStatEl=document.getElementById('outstat');
+
+  var pendingEditRow=null;        // 新增的行：渲染后自动进入就地编辑
+
+  // 就地编辑某一行（点正文或新增行后调用）。rowRef 用于新增行定位（可能已重排）
+  function startEdit(i, rowRef){
+    var r=rowRef||state.rows[i];
+    if(!r) return;
+    var rowEl=listEl.querySelector('.row[data-i="'+state.rows.indexOf(r)+'"]');
+    var txtEl=rowEl&&rowEl.querySelector('.txt');
+    if(!txtEl) return;
+    var inp=document.createElement('input');
+    inp.className='edit'; inp.value=r.text;
+    txtEl.replaceWith(inp);
+    inp.focus(); inp.select();
+    var done=false;
+    function commitEdit(){
+      if(done) return; done=true;
+      var v=inp.value.replace(/\s+/g,' ').trim();
+      if(v && v!==r.text){ snapshot(); r.text=v; }
+      render();
+    }
+    inp.addEventListener('keydown',function(ev){
+      if(ev.key==='Enter'){ ev.preventDefault(); commitEdit(); }
+      else if(ev.key==='Escape'){ ev.preventDefault(); done=true; render(); }
+    });
+    inp.addEventListener('blur',commitEdit);
+  }
+
+  // 在第 i 行下方插入一行（时间取与下一行的中点；插入后直接进入编辑）
+  function insertAfter(i){
+    var cur=state.rows[i], next=state.rows[i+1];
+    var t;
+    if(next && next.t-cur.t>20) t=Math.round((cur.t+next.t)/2);
+    else t=cur.t+3000;
+    var row={ t:t, text:'', role:'main', emptySlot:false };
+    snapshot();
+    state.rows.splice(i+1,0,row);
+    state.rows.sort(function(a,b){ return a.t-b.t; });
+    pendingEditRow=row;
+    commit();
+  }
+  // 末尾追加一行
+  function appendRow(){
+    var last=state.rows[state.rows.length-1];
+    var row={ t:(last?last.t+3000:0), text:'', role:'main', emptySlot:false };
+    snapshot();
+    state.rows.push(row);
+    pendingEditRow=row;
+    commit();
+  }
+
+  listEl.addEventListener('click', function(e){
+    var btn=e.target.closest('button'), row=e.target.closest('.row');
+    if(!row) return;
+    var i=+row.dataset.i, r=state.rows[i];
+    if(btn){
+      var act=btn.dataset.act;
+      if(act==='insert'){ insertAfter(i); return; }
+      snapshot();
+      if(act==='up'&&i>0){ state.rows[i]=state.rows[i-1]; state.rows[i-1]=r; }
+      else if(act==='down'&&i<state.rows.length-1){ state.rows[i]=state.rows[i+1]; state.rows[i+1]=r; }
+      else if(act==='tosub'){ r.role='sub'; }
+      else if(act==='tomain'){ r.role='main'; }
+      else if(act==='del'){ state.rows.splice(i,1); }
+      commit();
+      return;
+    }
+    var roleEl=e.target.closest('.role');
+    if(roleEl){
+      snapshot();
+      r.role = (r.role==='main') ? 'sub' : 'main';   // 主 ↔ 译文；信息行点一下即当作歌词行
+      commit();
+      return;
+    }
+    if(e.target.closest('.txt')){ startEdit(i, r); return; }
+  });
+
+
+  function snapshot(){
+    if(state) undoStack.push(JSON.stringify(state.rows));
+    if(undoStack.length>100) undoStack.shift();
+    redoStack.length=0;
+  }
+  function applySnapshot(json){
+    state.rows=JSON.parse(json);
+    render();
+  }
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  var ROLE_LABEL={ main:'主', sub:'译文', other:'信息' };
+
+  function render(){
+    if(!state){ listEl.innerHTML=''; pvEl.innerHTML='<div class="empty">还没有打开歌词文件</div>'; return; }
+    var html=[], i;
+    for(i=0;i<state.rows.length;i++){
+      var r=state.rows[i];
+      html.push('<div class="row" data-i="'+i+'">'+
+        '<input class="t" value="'+msToTag(r.t)+'" data-act="time" title="时间戳，可直接编辑">'+
+        '<span class="role '+r.role+'" data-act="role" title="点击切换：主 → 译文 → 主">'+ROLE_LABEL[r.role]+'</span>'+
+        '<span class="txt'+(r.role==='other'?' other':'')+'" data-act="edit">'+esc(r.text)+'</span>'+
+        '<span class="acts">'+
+          '<button data-act="up" title="上移">↑</button>'+
+          '<button data-act="down" title="下移">↓</button>'+
+          '<button data-act="insert" title="在这一行下方插入一行">＋</button>'+
+          (r.role==='main'?'<button data-act="tosub" title="挂到上面最近一条主歌词后面">设为译文</button>':'')+
+          (r.role==='sub'?'<button data-act="tomain" title="让它独立成一句">设为主歌词</button>':'')+
+          (r.role==='other'?'<button data-act="tomain" title="当作歌词行处理（不再算信息行）">视为歌词</button>':'')+
+          '<button data-act="del" title="删除该行">✕</button>'+
+        '</span></div>');
+    }
+    listEl.innerHTML=html.join('');
+    statEl.textContent=state.rows.length+' 行 · '+state.rows.filter(function(x){return x.role!=='other';}).length+' 条歌词';
+    renderPreview();
+    // 新增的行：渲染完直接进入就地编辑，省一次点击
+    if(pendingEditRow){
+      var pi=state.rows.indexOf(pendingEditRow), target=pendingEditRow;
+      pendingEditRow=null;
+      if(pi>=0) setTimeout(function(){ startEdit(pi, target); },0);
+    }
+  }
+
+  function renderPreview(){
+    var groups=groupRows(state.rows), html=[], i;
+    var subs=0;
+    for(i=0;i<groups.length;i++){
+      if(groups[i].other){ continue; }
+      html.push('<div class="g"><div class="m"><span class="tag">'+msToTag(groups[i].main.t)+'</span>'+esc(groups[i].main.text)+'</div>');
+      for(var s=0;s<groups[i].subs.length;s++){ subs++; html.push('<div class="s">'+esc(groups[i].subs[s].text)+'</div>'); }
+      html.push('</div>');
+    }
+    if(!html.length) html.push('<div class="empty">没有歌词行（可能整首都识别成了信息行）</div>');
+    pvEl.innerHTML=html.join('');
+    outStatEl.textContent=groups.filter(function(g){return !g.other;}).length+' 句 · '+subs+' 条译文';
+  }
+
+  function commit(){
+    render();
+  }
+
+  listEl.addEventListener('change', function(e){
+    if(e.target.dataset.act!=='time') return;
+    var row=e.target.closest('.row'), i=+row.dataset.i;
+    var t=toMs(e.target.value);
+    if(isNaN(t)){ render(); return; }
+    snapshot();
+    state.rows[i].t=t;
+    state.rows.sort(function(a,b){ return a.t-b.t; });
+    commit();
+  });
+
+  // 一键识别（对当前文件）
+  document.getElementById('btnAdd').addEventListener('click', function(){
+    if(!state) return;
+    appendRow();                                   // 末尾加一行，渲染后自动进入就地编辑
+  });
+  document.getElementById('btnAuto').addEventListener('click', function(){
+    if(!state) return;
+    snapshot();
+    state.rows=autoAssign(state.rows);
+    commit();
+  });
+  document.getElementById('btnUndo').addEventListener('click', function(){
+    if(!undoStack.length) return;
+    redoStack.push(JSON.stringify(state.rows));
+    applySnapshot(undoStack.pop());
+  });
+  document.getElementById('btnRedo').addEventListener('click', function(){
+    if(!redoStack.length) return;
+    undoStack.push(JSON.stringify(state.rows));
+    applySnapshot(redoStack.pop());
+  });
+  document.addEventListener('keydown', function(e){
+    if(!(e.ctrlKey||e.metaKey)) return;
+    if(e.key==='z'){ e.preventDefault(); document.getElementById('btnUndo').click(); }
+    if(e.key==='y'){ e.preventDefault(); document.getElementById('btnRedo').click(); }
+  });
+
+  document.getElementById('btnSave').addEventListener('click', function(){
+    if(!state) return;
+    var txt=exportText(state, document.getElementById('selOut').value);
+    var blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=state.name.replace(/\.(lrc|txt)$/i,'')+'.normalized.lrc';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },2000);
+  });
+  document.getElementById('selOut').addEventListener('change', renderPreview);
+
+  document.getElementById('btnOpen').addEventListener('click', function(){ document.getElementById('fileInput').click(); });
+  document.getElementById('fileInput').addEventListener('change', function(){ if(this.files.length) addFiles(this.files); this.value=''; });
+  // 清空：回到初始状态，接着拖下一个文件即可（不用刷新页面）
+  document.getElementById('btnClear').addEventListener('click', function(){
+    files=[]; curIdx=-1; state=null; undoStack=[]; redoStack=[];
+    dropEl.style.display='';
+    renderFiles(); render();
+  });
+  // 拖放：整个窗口都能接收（打开一个文件后也照样能拖下一个进来）
+  var dropHintEl=document.getElementById('dropHint');
+  var dragDepth=0;
+  document.addEventListener('dragenter', function(e){ e.preventDefault(); dragDepth++; if(state||files.length) dropHintEl.style.display='flex'; });
+  document.addEventListener('dragover', function(e){ e.preventDefault(); });
+  document.addEventListener('dragleave', function(e){ if(--dragDepth<=0){ dragDepth=0; dropHintEl.style.display='none'; } });
+  document.addEventListener('drop', function(e){
+    e.preventDefault(); dragDepth=0; dropHintEl.style.display='none';
+    if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  });
+  // 面板内的拖放（初始空状态）
+  ['dragenter','dragover'].forEach(function(t){ dropEl.addEventListener(t,function(e){ e.preventDefault(); dropEl.classList.add('over'); }); });
+  ['dragleave','drop'].forEach(function(t){ dropEl.addEventListener(t,function(e){ e.preventDefault(); dropEl.classList.remove('over'); }); });
+
+  function addFiles(fl){
+    var arr=Array.prototype.slice.call(fl), loaded=0;
+    arr.forEach(function(f){
+      var fr=new FileReader();
+      fr.onload=function(){
+        files.push({ name:f.name, buf:fr.result });
+        if(++loaded===arr.length){ renderFiles(); openFile(files.length-arr.length); }
+      };
+      fr.readAsArrayBuffer(f);
+    });
+  }
+  function renderFiles(){
+    filesEl.innerHTML=files.map(function(f,i){
+      return '<span data-i="'+i+'" class="'+(i===curIdx?'on':'')+'">'+esc(f.name)+'<b class="x" data-del="'+i+'" title="从列表移除">✕</b></span>';
+    }).join('');
+  }
+  filesEl.addEventListener('click', function(e){
+    var del=e.target.closest('[data-del]');
+    if(del){
+      var di=+del.dataset.del;
+      files.splice(di,1);
+      if(!files.length){ document.getElementById('btnClear').click(); return; }
+      openFile(Math.min(di, files.length-1));
+      return;
+    }
+    var sp=e.target.closest('span');
+    if(sp) openFile(+sp.dataset.i);
+  });
+  function openFile(i){
+    if(i<0||i>=files.length) return;
+    curIdx=i;
+    var parsed=parseLRC(decodeBytes(files[i].buf));
+    state={ name:files[i].name, head:parsed.head, rows:parsed.rows };
+    undoStack=[]; redoStack=[];
+    state.rows=autoAssign(state.rows);      // 打开就先按机械规则识别一遍，再让用户改
+    renderFiles(); render();
+    dropEl.style.display='none';
+  }
+  render();
+})();
+</script>
+</body>
+</html>

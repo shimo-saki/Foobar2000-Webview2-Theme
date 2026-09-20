@@ -720,14 +720,70 @@
     for (var g = 0; g < groups.length; g++) {
       var ms = groups[g].members;
       if (ms.length === 1) { out.push(ms[0]); continue; }
+      /* 归一阶段标记过"译文→原文"的同一时刻块：按标记配对。
+       * 例：天天天国地獄国.lrc 的 [00:12] 同刻有两行原文（天天天天天天天天 / 天天天国地獄国），
+       * 外加一句从 00:14 挂过来的译文（天天天国地狱国）；只按时间归组会变成
+       * "一行主 + 两行副"，看不出译文到底属于哪一句。按标记输出：
+       * 有译文挂靠的原文成组（原文主行、译文副行），其余原文行各自独立成行。
+       * 没有标记的块（同刻协议、单语言）走下面的原逻辑，行为完全不变。 */
+      var hasMark = false, q;
+      for (q = 0; q < ms.length; q++) { if (ms[q]._pair) { hasMark = true; break; } }
+      if (hasMark) {
+        var done = {};
+        for (q = 0; q < ms.length; q++) {
+          var ln = ms[q];
+          if (done[q] || ln._pair) continue;              // 有标记的是译文，随它的原文输出
+          var mysubs = [];
+          for (var r = 0; r < ms.length; r++) {
+            if (r === q || !ms[r]._pair) continue;
+            if (ms[r]._pair === ln) { var st = lineText(ms[r]); if (st) mysubs.push(st); done[r] = 1; }
+          }
+          if (!mysubs.length) { out.push(ln); continue; }  // 没有译文挂靠 → 独立成行
+          ln.subs = mysubs;
+          out.push(ln);
+        }
+        for (q = 0; q < ms.length; q++) {
+          if (!ms[q]._pair) continue;
+          var wasDone = done[q];
+          delete ms[q]._pair;                             // 标记用完即清，避免残留到缓存里
+          if (!wasDone) out.push(ms[q]);                  // 目标不在本块的异常情况：独立成行
+        }
+        continue;
+      }
       // 主行判定：同一时刻的第一行（文件里的自然顺序）为主，之后皆为副行。
       // 原实现用了"逐字行优先 / 含假名行优先 / 最后一行优先"三重启发式，
       // 在翻译写在前面的双语歌词中会把译文当主行，且隔行错位的中日歌词无法
       // 改善配对 —— 不如一个简单一致的可预测规则。
       var main = ms[0], subs = [];
-      for (var j = 1; j < ms.length; j++) {
+      // 主行判定：同一时刻的第一行（文件里的自然顺序）为主，但制作信息/占位行不能当主行
+      // —— 实测 Understand(Explicit).lrc 的 [00:00.555]Composed by：X 与第一句歌词同刻，
+      // 若按顺序取首行，歌词反被挤成副行。这里优先选一条真正的歌词行当主行。
+      for (var mi = 0; mi < ms.length; mi++) {
+        if (!_isCreditLine(lineText(ms[mi]), 99)) { main = ms[mi]; break; }
+      }
+      for (var j = 0; j < ms.length; j++) {
+        if (ms[j] === main) continue;
         var t = lineText(ms[j]);
         if (t) subs.push(t);
+      }
+      // 若所有行属于同一脚本族，说明"同一时间戳有两句原文"——例如粤语歌的
+      // 结尾句和重复副歌标在同一个时间上、或者不同角色同时唱了不同歌词。
+      // 这时按主副显示反而误导，不如拆成独立的行各自显示、各自高亮。
+      var allSame = subs.length >= 1;
+      if (allSame) {
+        var ma = _lineFamily(lineText(main));
+        for (var kk = 0; kk < subs.length && allSame; kk++) {
+          if (_lineFamily(subs[kk]) !== ma || ma === 'O') allSame = false;
+        }
+        // 同族同刻对有两种情况，用字符重合度机械区分（都是同一脚本族，看不出语言差别）：
+        //   · 译文字面与原文高度重合（日文汉字句 ↔ 中文句，如 天天天国地獄国 / 天天天国地狱国）→ 保持主副
+        //   · 两句无关原文（重叠人声、重复段，如 有了你… / 去到每一度…）→ 各自独立成行
+        // 两行完全相同的不拆：那是重复行（如 La-la-la 写了两遍），合在一起反而不冗余。
+        if (allSame && lineText(main) !== lineText(ms[1]) &&
+            _charSimilar(lineText(main), subs[0]) < 0.5) {
+          for (var si = 0; si < ms.length; si++) out.push(ms[si]);
+          continue;
+        }
       }
       main.subs = subs;
       out.push(main);
@@ -756,9 +812,11 @@
    * 的"首行即主行"规则，不重新引入任何"哪行才是主行"的猜测。
    * ============================================ */
 
-  var _BI_MIN_MATCH = 0.90;    // 关系式匹配率阈值（两协议实测 0% / 100%，阈值不敏感）
+  var _BI_MIN_MATCH = 0.90;    // 兜底判据（位置相位）的匹配率阈值：两协议实测 0% / 100%，阈值不敏感
   var _BI_MIN_SIDE = 3;        // 每侧最少行数
-  var _BI_MIN_COVER = 0.85;    // 两个脚本族合计占比门槛
+  var _BI_MIN_COVER = 0.60;    // 两个脚本族合计占比门槛（第三族=夹英文/数字的译文，占比可以较高）
+  var _BI_MIN_MATCH_MAIN = 0.55; // 主判据的关系式匹配率：回移已改成"逐组判定"，
+                                 // 少数派段落按各自形态处理、不会被误改，故门槛可放宽以覆盖混合写法文件
   var _BI_TOL_MS = 10;         // 时间戳相等容差
 
   // 片头信息行（只用于判定，不影响显示）：制作人员 / 版权声明 / 占位符 / 曲名行
@@ -769,11 +827,15 @@
   var _BI_PLACEHOLDER_RE = /^[\s\-—–·…,，.。、/\\|*]+$/;
   var _BI_TITLE_RE = /^.{0,45}\s[-–]\s.{0,45}$/;
   var _BI_CREDIT_MAX_LEN = 40;
+  // 说话人标签：对唱歌词里只写名字加冒号的行（"Charlie Puth："）。它和第一句原文同刻，
+  // 若不按信息行处理，会让"游程前的 p 是否落单"判断失败（实测 We Don't Talk Anymore.lrc）。
+  var _BI_LABEL_RE = /^[^:：\n]{1,16}[:：]$/;
 
   // 判定用信息行：先做便宜的前置过滤再上正则。制作信息那两条长正则只在
   // "短行且带冒号"（词：/編曲：/OP：…）上跑，普通歌词行直接跳过。
   // _BI_CREDIT_RE 自身要求结尾有冒号，故前置条件与它等价、不改判定结果。
   function _isCreditLine(text, idx) {
+    if (_BI_LABEL_RE.test(text)) return true;
     if (text.length <= _BI_CREDIT_MAX_LEN &&
         (text.indexOf(':') >= 0 || text.indexOf('：') >= 0) &&
         _BI_CREDIT_RE.test(text)) return true;
@@ -803,6 +865,32 @@
     return 'O';
   }
 
+  /* 两行的字符重合度（副行有多少比例的字符出现在主行里）。
+   * 用于同一脚本族的同刻对：译文字面通常与原文高度重合，无关的两句原文几乎不重合。 */
+  function _charSimilar(a, b) {
+    if (!a || !b) return 0;
+    var set = {}, i, ch;
+    for (i = 0; i < a.length; i++) set[a.charAt(i)] = 1;
+    var n = 0, hit = 0;
+    for (i = 0; i < b.length; i++) {
+      ch = b.charAt(i);
+      if (ch === ' ') continue;
+      n++;
+      if (set[ch]) hit++;
+    }
+    return n ? hit / n : 0;
+  }
+
+  /* 决定性语言标记：该行是否含假名/谚文。中文与英译里不会出现这两种字符，
+   * 所以"某一侧含标记、另一侧不含"时，含标记的一侧必是原文（用于锚点失效时定相位）。 */
+  function _hasKanaMark(s) {
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if ((c >= 0x3040 && c <= 0x30FF) || (c >= 0xAC00 && c <= 0xD7AF) || (c >= 0x1100 && c <= 0x11FF)) return true;
+    }
+    return false;
+  }
+
   /* 判定用主体：剔除信息行（不影响显示，只是不参与判定），并顺便算出
    *   - text[i]：该行的纯文本（去信息行判定已经算过，后面不再重复取）
    *   - fam[i] ：该行的脚本族（分侧/找同刻组/关系式/回移全部复用，不再重复分类）
@@ -821,30 +909,33 @@
     return { lines: body, text: text, fam: fam };
   }
 
-  /* 译文挂回它的原文（= 该译文之前最近的一条原文行）。side 为按下标取侧的查询函数。
-   * 两类"漏网行"在这里补上（实测语料 13 个文件、全是改善，其中 7 个抽查逐条核对）：
-   *   1) 非译文的第三族行（英文原词、英文副标题、韩文原词…）也参与 lastOrig 推进。
-   *      旧逻辑只认主族原文，于是"英文原文行 → 它的中文译文"里的译文会挂到更早的一句
-   *      日文原文上（God Knows....lrc：日文行同时挂走两条中文译文）。
-   *   2) 第三族行中"其实是译文"的（中英混排，如「无比炽热 Like a Bloody Stone」：
-   *      拉丁占比高被分到 L 族）按位置特征回移：与下一行同刻、脚本族不同、文字不同，
-   *      且下一行属于原文侧。旧逻辑完全跳过它们，那一组就变成 3 行、主行还是上一句译文。 */
-  function _shiftBack(body, from, side, origSide, fam, text, origFam) {
-    var lastOrig = null;
-    for (var i = from; i < body.length; i++) {
-      var s = side(i);
-      var isTrans = (s === 1 - origSide);
-      if (s < 0) {
-        var nx = body[i + 1];
-        if (nx && Math.abs(nx.time - body[i].time) <= _BI_TOL_MS &&
-            fam[i] !== fam[i + 1] && text[i] !== text[i + 1] &&
-            (!origFam || fam[i + 1] === origFam)) isTrans = true;
+  /* 延后写法的机械展开（自动识别判定为延后、或用户选"兼容旧版"时走这里）
+   *
+   * 规则完全机械，不做任何"哪句是原文"的推断：
+   *   按时间戳切成块，逐块处理：
+   *     · 块内有空槽（同一时间戳下有一行无正文/占位行）→ 译文槽是空的，块内正文是原文；
+   *     · 块内有多行正文且无空槽 → 首行是"上一句的译文"，挂到上一句；其余行是原文，
+   *       最后一行成为"当前原文"（供下一个块的译文挂靠）；
+   *     · 块内只有一行 → 它是原文。
+   * 空槽信息由 parseLRC 在解析时就标好（_emptySlot），所以不需要看脚本族/语言。
+   */
+  function _shiftBack(body, from) {
+    var lastOrig = null, i = from;
+    while (i < body.length) {
+      var j = i + 1;
+      while (j < body.length && Math.abs(body[j].time - body[i].time) <= _BI_TOL_MS) j++;
+      var first = body[i], many = (j - i) > 1;
+      if (many && !first._emptySlot && lastOrig) {
+        // 首行 = 上一句的译文 → 挂回上一句（标记下来，交给 groupSameTime 配对）
+        first.time = lastOrig.time;
+        first.startTime = lastOrig.time;
+        if (first.words && first.words.length) first.words[0].startTime = lastOrig.time;
+        first._pair = lastOrig;
+        lastOrig = body[j - 1];        // 块内其余行是原文，最后一个成为当前原文
+      } else {
+        lastOrig = body[j - 1];        // 单行块 / 空槽块 → 块内最后一行就是当前原文
       }
-      if (!isTrans) { lastOrig = body[i]; continue; }
-      if (!lastOrig) continue;
-      body[i].time = lastOrig.time;
-      body[i].startTime = lastOrig.time;
-      if (body[i].words && body[i].words.length) body[i].words[0].startTime = lastOrig.time;
+      i = j;
     }
   }
 
@@ -878,31 +969,60 @@
     }
     if (runA < 0) return 'unknown';       // 没有"跨语言同刻组" → 判不出（两侧语言不明或同一语言）
     if (runA === 0) return 'same';        // 主体首行就是游程首行（之前只有信息行）→ 同刻协议
-    var pSide = side(runA - 1), aSide = side(runA), bSide = side(runA + 1);
-    if (pSide !== bSide) {
-      // p 与游程首行同侧 → R 形如「本句原文 + 本句译文」→ 确认同刻；否则（p 不属于主族）判不出
-      return pSide === aSide ? 'same' : 'unknown';
+    /* 相位判定（两级）
+     * 1) 锚点：游程前紧邻的一行 p。p 与游程第二行同侧 → 延后（p 是原文，首行是它的译文）；
+     *    p 与游程首行同侧 → 同刻；p 落在第三族（英文原文、夹英文的混排行）则锚点失效。
+     * 2) 决定性语言标记：一侧含假名/谚文、另一侧不含 → 含的那一侧必是原文
+     *    （中文/英译里不会出现假名、谚文）。用于"整行全汉字的日文原文与中文译文同族、
+     *    分侧失效"的场景 —— 实测 天天天国地獄国、Blessing 这类文件锚点会失效甚至判反，
+     *    但含假名的行足以定侧。 */
+    var origSide = -1;
+    var pIdx = runA - 1;
+    // p 必须是"落单行"：它得是等到译文的那句原文。若 p 与邻行同刻（它自己已经配对，
+    // 说明它是某句的译文或译文槽里的行），它不能当相位锚点 —— 实测工具规范化后的文件
+    // （[00:14]Open sesame / [00:14]芝麻开门）会因此被判反相位，然后被二次改写。
+    var pLone = pIdx >= 0 &&
+      !(pIdx > 0 && Math.abs(body[pIdx].time - body[pIdx - 1].time) <= _BI_TOL_MS) &&
+      !(pIdx + 1 < body.length && Math.abs(body[pIdx + 1].time - body[pIdx].time) <= _BI_TOL_MS);
+    if (pLone && side(pIdx) >= 0) {
+      var pSide = side(pIdx), aSide = side(runA), bSide = side(runA + 1);
+      if (pSide !== bSide) return pSide === aSide ? 'same' : 'unknown';
+      origSide = bSide;
+    } else {
+      var kanaOn = [false, false];
+      for (i = 0; i < body.length; i++) {
+        var si = side(i);
+        if (si >= 0 && _hasKanaMark(text[i])) kanaOn[si] = true;
+      }
+      if (kanaOn[0] && !kanaOn[1]) origSide = 0;
+      else if (kanaOn[1] && !kanaOn[0]) origSide = 1;
+      if (origSide < 0) return 'unknown';
     }
-    var first = runA - 1;
-    var origSide = bSide;
-    // 关系式：每条译文行的时间戳 == 紧随其后的原文行的时间戳。
-    // "紧随其后的原文行"用一次反向扫描预先算出（原实现每行内层再扫一遍，最坏 O(n²)）
-    var nextOrig = new Array(body.length), nx = -1;
-    for (i = body.length - 1; i >= first; i--) {
-      nextOrig[i] = nx;
-      if (side(i) === origSide) nx = i;
+    var first = 0;
+    var transSide = 1 - origSide;
+    /* 判定依据：跨语言同刻组的"形态比例" —— 组首行在译文侧 = 延后写法（译文写在了
+     * 下一句原文的时间上）；组第二行在译文侧 = 同刻写法。
+     *
+     * 这里刻意不用"逐行匹配率"：那个口径把整首歌里所有译文侧的行都算进分母，
+     * 于是"部分段落才有译文"的文件（粤语歌夹英文段落、日语歌夹英文副歌等）分数被
+     * 稀释到阈值以下而放弃处理（实测 Everywhere We Go 19%、以父之名 10%）。
+     * 按组统计只看真正成对的地方，不受未翻译段落影响；而回移本身已经是逐组判定，
+     * 少数派段落不会被误改，故比例门槛可以取得较低。 */
+    var crossRuns = 0, lagRuns = 0;
+    for (i = first; i + 1 < body.length; i++) {
+      if (Math.abs(body[i].time - body[i + 1].time) > _BI_TOL_MS) continue;
+      var sa = side(i), sb = side(i + 1);
+      if (sa < 0 && sb < 0) continue;               // 两行都在第三族：无法归类
+      if (sa === transSide && sb === transSide) continue;  // 两行都是译文：不是译文对
+      crossRuns++;
+      if (sa === transSide && sb !== transSide) lagRuns++;  // 组首行是译文、次行不是 → 延后写法
     }
-    var total = 0, matched = 0;
-    for (i = first; i < body.length; i++) {
-      if (side(i) !== 1 - origSide) continue;
-      total++;
-      var nxt = nextOrig[i];
-      if (nxt < 0) { if (i === body.length - 1) matched++; continue; }   // 末句译文无后继原文
-      if (Math.abs(body[i].time - body[nxt].time) <= _BI_TOL_MS) matched++;
-    }
-    if (total < _BI_MIN_SIDE) return 'unknown';
-    if (matched / total < _BI_MIN_MATCH) return 'unknown';
-    _shiftBack(body, first, side, origSide, fam, text, origSide === 0 ? famA : famB);
+    if (crossRuns < _BI_MIN_SIDE) return 'unknown';
+    var lagRatio = lagRuns / crossRuns;
+    // 绝大多数组都是"同刻形态"（首行不是译文）→ 确认同刻协议，不改写
+    if (lagRatio <= 0.15) return 'same';
+    if (lagRatio < _BI_MIN_MATCH_MAIN) return 'unknown';
+    _shiftBack(body, 0);
     return 'delay';
   }
 
@@ -953,25 +1073,12 @@
    * King Gnu-AIZO 这类）。仍保留两条最小护栏：两侧脚本族相同的组不改（那是同一语言
    * 的两行，不构成译文对），以及组内两行文字相同的组不改（纯重复行）。
    */
-  function _forceDelayShift(body, text, fam) {
-    var lastOrig = null, hit = 0, i;
-    for (i = 0; i < body.length; i++) {
-      var l = body[i], nx = body[i + 1];
-      if (nx && Math.abs(l.time - nx.time) <= _BI_TOL_MS) {
-        var fa = fam[i], fb = fam[i + 1];
-        if (lastOrig && text[i] !== text[i + 1] && (fa === 'O' || fb === 'O' || fa !== fb)) {
-          l.time = lastOrig.time;
-          l.startTime = lastOrig.time;
-          if (l.words && l.words.length) l.words[0].startTime = lastOrig.time;
-          hit++;
-        }
-        lastOrig = nx;      // 组的第二行是"本句原文"
-        i++;
-      } else {
-        lastOrig = l;       // 落单行按原文处理（未翻译的原文/背景和声等）
-      }
-    }
-    return hit > 0;
+  function _forceDelayShift(body) {
+    var before = -1, i;
+    for (i = 0; i < body.length; i++) if (body[i]._pair) break;
+    _shiftBack(body, 0);                     // 与自动识别同一条机械规则，保证两种入口行为一致
+    for (i = 0; i < body.length; i++) if (body[i]._pair) return true;
+    return false;
   }
 
   /* 归一入口：mode = 'auto' | 'same'（不改写） | 'offset'（强制延后）
@@ -995,7 +1102,7 @@
     if (mode === 'same') { lyric.lastVerdict = 'same'; return false; }
     var b = _bilingualBody(lines), body = b.lines;
     if (mode === 'offset') {
-      if (_forceDelayShift(body, b.text, b.fam)) { lyric.lastVerdict = 'delay'; return true; }
+      if (_forceDelayShift(body)) { lyric.lastVerdict = 'delay'; return true; }
       lyric.lastVerdict = 'unknown';
       return false;
     }
@@ -1022,7 +1129,7 @@
     var clean = lrc.replace(/\[(?:ti|ar|al|by|re|ve|length|au|la|language|offset|ts|ml|ver)\s*:\s*[^\]]*\]/gi, '');
 
     var rawLines = clean.split(/\r?\n/);
-    var lines = [];
+    var lines = [], emptyTimes = {};
 
     for (var i = 0; i < rawLines.length; i++) {
       var raw = rawLines[i].trim();
@@ -1037,7 +1144,12 @@
       text = text.replace(/\s+/g, ' ').trim();
       // 同时移除残留的元数据标签
       text = text.replace(/\[[a-z]+:[^\]]*\]/gi, '').replace(/\s+/g, ' ').trim();
-      if (!text) continue;
+      // 空槽：该时间戳下有一行没有正文（或只有占位符）—— 延后写法里它表示"这句没有译文"，
+      // 是机械展开时判断"块内首行是译文还是原文"的唯一依据，必须保留（不能直接丢弃）
+      if (!text || _BI_PLACEHOLDER_RE.test(text)) {
+        for (var et = 0; et < tags.length; et++) emptyTimes[tags[et].time + offsetMs] = 1;
+        continue;
+      }
       // 背景和声检测
       var bgMatch = text.match(/^[(（](.+)[)）]$/);
       var isBG = !!bgMatch;
@@ -1057,6 +1169,10 @@
     }
     // 排序
     lines.sort(function(a, b) { return a.time - b.time; });
+    // 把空槽标记写到该时间戳的行上（供机械展开判断块内首行是译文还是原文）
+    for (var em = 0; em < lines.length; em++) {
+      if (emptyTimes[lines[em].time]) lines[em]._emptySlot = true;
+    }
     // 计算 endTime（取下一行 startTime；在归一之前做，保持原文行拿到真实的下一句时间）
     for (var k = 0; k < lines.length - 1; k++) {
       lines[k].endTime = lines[k+1].startTime;
