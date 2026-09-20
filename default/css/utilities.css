@@ -38,7 +38,7 @@
   animation:ctx-in 0.16s var(--ease);
   /* 菜单过长时允许滚轮滚动，避免底部项（如“在线获取标签”）超出视口被挡住 */
   max-height:min(52vh, 460px, calc(100vh - 20px));
-  overflow-y:auto;overscroll-behavior:contain;
+  overflow-x:clip;overflow-y:auto;overscroll-behavior:contain;
   scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.22) transparent;
 }
 .ctx-menu::-webkit-scrollbar, .ctx-submenu::-webkit-scrollbar{width:8px}

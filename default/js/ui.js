@@ -204,10 +204,10 @@
     el.style.maxHeight = `${maxH}px`;
     el.classList.remove('hidden', 'removing');
 
-    const { width: w, height: h } = el.getBoundingClientRect();
-    const offsetW = el.classList.contains('ctx-submenu') ? (el.parentNode.getBoundingClientRect().width || 0) : 0;
-    const left = Math.max(MARGIN, (refX + gap + w > W - MARGIN) ? refX - offsetW - w - -gap : refX + gap);
-    const top = Math.max(MARGIN, (refY + h > H - MARGIN) ? Math.min(refY - h - gap, H - h - MARGIN) : refY);
+    const w = el.offsetWidth, h = el.offsetHeight;
+    const offsetW = el.matches('.ctx-submenu') ? el.parentNode.offsetWidth : 0;
+    const left = Math.max(MARGIN, (refX + w > W - MARGIN) ? refX - offsetW - w : refX + gap);
+    const top = Math.max(MARGIN, Math.min(refY, H - h - MARGIN));
 
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
@@ -224,7 +224,7 @@
         .filter(k => item[k])
         .join(' ');
 
-      if (item?.submenu?.length) return `
+      if (item.submenu?.length) return `
         <div class="ctx-menu-item ${classes}" data-path="${JSON.stringify(path)}">
           ${item.icon || ''}
           <span>${esc(item.label)}</span>
