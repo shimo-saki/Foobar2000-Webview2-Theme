@@ -826,7 +826,7 @@
     var blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
     var a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
-    a.download=state.name.replace(/\.(lrc|txt)$/i,'')+'.normalized.lrc';
+    a.download=state.name.replace(/\.(lrc|txt)$/i,'')+'.lrc';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function(){ URL.revokeObjectURL(a.href); },2000);
   });
