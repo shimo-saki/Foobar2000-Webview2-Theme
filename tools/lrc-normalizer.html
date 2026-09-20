@@ -95,6 +95,14 @@
   .chk input{accent-color:var(--accent);cursor:pointer}
   .row.tap{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
   .row.tap:hover{background:var(--accent-soft)}
+  /* 逐字打轴：字/词条 */
+  #tapWords{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px}
+  #tapWords:empty{display:none}
+  #tapWords .w{white-space:pre-wrap;font-size:17px;line-height:1.55;padding:1px 5px;border-radius:5px;background:var(--bg-3);color:var(--text-3)}
+  #tapWords .w.done{background:transparent;color:var(--text-2)}
+  #tapWords .w.cur{background:var(--accent);color:#fff;font-weight:700}
+  .wstat{font-family:Consolas,monospace;font-size:10.5px;color:var(--text-3);margin-left:6px}
+  .wstat.ok{color:var(--main)}
   /* 打轴页的歌词列表：只读，点一行 = 从那一句开始打 */
   #tapList .row{cursor:pointer;align-items:baseline}
   #tapList .row.cur{background:var(--bg-1)}
@@ -139,6 +147,7 @@
     <button id="btnUndo">撤销</button>
     <button id="btnRedo">重做</button>
     <button id="btnClear" title="清空当前文件与文件列表，回到初始状态（不用刷新页面）">清空</button>
+    <label class="chk" id="lblWord" title="逐字歌词：打轴时逐字/逐词打，导出 [mm:ss.xx]<mm:ss.xx>字… 增强型 LRC；译文行不打字轴，按同刻整句写"><input type="checkbox" id="chkWord"> 逐字歌词</label>
     <span style="flex:1"></span>
     <select id="selOut">
       <option value="same">导出为：标准双语（原文在前、译文紧随同刻）→ 主题里选「标准双语」</option>
@@ -206,22 +215,29 @@
       <div class="tap-top">
         <span class="badge">打轴</span>
         <span id="tapProgress">—</span>
+        <span id="tapMode" class="badge" style="display:none;background:var(--bg-3);color:var(--text-2)">逐字</span>
         <span style="flex:1"></span>
         <label class="chk" title="打轴时跳过译文行：只给原文打时间戳（译文行的时间在导出时按所选写法统一写）"><input type="checkbox" id="chkSkipSub" checked> 跳过译文行</label>
       </div>
       <div class="tap-cur empty" id="tapCur">还没有歌词行</div>
+      <div id="tapWords"></div>
       <div class="tap-next" id="tapNext"></div>
       <div class="tap-row">
         <button id="btnTap" class="primary big" title="按空格 / 回车，或直接点这个按钮">打轴（空格）</button>
-        <button id="btnPlayHere" title="回到目标行前 1.2 秒开始播放（S）">从此行播</button>
+        <button id="btnPlayHere" title="回到当前字（或目标行）前 1.2 秒开始播放（S）">从此行播</button>
         <button id="btnTapUndo" title="撤销上一次打轴（Backspace）">撤销打轴</button>
         <button id="btnFirstLine" title="把目标回到第一句，从头重新打（已打的时间戳不会自动清掉，需要清空点「全部归零」）">回到第一句</button>
-        <button id="btnZeroAll" title="把所有歌词行的时间戳都设为 00:00.000（可撤销），适合从头重新打一份">全部归零</button>
+        <button id="btnZeroAll" title="把所有歌词行（含逐字时间）都归零（可撤销），适合从头重新打一份">全部归零</button>
       </div>
-      <div class="tap-hint">
+      <div class="tap-hint" id="hintWhole">
         <b>空格 / 回车 / 点按钮</b> = 给目标行打上当前播放时间，打完自动跳下一句 · <b>Backspace</b> = 撤销上一次 ·
         <b>P</b> = 播放/暂停 · <b>← →</b> = ∓3 秒（按住 Shift 微调 0.5 秒）· <b>S</b> = 从此行播（回到该句前 1.2 秒）<br>
         下面的歌词列表<b>点任意一行 = 从那一句开始打</b>（重打某几句时用）；译文行在勾选「跳过译文行」时不会被停下来，会自动跳过。
+      </div>
+      <div class="tap-hint" id="hintWord" style="display:none">
+        <b>逐字模式</b>：给每个字 / 每个词按一次 <b>空格</b>，打在它开始唱的时刻 —— 打完最后一个字自动跳下一句，译文行整句跳过。<br>
+        <b>Backspace</b> = 退回上一个字 · <b>S</b> = 从当前字前 1.2 秒播 · 上排工具条的 <b>逐字歌词</b> 勾选框开关本模式（勾上后导出为
+        <code>[mm:ss.xx]&lt;mm:ss.xx&gt;字…</code> 增强型 LRC，译文行按同刻整句写）。只想整句打也行：每句只按一次，那行就按整句导出。
       </div>
     </div>
     <div class="pane-head">
@@ -283,6 +299,94 @@
     return new TextDecoder('gb18030').decode(buf);
   }
 
+  /* ---------- 逐字歌词（ESLyric 增强型 LRC）----------
+   * 写法：[00:12.34]<00:12.34>夜<00:12.60>色<00:12.85>渐<00:13.10>浓
+   * 标记在词前 = 该词的开始时间；行首方括号是整行时间（主题也认这种）。
+   * 译文行不打字轴，按同刻整句写（主题会把它归到同刻的主歌词组里）。
+   */
+  var WORD_TAG_RE = /<(\d{1,3}:\d{2}(?:[.:]\d{1,3})?)>/g;
+  var HAS_WORD_TAG = /<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>/;
+  function isCJK(ch){
+    var c=ch.charCodeAt(0);
+    return (c>=0x3400&&c<=0x9FFF)||(c>=0xF900&&c<=0xFAFF)||(c>=0x3040&&c<=0x30FF)||(c>=0xAC00&&c<=0xD7AF);
+  }
+  // 分词：汉字/假名/谚文一字一个词，拉丁字母数字按空格分词（空格跟着前一个词，保证拼回去和原文一模一样）
+  function splitWords(text){
+    var toks=[], buf='', i, ch;
+    for(i=0;i<text.length;i++){
+      ch=text.charAt(i);
+      if(isCJK(ch)){
+        if(buf){ if(buf.replace(/\s/g,'')) toks.push(buf); else if(toks.length) toks[toks.length-1]+=buf; else toks.push(buf); buf=''; }
+        toks.push(ch);
+      } else if(/\s/.test(ch)){
+        buf+=ch;
+        if(buf.replace(/\s/g,'')){ toks.push(buf); buf=''; }      // 空格跟在词后面
+      } else buf+=ch;
+    }
+    if(buf) toks.push(buf);
+    return toks.length?toks:[text];
+  }
+  // 解析逐字正文：返回 { text, words:[{t,text}] }；没有逐字标记时 words=null（当普通行）
+  function parseWordLine(body, lineTime){
+    if(!HAS_WORD_TAG.test(body)) return { text:body, words:null };
+    var out=[], m, pos=0, pending=null;
+    WORD_TAG_RE.lastIndex=0;
+    while((m=WORD_TAG_RE.exec(body))!==null){
+      var chunk=body.slice(pos, m.index);
+      if(chunk) out.push({ t:pending, text:chunk });
+      pending=toMs(m[1]);
+      pos=m.index+m[0].length;
+    }
+    var tail=body.slice(pos);
+    if(tail) out.push({ t:pending, text:tail });
+    if(out.length<=1) return { text:out.length?out[0].text:body, words:null };
+    var text='';
+    for(var i=0;i<out.length;i++) text+=out[i].text;
+    return { text:text, words:out };
+  }
+  // 导出用：把词时间拼回 [行时间]<词时间>词… ；没有词时间的词并进前一个词；整行都没时间就返回 null（写纯文本）
+  function wordLineText(row){
+    var words=row.words;
+    if(!words || words.length<2) return null;
+    var chunks=[], last=null, i, t;
+    for(i=0;i<words.length;i++){
+      t=(words[i].t!=null)?words[i].t:last;
+      if(t==null) continue;
+      if(last!==null && t===last && chunks.length) chunks[chunks.length-1].text+=words[i].text;
+      else chunks.push({ t:t, text:words[i].text });
+      last=t;
+    }
+    if(!chunks.length) return null;
+    var out='';
+    for(i=0;i<chunks.length;i++) out+='<'+msToTag(chunks[i].t)+'>'+chunks[i].text;
+    return out;
+  }
+  function wordCount(row){ return (row.words&&row.words.length)?row.words.length:0; }
+  function wordDone(row){ 
+    if(!row.words) return 0;
+    var n=0;
+    for(var i=0;i<row.words.length;i++) if(row.words[i].t!=null) n++;
+    return n;
+  }
+  function ensureWords(row){
+    if(!row.words || !row.words.length){
+      var toks=splitWords(row.text);
+      row.words=[];
+      for(var i=0;i<toks.length;i++) row.words.push({ t:null, text:toks[i] });
+    }
+    return row.words;
+  }
+  // 只有逐字标记、没有行首 [mm:ss.xx] 的行 → 用第一个词的时间当行时间
+  function wordOnlyLine(line){
+    if(!HAS_WORD_TAG.test(line)) return null;
+    var wo=parseWordLine(line, 0);
+    if(!wo.words) return null;
+    var ft=null;
+    for(var q=0;q<wo.words.length;q++) if(wo.words[q].t!=null){ ft=wo.words[q].t; break; }
+    if(ft==null) return null;
+    return { t:ft, text:wo.text, role:'main', emptySlot:false, words:wo.words };
+  }
+
   // 解析：元信息行单独存放（导出时原样写回）；正文行变成可编辑的 rows
   // row = { t, text, role: 'main'|'sub'|'other' }
   function parseLRC(text){
@@ -295,14 +399,24 @@
       TAG_RE.lastIndex=0;
       var m, tags=[];
       while((m=TAG_RE.exec(line))!==null) tags.push({t:toMs(m[1]),s:m.index,e:m.index+m[0].length});
-      if(!tags.length){ head.push(line); continue; }
+      if(!tags.length){
+        var wo=wordOnlyLine(line);            // 少数文件只写 <mm:ss.xx> 逐字标记、没有行首时间标签
+        if(wo){ rows.push(wo); continue; }
+        head.push(line); continue;
+      }
       var body=line;
       for(var k=tags.length-1;k>=0;k--) body=body.slice(0,tags[k].s)+body.slice(tags[k].e);
-      body=body.replace(/\s+/g,' ').trim();
+      var wl=parseWordLine(body.replace(/\s+/g,' ').trim(), 0);   // 逐字行：行时间下面按标签补
+      body=wl.text;
       for(var j=0;j<tags.length;j++){
         var t=tags[j].t;
         if(!body||PLACEHOLDER.test(body)){ emptyTimes[t]=1; continue; }
-        rows.push({ t:t, text:body, role: isCredit(body, rows.length)?'other':'main', emptySlot:false });
+        var row={ t:t, text:body, role: isCredit(body, rows.length)?'other':'main', emptySlot:false };
+        if(wl.words){
+          row.words=[];
+          for(var wi=0;wi<wl.words.length;wi++) row.words.push({ t:(wl.words[wi].t!=null?wl.words[wi].t:t), text:wl.words[wi].text });
+        }
+        rows.push(row);
       }
     }
     rows.sort(function(a,b){ return a.t-b.t; });
@@ -325,6 +439,8 @@
       if(!tags.length){
         // [ti:][ar:][offset:] 这类元信息行照样进文件头（导出时原样写回）
         if(META_RE.test(line)){ head.push(line); continue; }
+        var wo=wordOnlyLine(line);            // 只有逐字标记的行
+        if(wo){ rows.push(wo); continue; }
         // 没有时间戳：制作信息行当信息行，其它行时间戳给 0 等打轴
         if(isCredit(line, rows.length)) rows.push({ t:0, text:line, role:'other', emptySlot:false });
         else rows.push({ t:0, text:line, role:'main', emptySlot:false });
@@ -332,10 +448,17 @@
       }
       var body=line;
       for(var k=tags.length-1;k>=0;k--) body=body.slice(0,tags[k].s)+body.slice(tags[k].e);
-      body=body.replace(/\s+/g,' ').trim();
+      var wl=parseWordLine(body.replace(/\s+/g,' ').trim(), 0);   // 逐字行：词时间来自 <mm:ss.xx>
+      body=wl.text;
       if(!body||PLACEHOLDER.test(body)) continue;
       for(var j=0;j<tags.length;j++){
-        rows.push({ t:tags[j].t, text:body, role: isCredit(body, rows.length)?'other':'main', emptySlot:false });
+        var t=tags[j].t;
+        var row={ t:t, text:body, role: isCredit(body, rows.length)?'other':'main', emptySlot:false };
+        if(wl.words){
+          row.words=[];
+          for(var wi=0;wi<wl.words.length;wi++) row.words.push({ t:(wl.words[wi].t!=null?wl.words[wi].t:t), text:wl.words[wi].text });
+        }
+        rows.push(row);
       }
     }
     return { head:head, rows:rows };
@@ -347,6 +470,7 @@
    *   单行 → main
    */
   function autoAssign(rows){
+    for(var q=0;q<rows.length;q++) if(rows[q].words && rows[q].words.length) return autoAssignWord(rows);
     var out=[], i=0;
     while(i<rows.length && rows[i].role==='other'){ out.push(rows[i]); i++; }
     var lastMain=-1, hasMain=false;
@@ -375,9 +499,28 @@
     return out;
   }
 
+  /* 逐字歌词（ESLyric）：同刻块里带 <mm:ss.xx> 逐字标记的那行是主歌词，其它行是同刻译文。
+     逐字文件没有「译文晚一行」的写法（时间戳就是同刻分组），所以不能用上面那套相位规则。 */
+  function autoAssignWord(rows){
+    var out=[], i=0;
+    while(i<rows.length){
+      var j=i+1;
+      while(j<rows.length && Math.abs(rows[j].t-rows[i].t)<=TOL) j++;
+      var block=rows.slice(i,j), pick=-1, b;
+      for(b=0;b<block.length;b++){
+        if(block[b].role==='other') continue;
+        if(block[b].words && block[b].words.length){ pick=b; break; }
+        if(pick<0) pick=b;
+      }
+      for(b=0;b<block.length;b++) if(block[b].role!=='other') block[b].role=(b===pick)?'main':'sub';
+      for(b=0;b<block.length;b++) out.push(block[b]);
+      i=j;
+    }
+    return out;
+  }
+
   // 分组：每个 sub 归属"它上面最近的一条 main"；带行号（导出时用兜底时间要按下标取）
-  function groupRows(rows){
-    var groups=[];
+  function groupRows(rows){    var groups=[];
     for(var i=0;i<rows.length;i++){
       var r=rows[i];
       if(!r.text) continue;                        // 空行不参与分组（新增但还没填内容）
@@ -392,10 +535,13 @@
   }
 
   // 导出：按列表顺序逐行取，最后按时间戳升序排列（只重打某一句时也能得到合法的时间轴文件）；
-  // 时间相同的行保持列表里的先后（主歌词在译文前面）
+  // 时间相同的行保持列表里的先后（主歌词在译文前面）。
+  // 逐字模式：主歌词写 [行时间]<词时间>词…；译文行不打字轴，按同刻整句写
   function exportText(state, mode){
     var lines=state.head.slice(), i, g, s;
     var groups=groupRows(state.rows), subTime=[];
+    var word=wordMode();
+    if(word) mode='same';
     for(g=0;g<groups.length;g++){
       if(groups[g].other) continue;
       var nt=(mode==='same') ? groups[g].main.t : nextMainTime(groups,g);
@@ -406,7 +552,8 @@
       var r=state.rows[i];
       if(!r.text) continue;                        // 空行（新增但还没填内容）不写进文件
       var t=(r.role==='sub' && subTime[i]!=null) ? subTime[i] : r.t;
-      out.push({ t:t, text:r.text });
+      var body=(word && r.role!=='sub') ? (wordLineText(r)||r.text) : r.text;
+      out.push({ t:t, text:body });
     }
     out.sort(function(a,b){ return a.t-b.t; });
     for(i=0;i<out.length;i++) lines.push('['+msToTag(out[i].t)+']'+out[i].text);
@@ -563,10 +710,15 @@
     for(var i=0;i<state.rows.length;i++){
       var r=state.rows[i], cls='row';
       if(i===target) cls+=' tap'; else if(target>=0 && i<target) cls+=' past';
+      var ws='';
+      if(wordMode() && r.role!=='sub' && wordCount(r)>1){
+        var dn=wordDone(r);
+        ws='<span class="wstat'+(dn>=wordCount(r)?' ok':'')+'">'+dn+'/'+wordCount(r)+'字</span>';
+      }
       html.push('<div class="'+cls+'" data-i="'+i+'">'+
         '<span class="t2">'+msToTag(r.t)+'</span>'+
         '<span class="role '+r.role+'">'+ROLE_LABEL[r.role]+'</span>'+
-        '<span class="txt'+(r.role==='other'?' other':'')+'">'+esc(r.text)+'</span></div>');
+        '<span class="txt'+(r.role==='other'?' other':'')+'">'+esc(r.text)+'</span>'+ws+'</div>');
     }
     tapListEl.innerHTML=html.join('');
   }
@@ -576,7 +728,8 @@
     var subs=0;
     for(i=0;i<groups.length;i++){
       if(groups[i].other){ continue; }
-      html.push('<div class="g"><div class="m"><span class="tag">'+msToTag(groups[i].main.t)+'</span>'+esc(groups[i].main.text)+'</div>');
+      var wm=(wordMode() && wordCount(groups[i].main)>1)?'<span class="wstat'+(wordDone(groups[i].main)>=wordCount(groups[i].main)?' ok':'')+'">逐字 '+wordDone(groups[i].main)+'/'+wordCount(groups[i].main)+'</span>':'';
+      html.push('<div class="g"><div class="m"><span class="tag">'+msToTag(groups[i].main.t)+'</span>'+esc(groups[i].main.text)+wm+'</div>');
       for(var s=0;s<groups[i].subs.length;s++){ subs++; html.push('<div class="s">'+esc(groups[i].subs[s].r.text)+'</div>'); }
       html.push('</div>');
     }
@@ -595,7 +748,9 @@
     var t=toMs(e.target.value);
     if(isNaN(t)){ render(); return; }
     snapshot();
-    state.rows[i].t=t;                      // 只改时间，不重排行序（列表顺序 = 文件顺序）
+    var r=state.rows[i], d=t-r.t;
+    r.t=t;                                  // 只改时间，不重排行序（列表顺序 = 文件顺序）
+    if(r.words && d) for(var k=0;k<r.words.length;k++) if(r.words[k].t!=null) r.words[k].t+=d;   // 逐字时间跟着整句平移
     commit();
   });
 
@@ -681,7 +836,7 @@
   document.getElementById('fileInput').addEventListener('change', function(){ if(this.files.length) addFiles(this.files); this.value=''; });
   // 清空：回到初始状态，接着拖下一个文件即可（不用刷新页面）
   document.getElementById('btnClear').addEventListener('click', function(){
-    files=[]; curIdx=-1; state=null; undoStack=[]; redoStack=[]; tapIdx=-1; tapDone=false;
+    files=[]; curIdx=-1; state=null; undoStack=[]; redoStack=[]; tapIdx=-1; tapDone=false; wordIdx=0;
     dropEl.style.display='';
     renderFiles(); render();
   });
@@ -737,7 +892,7 @@
     curIdx=i;
     var parsed=parseLRC(decodeBytes(files[i].buf));
     state={ name:files[i].name, head:parsed.head, rows:parsed.rows };
-    undoStack=[]; redoStack=[]; tapIdx=-1;
+    undoStack=[]; redoStack=[]; tapIdx=-1; tapDone=false; wordIdx=0;
     state.rows=autoAssign(state.rows);      // 打开就先按机械规则识别一遍，再让用户改
     renderFiles(); render();
     dropEl.style.display='none';
@@ -748,6 +903,9 @@
   var tapCurEl=document.getElementById('tapCur'), tapNextEl=document.getElementById('tapNext');
   var tapProgEl=document.getElementById('tapProgress'), tapBtn=document.getElementById('btnTap');
   var tapListEl=document.getElementById('tapList'), tapStatEl=document.getElementById('tapStat');
+  var tapWordsEl=document.getElementById('tapWords'), tapModeEl=document.getElementById('tapMode');
+  var hintWhole=document.getElementById('hintWhole'), hintWord=document.getElementById('hintWord');
+  var chkWord=document.getElementById('chkWord'), selOut=document.getElementById('selOut');
   var chkSkipSub=document.getElementById('chkSkipSub');
   var songNameEl=document.getElementById('songName'), seekEl=document.getElementById('seek');
   var posEl=document.getElementById('tpos'), durEl=document.getElementById('tdur');
@@ -825,8 +983,10 @@
   document.getElementById('btnSong2').addEventListener('click', function(){ document.getElementById('songInput').click(); });
   document.getElementById('songInput').addEventListener('change', function(){ if(this.files[0]) loadSong(this.files[0]); this.value=''; });
 
-  /* --- 打轴目标：tapIdx 是当前目标行下标（-1 = 还没定位，取第一句可打轴的）；tapDone = 打到最后一句之后 --- */
-  var tapIdx=-1, tapDone=false;
+  /* --- 打轴目标：tapIdx 是当前目标行下标（-1 = 还没定位，取第一句可打轴的）；tapDone = 打到最后一句之后
+         wordIdx 是逐字模式下当前要打的字/词下标 --- */
+  var tapIdx=-1, tapDone=false, wordIdx=0;
+  function wordMode(){ return chkWord.checked; }
   function tapEligible(i){
     var r=state && state.rows[i];
     if(!r || !r.text) return false;
@@ -845,16 +1005,34 @@
     var list=eligibleList();
     return list.length?list[0]:-1;
   }
+  // 当前该打的字/词的开始时间（逐字模式：没有就退回行时间）
+  function curWordTime(i){
+    var r=(i>=0 && state)?state.rows[i]:null;
+    if(!r) return null;
+    if(wordMode() && r.words && r.words.length){
+      var k=Math.min(wordIdx, r.words.length-1);
+      for(var j=k;j>=0;j--) if(r.words[j].t!=null) return r.words[j].t;
+      return null;
+    }
+    return r.t;
+  }
   function renderTap(){
     var i=tapTargetIndex(), list=eligibleList(), pos=-1;
     for(var k=0;k<list.length;k++) if(list[k]===i){ pos=k; break; }
     tapBtn.disabled=(i<0);
+    tapModeEl.style.display=wordMode()?'':'none';
+    hintWhole.style.display=wordMode()?'none':'';
+    hintWord.style.display=wordMode()?'':'none';
     if(!state){
       tapProgEl.textContent='—'; tapStatEl.textContent='';
     } else {
-      tapProgEl.textContent=list.length?('第 '+(pos<0?list.length:pos+1)+' / '+list.length+' 句')+'（共 '+state.rows.length+' 行）':'没有可打轴的行';
+      var prog=list.length?('第 '+(pos<0?list.length:pos+1)+' / '+list.length+' 句'):'没有可打轴的行';
+      var r0=(i>=0)?state.rows[i]:null;
+      if(wordMode() && r0 && r0.words && r0.words.length) prog+=' · 本句第 '+Math.min(wordIdx+1, r0.words.length)+' / '+r0.words.length+' 字';
+      tapProgEl.textContent=list.length?(prog+'（共 '+state.rows.length+' 行）'):prog;
       tapStatEl.textContent=list.length+' 句待打轴'+(tapDone?' · 已到最后一句':'');
     }
+    renderWordStrip(i);
     if(i<0){
       tapCurEl.className='tap-cur empty';
       tapCurEl.textContent=!state?'还没有歌词行'
@@ -869,26 +1047,38 @@
     for(var j=i+1;j<state.rows.length;j++) if(tapEligible(j)){ nx=j; break; }
     tapNextEl.textContent=(nx<0)?'（这是最后一句）':('下一句：'+state.rows[nx].text);
   }
+  // 逐字模式下的一排字/词：已打的变暗、当前的高亮
+  function renderWordStrip(i){
+    if(!wordMode() || i<0){ tapWordsEl.innerHTML=''; return; }
+    var r=state.rows[i];
+    if(!r.words || !r.words.length){ tapWordsEl.innerHTML=''; return; }
+    var html=[];
+    for(var k=0;k<r.words.length;k++){
+      var w=r.words[k], cls=(k===wordIdx)?'cur':(w.t!=null?'done':'');
+      html.push('<span class="w '+cls+'" data-w="'+k+'" title="'+(w.t!=null?msToTag(w.t):'还没打')+'">'+esc(w.text)+'</span>');
+    }
+    tapWordsEl.innerHTML=html.join('');
+  }
   function scrollToTap(){
     var i=tapTargetIndex();
     if(i<0) return;
     var el=tapListEl.querySelector('.row[data-i="'+i+'"]');
     if(el && el.scrollIntoView) el.scrollIntoView({block:'center'});   // 连续打轴时不加动画，避免跟不上
   }
-  // 前进到下一句可打轴的行；没有下一句就进入「打完了」状态
-  function advanceTap(from){
-    for(var j=from+1;j<state.rows.length;j++) if(tapEligible(j)){ tapIdx=j; tapDone=false; return; }
-    tapIdx=-1; tapDone=true;
-  }
+  // 前进到下一句可打轴的行 / 从指定字开始：见下面的 advanceTap（此处不再重复定义）
   function setTapTarget(i){
     if(!state || !tapEligible(i)) return;
     tapIdx=i; tapDone=false;
     render();
     scrollToTap();
   }
-  // 撤销后把打轴目标退回上一句（数据回滚了，指针也跟着退）
+  // 撤销后把打轴目标退回上一句 / 上一个字（数据回滚了，指针也跟着退）
   function stepTapBack(){
     if(!state){ return; }
+    if(wordMode()){                                  // 逐字：先退一个字
+      var ri=tapTargetIndex();
+      if(ri>=0 && state.rows[ri].words && wordIdx>0){ wordIdx--; render(); return; }
+    }
     var list=eligibleList();
     if(!list.length){ tapIdx=-1; tapDone=false; return; }
     var cur=-1;
@@ -896,42 +1086,66 @@
     if(cur<0) cur=list.length;                       // 没定位过 / 已打完 → 退到最后一句
     tapIdx=list[Math.max(0,cur-1)];
     tapDone=false;
+    if(wordMode()){                                  // 退回上一句的最后一个字
+      var r=state.rows[tapIdx];
+      var n=(r.words&&r.words.length)?r.words.length:1;
+      var d=wordDone(r);
+      wordIdx=Math.max(0, Math.min(n-1, (d>0?d:1)-1));
+    }
     render();
     scrollToTap();
+  }
+  // 前进到下一句可打轴的行；没有下一句就进入「打完了」状态
+  function advanceTap(from){
+    for(var j=from+1;j<state.rows.length;j++) if(tapEligible(j)){ tapIdx=j; tapDone=false; wordIdx=0; return; }
+    tapIdx=-1; tapDone=true; wordIdx=0;
   }
   function doTap(){
     if(!state) return;
     if(!audio.src){ toast('先载入歌曲：点「载入歌曲」，或把音频文件拖进窗口'); return; }
     var i=tapTargetIndex();
     if(i<0){ toast(tapDone?'已经打到最后一句了（点某一行从那句继续，或「回到第一句」重来）':'没有可打轴的行'); return; }
-    snapshot();
     var t=Math.round(audio.currentTime*1000);
     var r=state.rows[i];
-    r.t=t;
-    // 跳过译文行时：紧跟其后的译文行也写上同一个时间（导出时仍按所选写法重算）
-    if(chkSkipSub.checked){
-      for(var j=i+1;j<state.rows.length && state.rows[j].role==='sub';j++) state.rows[j].t=t;
+    snapshot();
+    if(wordMode()){
+      var words=ensureWords(r);
+      if(wordIdx>=words.length) wordIdx=0;
+      words[wordIdx].t=t;
+      if(words[0].t!=null) r.t=words[0].t;           // 行时间 = 第一个字的时间
+      wordIdx++;
+      if(wordIdx>=words.length) advanceTap(i);       // 这句打完 → 下一句（译文行自动跳过）
+      render();
+    } else {
+      r.t=t;
+      // 跳过译文行时：紧跟其后的译文行也写上同一个时间（导出时仍按所选写法重算）
+      if(chkSkipSub.checked){
+        for(var j=i+1;j<state.rows.length && state.rows[j].role==='sub';j++) state.rows[j].t=t;
+      }
+      advanceTap(i);
+      render();
     }
-    advanceTap(i);
-    render();
     scrollToTap();
   }
   function playFromTarget(){
     if(!state) return;
     if(!audio.src){ toast('先载入歌曲：点「载入歌曲」，或把音频文件拖进窗口'); return; }
     var i=tapTargetIndex();
-    if(i>=0) audio.currentTime=Math.max(0, state.rows[i].t/1000-1.2);
-    else if(!audio.currentTime) audio.currentTime=0;
+    if(i>=0){
+      var wt=curWordTime(i);
+      if(wt!=null) audio.currentTime=Math.max(0, wt/1000-1.2);
+      else if(!audio.currentTime) audio.currentTime=0;
+    } else if(!audio.currentTime) audio.currentTime=0;
     audio.play().catch(function(){});
   }
   tapBtn.addEventListener('click', doTap);
   document.getElementById('btnPlayHere').addEventListener('click', playFromTarget);
   document.getElementById('btnTapUndo').addEventListener('click', function(){
-    document.getElementById('btnUndo').click();     // stepTapBack 会把目标退回上一句
+    document.getElementById('btnUndo').click();     // stepTapBack 会把目标退回上一句 / 上一个字
   });
   document.getElementById('btnFirstLine').addEventListener('click', function(){
     if(!state) return;
-    tapIdx=-1; tapDone=false;
+    tapIdx=-1; tapDone=false; wordIdx=0;
     render();
     scrollToTap();
     toast('目标已回到第一句（已打的时间戳还在，要重打先点「全部归零」）');
@@ -943,12 +1157,38 @@
       var r=state.rows[i];
       if(r.role==='other') continue;            // 信息行不动（它们本来就在文件头）
       r.t=0;
+      if(r.words) for(var k=0;k<r.words.length;k++) r.words[k].t=null;   // 逐字时间一起清
     }
-    tapIdx=-1; tapDone=false;
+    tapIdx=-1; tapDone=false; wordIdx=0;
     render();
     toast('所有歌词行的时间戳已归零，可以从头打了（Ctrl+Z 可撤销）');
   });
-  chkSkipSub.addEventListener('change', function(){ tapIdx=-1; tapDone=false; render(); });
+  chkSkipSub.addEventListener('change', function(){ tapIdx=-1; tapDone=false; wordIdx=0; render(); });
+  // 逐字歌词开关：打轴按字打、导出增强型 LRC（译文行仍是同刻整句）
+  chkWord.addEventListener('change', function(){
+    if(chkWord.checked){
+      if(selOut.value!=='same'){ selOut.value='same'; renderPreview(); }
+      selOut.disabled=true;
+      selOut.title='逐字歌词：译文行按同刻整句写，导出为增强型 LRC';
+    } else {
+      selOut.disabled=false;
+      selOut.title='';
+    }
+    tapIdx=-1; tapDone=false; wordIdx=0;
+    render();
+    toast(chkWord.checked?'已切到逐字歌词：按空格逐字打，导出 [mm:ss.xx]<mm:ss.xx>字…':'已切回整句打轴');
+  });
+  // 点字条上的某个字 = 从那个字开始打
+  tapWordsEl.addEventListener('click', function(e){
+    var w=e.target.closest('.w');
+    if(w) setWordTarget(+w.dataset.w);
+  });
+  function setWordTarget(k){
+    var i=tapTargetIndex();
+    if(i<0 || !state.rows[i].words) return;
+    wordIdx=Math.max(0, Math.min(k, state.rows[i].words.length-1));
+    render();
+  }
 
   /* --- 分页 --- */
   function showPage(which){
@@ -998,7 +1238,7 @@
       curIdx=-1;
     }
     if(document.getElementById('chkPasteAuto').checked) state.rows=autoAssign(state.rows);
-    tapIdx=-1; tapDone=false;
+    tapIdx=-1; tapDone=false; wordIdx=0;
     closePaste();
     dropEl.style.display='none';
     renderFiles(); render(); scrollToTap();
