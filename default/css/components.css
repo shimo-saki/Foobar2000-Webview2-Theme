@@ -289,6 +289,8 @@ body.is-playing .np-icon-play, body:not(.is-playing) .np-icon-pause{display: non
   content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
   width:4px;height:4px;border-radius:50%;background:var(--accent);
 }
+#btnOrder .icon, #volBtn .icon{display:none}
+#btnOrder .icon.active, #volBtn .icon.active{display:inline-block}
 .ctrl-btn.play-btn{
   width:40px;height:40px;background:var(--text);color:var(--bg-0);margin:0 4px;
   transition:transform var(--t-fast),box-shadow var(--t-fast),background var(--t-fast);

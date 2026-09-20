@@ -170,16 +170,13 @@
   CM.bindSeekBar = function (bar, timeLabel, cssVar, seekingKey, updateFn) {
     bar.addEventListener('input', () => {
       state[seekingKey] = true;
-      const pct = bar.value / 1000;
-      bar.style.setProperty(cssVar, `${(pct * 100).toFixed(2)}%`);
-      timeLabel.textContent = CM.formatTime(pct * state.duration);
+      bar.style.setProperty(cssVar, `${(+bar.value).toFixed(2)}%`);
+      timeLabel.textContent = CM.formatTime(bar.value / 100 * state.duration);
     });
     bar.addEventListener('change', () => {
-      const pct = bar.value / 1000;
-      const seconds = pct * state.duration;
       // 不在此处更新 state.position，交给 playback:seeked / timeHighRes 事件统一处理，
       // 避免因 API 返回 undefined/null 时误把旧位置覆盖掉 seeked 事件已写入的正确位置。
-      CM.api('playback.setPosition', { seconds }).then(() => {
+      CM.api('playback.setPosition', { seconds: bar.value / 100 * state.duration }).then(() => {
         state[seekingKey] = false;
         updateFn();
       });
@@ -485,7 +482,7 @@
       if (!CM.playlists.length) return CM.showToast('请先添加歌单', null, 'error');
       if (CM.playlists?.find(p => p.index === CM.state.currentPlaylistIndex)?.isLocked)
         return CM.showToast('当前歌单已锁定，无法添加项目', null, 'error');
-      
+
       CM.api('dnd.getPathsAsync', { sessionId: data?.sessionId }).then(r => {
         const paths = r.paths?.length ? r.paths : data?.paths;
         CM.addDroppedPaths(paths);

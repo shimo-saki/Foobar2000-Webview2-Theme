@@ -88,14 +88,13 @@
 
   /* ============================================
   * 播放顺序（foobar2000 playback order）
-  * 0=Default 1=Repeat(playlist) 2=Repeat(track) 4=Shuffle(tracks) 6=Shuffle(folders)
   * ============================================ */
   CM.ORDERS = [
-    { id: 0, name: '顺序播放', icon: '' },
-    { id: 1, name: '列表循环', icon: '' },
-    { id: 2, name: '单曲循环', icon: '' },
-    { id: 4, name: '随机播放', icon: '' },
-    { id: 6, name: '随机目录', icon: '' },
+    { id: 0, name: '顺序播放', label: 'Default' },
+    { id: 1, name: '列表循环', label: 'Repeat-playlist' },
+    { id: 2, name: '单曲循环', label: 'Repeat-track' },
+    { id: 4, name: '随机播放', label: 'Shuffle-tracks' },
+    { id: 6, name: '随机目录', label: 'Shuffle-folders' },
   ];
   CM.orderIndexOf = function (orderId) {
     return CM.ORDERS.findIndex(o => o.id === orderId) || 0;

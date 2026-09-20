@@ -308,29 +308,19 @@
    * 标题栏（窗口控制按钮）
    * ============================================ */
   CM.initTitlebar = function () {
-    els.titlebarControls.innerHTML = `
-      <button class="caption-btn" id="capMin" title="最小化">
-        <span class="icon"></icon>
-      </button>
-      <button class="caption-btn" id="capMax" title="最大化/还原">
-        <span class="icon icon-max"></span>
-        <span class="icon icon-restore"></span>
-      </button>
-      <button class="caption-btn close" id="capClose" title="关闭"><span class="icon">${CM.icons.cancel}</span></button>`;
     CM.$('capMin').addEventListener('click', () => CM.api('window.minimize'));
     CM.$('capMax').addEventListener('click', () => CM.api('window.toggleMaximize'));
     CM.$('capClose').addEventListener('click', () => CM.api('window.close'));
     els.titlebarDrag.addEventListener('mousedown', e => { if (e.button === 0) CM.api('window.startDrag'); });
     els.titlebarDrag.addEventListener('dblclick', () => CM.api('window.toggleMaximize'));
     CM.updateMaxIcon();
-    fb.on('window:stateChanged', () => CM.updateMaxIcon());
+    fb.on('window:stateChanged', e => CM.updateMaxIcon(e.maximized));
   };
-  CM.updateMaxIcon = function () {
-    CM.api('window.isMaximized').then(r => {
-      if (!r) return;
-      const max = r.maximized ?? r.isMaximized ?? r.result ?? false;
-      CM.$('capMax')?.classList.toggle('is-max', !!max);
-    });
+  CM.updateMaxIcon = function (maximized = null) {
+    if (maximized !== null) return CM.$('capMax').classList.toggle('is-max', maximized);
+    CM.api('window.isMaximized').then(r =>
+      CM.$('capMax').classList.toggle('is-max', r.maximized ?? r.isMaximized ?? false)
+    );
   };
 
   /* ============================================
@@ -368,15 +358,18 @@
    * ============================================ */
   CM.updateOrderIcon = function () {
     const order = CM.ORDERS[CM.orderIndexOf(state.order)];
-    els.btnOrder.innerHTML = `<span class="icon font-size-16">${order.icon}</span>`;
-    els.btnOrder.title = `播放顺序： ${order.name}`;
     els.btnOrder.classList.toggle('active', order.id !== 0);
+    els.btnOrder.querySelectorAll('.icon').forEach(el =>
+      el.classList.toggle('active', el.dataset.order === order.label)
+    );
+    els.btnOrder.title = `播放顺序： ${order.name}`;
   };
 
-  const VOLUME_STAGE = [{ max: 0, icon: '' }, { max: 33, icon: '' }, { max: 66, icon: '' }, { max: Infinity, icon: '' }];
   CM.updateVolumeIcon = function () {
     const value = state.volume;
-    els.volIcon.innerHTML = VOLUME_STAGE.find(l => value <= l.max).icon;
+    const icons = [...els.volBtn.querySelectorAll('.icon')];
+    const target = icons.find(el => value <= +el.dataset.vol);
+    icons.forEach(el => el.classList.toggle('active', el === target));
     els.volSlider.value = value;
     els.volSlider.style.setProperty('--vol-pct', `${value}%`);
   };
@@ -384,9 +377,9 @@
   // 通用进度条更新（主进度条 + 沉浸式进度条共用）
   CM._updateSeekBar = function (bar, curLabel, totalLabel, cssVar, seekingFlag) {
     if (state[seekingFlag]) return;
-    const pct = state.duration > 0 ? (state.position / state.duration) : 0;
-    bar.value = Math.round(pct * 1000);
-    bar.style.setProperty(cssVar, `${(pct * 100).toFixed(2)}%`);
+    const pct = (state.duration > 0 ? state.position / state.duration : 0) * 100;
+    bar.value = pct.toFixed(2);
+    bar.style.setProperty(cssVar, `${pct.toFixed(2)}%`);
     curLabel.textContent = CM.formatTimeCached(state.position);
     totalLabel.textContent = CM.formatTimeCached(state.duration);
   };

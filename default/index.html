@@ -23,7 +23,14 @@
       <span class="titlebar-title">CloudMusic</span>
     </div>
     <div class="titlebar-drag" id="titlebarDrag"></div>
-    <div class="titlebar-controls" id="titlebarControls"></div>
+    <div class="titlebar-controls" id="titlebarControls">
+      <button class="caption-btn" id="capMin" title="最小化"><span class="icon"></icon></button>
+      <button class="caption-btn" id="capMax" title="最大化 / 还原">
+        <span class="icon icon-max"></span>
+        <span class="icon icon-restore"></span>
+      </button>
+      <button class="caption-btn close" id="capClose" title="关闭"><span class="icon"></span></button>
+    </div>
   </div>
 
   <!-- ============ Sidebar ============ -->
@@ -190,9 +197,7 @@
 <div class="right-panel" id="rightPanel">
   <button class="rp-immersive-btn" id="rpImmersiveBtn" title="进入沉浸模式"><span class="icon font-size-16"></span></button>
   <div class="lyrics-blur-bg" id="lyricsBlurBg"></div>
-    <div class="rp-art-wrap">
-      <img class="rp-art" id="lyricsArt" src="" alt=""/>
-    </div>
+    <div class="rp-art-wrap"><img class="rp-art" id="lyricsArt" src="" alt=""/></div>
     <div class="rp-track-info">
       <div class="rp-track-title" id="lyricsTrackTitle">未在播放</div>
       <div class="rp-track-artist" id="lyricsTrackArtist">--</div>
@@ -216,9 +221,15 @@
 
     <div class="bottom-center">
       <div class="bottom-controls">
-        <button class="ctrl-btn" id="btnOrder" title="播放顺序"><span class="icon font-size-16"></span></button>
+        <button class="ctrl-btn" id="btnOrder" title="播放顺序">
+          <span class="icon font-size-16 active" data-order="Default"></span>
+          <span class="icon font-size-16" data-order="Repeat-playlist"></span>
+          <span class="icon font-size-16" data-order="Repeat-track"></span>
+          <span class="icon font-size-16" data-order="Shuffle-tracks"></span>
+          <span class="icon font-size-16" data-order="Shuffle-folders"></span>
+        </button>
         <button class="ctrl-btn" id="btnPrev" title="上一首"><span class="icon"></span></button>
-        <button class="ctrl-btn play-btn" id="btnPlayPause" title="播放/暂停">
+        <button class="ctrl-btn play-btn" id="btnPlayPause" title="播放 / 暂停">
           <span class="icon font-size-16" id="iconPlay"></span>
           <span class="icon font-size-16" id="iconPause"></span>
         </button>
@@ -227,9 +238,7 @@
       </div>
       <div class="seek-bar-wrap">
         <span class="seek-time num" id="seekCurrent">0:00</span>
-        <div class="seek-rail">
-          <input type="range" class="seek-bar" id="seekBar" min="0" max="1000" value="0"/>
-        </div>
+        <div class="seek-rail"><input type="range" class="seek-bar" id="seekBar" min="0" max="100" step="any" value="0"/></div>
         <span class="seek-time num" id="seekTotal">0:00</span>
       </div>
     </div>
@@ -238,7 +247,12 @@
       <div class="mini-spectrum" id="miniSpectrum"></div>
       <button class="icon-btn" id="btnVisualizer" title="迷你频谱"><span class="icon"></span></button>
       <div class="vol-wrap">
-        <button class="icon-btn" id="volBtn" title="音量/静音"><span class="icon font-size-16" id="volIcon"></span></button>
+        <button class="icon-btn" id="volBtn" title="音量 / 静音">
+          <span class="icon font-size-16" data-vol="0"></span>
+          <span class="icon font-size-16" data-vol="33"></span>
+          <span class="icon font-size-16" data-vol="66"></span>
+          <span class="icon font-size-16 active" data-vol="Infinity"></span>
+        </button>
         <div class="vol-slider-wrap"><input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="100"/></div>
       </div>
       <button class="icon-btn" id="btnQueue" title="播放队列">
@@ -286,7 +300,7 @@
       </div>
       <div class="np-controls">
         <button class="np-ctrl-btn" id="npBtnPrev" title="上一首"><span class="icon font-size-16"></span></button>
-        <button class="np-ctrl-btn np-ctrl-play" id="npBtnPlay" title="播放/暂停">
+        <button class="np-ctrl-btn np-ctrl-play" id="npBtnPlay" title="播放 / 暂停">
           <span class="icon np-icon-play"></span>
           <span class="icon np-icon-pause"></span>
         </button>
@@ -298,7 +312,7 @@
     <div class="np-lyrics-side" id="npLyricsSide">
       <div class="np-lyrics-controls" id="npLyricsControls">
         <button class="np-ctrl-btn" id="npLcPrev" title="上一首"><span class="icon font-size-16"></span></button>
-        <button class="np-ctrl-btn np-ctrl-play" id="npLcPlay" title="播放/暂停">
+        <button class="np-ctrl-btn np-ctrl-play" id="npLcPlay" title="播放 / 暂停">
           <span class="icon np-icon-play"></span>
           <span class="icon np-icon-pause"></span>
         </button>
@@ -312,11 +326,10 @@
     <span class="np-time" id="npTimeCurrent">0:00</span>
     <div class="np-seek-rail">
       <div class="np-waveform hide" id="npWaveform"></div>
-      <input type="range" class="np-seek-bar" id="npSeekBar" min="0" max="1000" value="0"/>
+      <input type="range" class="np-seek-bar" id="npSeekBar" min="0" max="100" step="any" value="0"/>
     </div>
     <span class="np-time" id="npTimeTotal">0:00</span>
   </div>
-</div>
 </div>
 
 <!-- Modal -->

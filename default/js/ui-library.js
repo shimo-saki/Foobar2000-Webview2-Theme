@@ -290,8 +290,7 @@
     btn.addEventListener('click', () => {
       const resetBtn = CM.setBtnLoading(btn, '扫描中...');
       CM.api('library.refresh').then(res => {
-        console.log(res);
-        if (res && res.success !== false) {
+        if (res.success) {
           CM.showToast('媒体库已刷新', '正在重新加载歌曲列表', 'success');
           CM.renderLibraryTracks();
         } else {
