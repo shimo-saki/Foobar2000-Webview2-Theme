@@ -217,7 +217,8 @@
       els.plCover.style.display = '';
       // 封面处理
       if (tracks.length) {
-        CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[Math.max(state.playingTrackIndex, 0)]), maxSize: 600 })
+        const i = state.playingPlaylistIndex === idx ? Math.max(state.playingTrackIndex, 0) : 0;
+        CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[i]), maxSize: 600 })
           .then(ar => {
             if (loadId !== _playlistViewLoadId) return;
             els.plCover.src = ar?.dataUrl ?? CM.DEFAULT_TRACK_COVER;
