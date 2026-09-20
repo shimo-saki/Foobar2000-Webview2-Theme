@@ -14,9 +14,14 @@
   }
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'Segoe UI','Microsoft YaHei',system-ui,sans-serif;background:var(--bg-0);color:var(--text);line-height:1.6;height:100vh;display:flex;flex-direction:column}
-  header{padding:14px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+  header{padding:12px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
   h1{font-size:17px;font-weight:700;display:inline-block;margin-right:10px}
   .sub{font-size:12px;color:var(--text-3)}
+  .hrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .tabs{display:flex;gap:2px;background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:2px}
+  .tab{background:transparent;border:none;color:var(--text-3);padding:5px 16px;border-radius:6px;font-size:13px}
+  .tab:hover:not(.on){background:var(--bg-3);color:var(--text)}
+  .tab.on{background:var(--accent);border:none;color:#fff}
   .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
   button{font-family:inherit;font-size:12.5px;padding:6px 12px;cursor:pointer;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:6px;transition:.15s}
   button:hover:not(:disabled){background:var(--accent);border-color:var(--accent);color:#fff}
@@ -24,6 +29,10 @@
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   select{font-family:inherit;font-size:12.5px;padding:6px 8px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:6px}
   main{flex:1;display:flex;min-height:0}
+  .page{flex:1;display:none;min-height:0}
+  .page.on{display:flex}
+  #pageEdit{flex-direction:row}
+  #pageTap{flex-direction:column}
   #left{width:52%;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0}
   #right{flex:1;display:flex;flex-direction:column;min-width:0}
   .pane-head{padding:8px 14px;font-size:12px;color:var(--text-3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
@@ -62,17 +71,71 @@
   .callout{background:var(--bg-1);border-left:3px solid var(--accent);padding:8px 12px;border-radius:0 6px 6px 0;font-size:12px;color:var(--text-2);margin:10px 16px}
   .callout b{color:var(--text)}
   .empty{padding:28px;text-align:center;color:var(--text-3);font-size:13px}
+
+  /* ---------- 播放器条 ---------- */
+  #player{display:flex;align-items:center;gap:8px;padding:8px 18px;border-bottom:1px solid var(--border);background:var(--bg-1);flex-shrink:0;flex-wrap:wrap}
+  #songName{font-size:12.5px;color:var(--text-3);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #songName.on{color:var(--text-2)}
+  #seek{flex:1;min-width:150px;height:20px;accent-color:var(--accent);cursor:pointer}
+  .mono{font-family:Consolas,monospace;font-size:11.5px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+  #btnPlay{min-width:40px;font-size:13px}
+
+  /* ---------- 打轴台 ---------- */
+  #tap{padding:10px 18px;border-bottom:1px solid var(--border);background:var(--bg-1);flex-shrink:0}
+  .tap-top{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-3);flex-wrap:wrap}
+  .badge{font-size:10.5px;padding:1px 8px;border-radius:20px;background:var(--accent-soft);color:var(--accent)}
+  .tap-cur{margin-top:7px;font-size:14.5px;min-height:24px;padding-left:9px;border-left:3px solid var(--accent);color:var(--text);word-break:break-word}
+  .tap-cur.empty{color:var(--text-3);font-size:13px;border-left-color:var(--border)}
+  .tap-cur .sub{font-size:11.5px;color:var(--text-3);margin-left:6px}
+  .tap-next{margin-top:3px;padding-left:12px;font-size:12px;color:var(--text-3);min-height:17px;word-break:break-word}
+  .tap-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:9px}
+  .tap-hint{margin-top:7px;font-size:11px;color:var(--text-3);line-height:1.7}
+  button.big{padding:7px 20px;font-size:13.5px;font-weight:700}
+  .chk{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-2);cursor:pointer;user-select:none}
+  .chk input{accent-color:var(--accent);cursor:pointer}
+  .row.tap{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+  .row.tap:hover{background:var(--accent-soft)}
+  /* 打轴页的歌词列表：只读，点一行 = 从那一句开始打 */
+  #tapList .row{cursor:pointer;align-items:baseline}
+  #tapList .row.cur{background:var(--bg-1)}
+  #tapList .t2{font-family:Consolas,monospace;font-size:11.5px;color:var(--text-3);width:78px;flex-shrink:0}
+  #tapList .row.tap .t2{color:var(--accent)}
+  #tapList .row.past .t2{color:var(--text-2)}
+
+  /* ---------- 粘贴文本弹层 ---------- */
+  #pasteWrap{position:fixed;inset:0;background:rgba(8,8,10,.72);z-index:200;display:none;align-items:center;justify-content:center}
+  #pasteWrap.on{display:flex}
+  #pasteBox{width:min(780px,94vw);max-height:92vh;display:flex;flex-direction:column;gap:10px;background:var(--bg-1);border:1px solid var(--border);border-radius:12px;padding:18px 20px;box-shadow:0 18px 60px rgba(0,0,0,.5)}
+  #pasteBox h2{font-size:15px}
+  #pasteBox .hint{font-size:12px;color:var(--text-3);line-height:1.75}
+  #pasteBox .hint b{color:var(--text-2)}
+  #pasteText{width:100%;height:42vh;min-height:150px;resize:vertical;font-family:Consolas,'Microsoft YaHei',monospace;font-size:12.5px;line-height:1.6;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+  #pasteText:focus{outline:none;border-color:var(--accent)}
+  .paste-btns{display:flex;gap:8px;align-items:center}
+
+  /* ---------- 临时提示 ---------- */
+  #toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:var(--bg-4);color:var(--text);font-size:12.5px;padding:8px 16px;border-radius:20px;border:1px solid var(--border);opacity:0;pointer-events:none;transition:opacity .2s;z-index:300;max-width:76vw;text-align:center}
+  #toast.on{opacity:1}
 </style>
 </head>
 <body>
 <header>
-  <h1>LRC 双语歌词编辑器</h1>
-  <span class="sub">像改代码一样改歌词：标记主/译文、上下移动、改时间戳，右侧实时预览主题里的显示效果</span>
+  <div class="hrow">
+    <h1>LRC 双语歌词编辑器</h1>
+    <span class="sub">两份歌词、一个文件：在「编辑歌词」里调主/译文和时间戳，在「打轴」里边听边按空格打时间</span>
+    <span style="flex:1"></span>
+    <div class="tabs">
+      <button id="tabEdit" class="tab on">编辑歌词</button>
+      <button id="tabTap" class="tab">打轴</button>
+    </div>
+  </div>
   <div class="bar">
     <button id="btnOpen">打开 .lrc</button>
     <input type="file" id="fileInput" accept=".lrc,.txt" multiple hidden>
+    <button id="btnPaste" title="直接把歌词文本粘贴进来（可以带时间戳，也可以只有纯文本）">粘贴文本</button>
     <button id="btnAuto" title="按机械规则重新分配主/译文（逐时间戳块）">一键识别</button>
-    <button id="btnAdd" title="在末尾添加一行（时间 = 最后一行 +3 秒），加完直接输入正文">＋ 添加行</button>
+    <button id="btnAltPair" title="首行保持当前角色，其余行按「主 / 译文」交替配对 —— 粘贴的原文+译文逐行交替时用这个">交替配对</button>
+    <button id="btnAdd" title="在末尾添加一行，加完直接输入正文；时间戳默认取上一行 +3 秒">＋ 添加行</button>
     <button id="btnUndo">撤销</button>
     <button id="btnRedo">重做</button>
     <button id="btnClear" title="清空当前文件与文件列表，回到初始状态（不用刷新页面）">清空</button>
@@ -86,36 +149,115 @@
   <div class="files" id="files"></div>
 </header>
 
+<div id="player">
+  <audio id="audio" preload="auto"></audio>
+  <input type="file" id="songInput" accept="audio/*" hidden>
+  <button id="btnSong2" title="载入音频文件（也可以直接把音频拖到窗口里）">载入歌曲</button>
+  <button id="btnPlay" disabled title="播放 / 暂停（P）">▶</button>
+  <button id="btnBack5" disabled title="后退 5 秒（← 后退 3 秒，Shift+← 后退 0.5 秒）">−5s</button>
+  <button id="btnFwd5" disabled title="前进 5 秒（→ 前进 3 秒，Shift+→ 前进 0.5 秒）">+5s</button>
+  <input type="range" id="seek" min="0" max="10000" value="0" step="1" disabled title="拖动定位">
+  <span class="mono" id="tpos">--:--.---</span>
+  <span class="mono" style="opacity:.45">/</span>
+  <span class="mono" id="tdur">--:--.---</span>
+  <select id="selRate" disabled title="播放速度（打轴时可以放慢，时间戳仍然是真实时间）">
+    <option value="0.5">0.5×</option>
+    <option value="0.75">0.75×</option>
+    <option value="0.9">0.9×</option>
+    <option value="1" selected>1.0×</option>
+    <option value="1.25">1.25×</option>
+    <option value="1.5">1.5×</option>
+  </select>
+  <span id="songName">未载入歌曲 —— 点「载入歌曲」，或把音频文件拖进窗口</span>
+</div>
+
 <main>
-  <div id="left">
-    <div class="pane-head">
-      <span>歌词行（点角色徽标可切换，悬停行出现操作按钮）</span>
-      <span style="flex:1"></span>
-      <span id="stat"></span>
+  <!-- ========== 页 1：编辑歌词 ========== -->
+  <div class="page on" id="pageEdit">
+    <div id="left">
+      <div class="pane-head">
+        <span>歌词行（点角色徽标可切换，悬停行出现操作按钮）</span>
+        <span style="flex:1"></span>
+        <span id="stat"></span>
+      </div>
+      <div class="list" id="list"></div>
+      <div id="drop">把 .lrc 拖到这里，或点上方「打开 .lrc」／「粘贴文本」（可多选，之后在文件列表里切换）<br><span style="font-size:12px">音频文件（mp3 / m4a / flac / wav / ogg…）拖到窗口任意位置即可载入歌曲</span></div>
     </div>
-    <div class="list" id="list"></div>
-    <div id="drop">把 .lrc 文件拖到这里，或点上方「打开 .lrc」（可多选，之后在文件列表里切换）</div>
+    <div id="right">
+      <div class="pane-head">
+        <span>主题里的显示效果（实时）</span>
+        <span style="flex:1"></span>
+        <span id="outstat"></span>
+      </div>
+      <div id="preview"></div>
+      <div class="callout">
+        <b>这一页</b>：① 先「一键识别」，看右侧预览对不对；② 不对就手动改 —— 点行首角色徽标切 <b>主/译文</b>，
+        <b>↑ ↓</b> 调整位置（例如把译文挪到它真正的原文后面），<b>时间戳和正文都直接点着改</b>（回车提交 / Esc 取消），
+        可删掉多余行；③ 选好导出的写法并下载，覆盖原歌词文件（建议先备份），主题里选对应的「翻译对齐方式」。
+        <br>调完一个直接再拖一个文件进来就行，或者点 <b>清空</b> 回到初始状态 —— <b>都不用刷新页面</b>。
+        <br>这里的行顺序就是你要的顺序；<b>导出的文件按时间戳升序排列</b>（同一时间戳保持列表先后，主歌词在译文前面），所以只重打了某一句也不会出现时间倒退。
+      </div>
+    </div>
   </div>
-  <div id="right">
+
+  <!-- ========== 页 2：打轴 ========== -->
+  <div class="page" id="pageTap">
+    <div id="tap">
+      <div class="tap-top">
+        <span class="badge">打轴</span>
+        <span id="tapProgress">—</span>
+        <span style="flex:1"></span>
+        <label class="chk" title="打轴时跳过译文行：只给原文打时间戳（译文行的时间在导出时按所选写法统一写）"><input type="checkbox" id="chkSkipSub" checked> 跳过译文行</label>
+      </div>
+      <div class="tap-cur empty" id="tapCur">还没有歌词行</div>
+      <div class="tap-next" id="tapNext"></div>
+      <div class="tap-row">
+        <button id="btnTap" class="primary big" title="按空格 / 回车，或直接点这个按钮">打轴（空格）</button>
+        <button id="btnPlayHere" title="回到目标行前 1.2 秒开始播放（S）">从此行播</button>
+        <button id="btnTapUndo" title="撤销上一次打轴（Backspace）">撤销打轴</button>
+        <button id="btnFirstLine" title="把目标回到第一句，从头重新打（已打的时间戳不会自动清掉，需要清空点「全部归零」）">回到第一句</button>
+        <button id="btnZeroAll" title="把所有歌词行的时间戳都设为 00:00.000（可撤销），适合从头重新打一份">全部归零</button>
+      </div>
+      <div class="tap-hint">
+        <b>空格 / 回车 / 点按钮</b> = 给目标行打上当前播放时间，打完自动跳下一句 · <b>Backspace</b> = 撤销上一次 ·
+        <b>P</b> = 播放/暂停 · <b>← →</b> = ∓3 秒（按住 Shift 微调 0.5 秒）· <b>S</b> = 从此行播（回到该句前 1.2 秒）<br>
+        下面的歌词列表<b>点任意一行 = 从那一句开始打</b>（重打某几句时用）；译文行在勾选「跳过译文行」时不会被停下来，会自动跳过。
+      </div>
+    </div>
     <div class="pane-head">
-      <span>主题里的显示效果（实时）</span>
+      <span>点一行 = 从那一句开始打轴（当前目标行高亮）</span>
       <span style="flex:1"></span>
-      <span id="outstat"></span>
+      <span id="tapStat"></span>
     </div>
-    <div id="preview"></div>
-    <div class="callout">
-      <b>怎么用</b>：① 先「一键识别」，看右侧预览对不对；② 不对就手动改 —— 点行首角色徽标切 <b>主/译文</b>，
-      <b>↑ ↓</b> 调整位置（例如把译文挪到它真正的原文后面），<b>时间戳和正文都直接点着改</b>（回车提交 / Esc 取消），
-      可删掉多余行；③ 满意后选导出的写法并下载，覆盖原歌词文件（建议先备份），主题里选对应的「翻译对齐方式」即可。
-      <br>调完一个直接再拖一个文件进来就行，或者点 <b>清空</b> 回到初始状态 —— <b>都不用刷新页面</b>。
-    </div>
+    <div class="list" id="tapList"></div>
   </div>
 </main>
 
 <footer>
   <span>规则（机械，不做语义判断）：译文 = 挂在它上面最近一条「主歌词」后面；导出时「标准双语」把译文时间改成主歌词的时间，「兼容旧版」把译文改成下一句主歌词的时间。</span>
+  <span>粘贴的纯文本没有时间戳，所有行就是 <b>00:00.000</b>；在「打轴」页边听边按空格把它们排出来即可。</span>
 </footer>
-<div id="dropHint">松开鼠标即可载入歌词文件</div>
+<div id="dropHint">松开鼠标即可载入（音频 → 歌曲，.lrc / .txt → 歌词）</div>
+
+<div id="pasteWrap">
+  <div id="pasteBox">
+    <h2>粘贴歌词文本</h2>
+    <p class="hint">
+      每行一句，直接从网页 / 记事本复制粘贴即可。<b>带 [mm:ss.xx] 时间戳</b>的行按时间戳解析，之后可以在「打轴」页重打；
+      <b>不带时间戳的纯文本</b>会把所有行的时间戳设为 <b>00:00.000</b>，等你去「打轴」页跟着音乐按空格逐个打。<br>
+      粘贴的是「原文一行、译文一行」交替的双语歌词时，导入后点工具条上的 <b>交替配对</b> 就能把译文行标出来（首行角色不对就先点一下首行徽标再配对）。
+    </p>
+    <textarea id="pasteText" spellcheck="false" placeholder="[00:12.34]第一句歌词&#10;第二句歌词&#10;[00:20.10]第三句歌词&#10;&#10;也可以整段都没有时间戳，纯文本就行"></textarea>
+    <div class="paste-btns">
+      <label class="chk"><input type="checkbox" id="chkPasteAuto" checked> 导入后自动跑一次「一键识别」（分配主/译文）</label>
+      <span style="flex:1"></span>
+      <button id="btnPasteCancel">取消</button>
+      <button id="btnPasteAppend">追加到末尾</button>
+      <button id="btnPasteReplace" class="primary">替换当前内容</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
 
 <script>
 (function(){
@@ -132,6 +274,7 @@
   function msToTag(ms){ var t=Math.max(0,Math.round(ms)); return pad(Math.floor(t/60000),2)+':'+pad(Math.floor(t%60000/1000),2)+'.'+pad(t%1000,3); }
   function toMs(s){ var neg=false; s=String(s).trim(); if(s.charAt(0)==='-'){neg=true;s=s.slice(1);} var sec=0,p=s.split(':'); for(var i=0;i<p.length;i++) sec=sec*60+parseFloat(p[i]); var ms=Math.round(sec*1000); return neg?-ms:ms; }
   var TITLE_RE = /^.{0,45}\s[-–]\s.{0,45}$/;   // 曲名行（只在前 3 行内判定，与主题一致）
+  var META_RE = /^\[(ti|ar|al|au|by|re|ve|offset|length|lyricist|composer|trans(lation)?|kana)[:：]/i;   // [ti:][ar:] 这类元信息行
   function isCredit(t, idx){ return !!t && (LABEL_RE.test(t) || (t.length<=40 && CREDIT_RE.test(t)) || NOTICE_RE.test(t) || (idx < 3 && TITLE_RE.test(t))); }
   function decodeBytes(buf){
     try { return new TextDecoder('utf-8',{fatal:true}).decode(buf); } catch(e){}
@@ -164,6 +307,37 @@
     }
     rows.sort(function(a,b){ return a.t-b.t; });
     for(var r=0;r<rows.length;r++) if(emptyTimes[rows[r].t]) rows[r].emptySlot=true;
+    return { head:head, rows:rows };
+  }
+
+  /* 粘贴文本解析：标签规则和 parseLRC 完全一致，区别是没有时间戳的行不进 head，
+     而是变成时间戳为 0 的普通歌词行（之后到「打轴」页边听边打） */
+  function parseLyricText(text){
+    var head=[], rows=[];
+    if (text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+    var lines=text.split(/\r?\n/);
+    for (var i=0;i<lines.length;i++){
+      var line=lines[i].trim();
+      if(!line) continue;
+      TAG_RE.lastIndex=0;
+      var m, tags=[];
+      while((m=TAG_RE.exec(line))!==null) tags.push({t:toMs(m[1]),s:m.index,e:m.index+m[0].length});
+      if(!tags.length){
+        // [ti:][ar:][offset:] 这类元信息行照样进文件头（导出时原样写回）
+        if(META_RE.test(line)){ head.push(line); continue; }
+        // 没有时间戳：制作信息行当信息行，其它行时间戳给 0 等打轴
+        if(isCredit(line, rows.length)) rows.push({ t:0, text:line, role:'other', emptySlot:false });
+        else rows.push({ t:0, text:line, role:'main', emptySlot:false });
+        continue;
+      }
+      var body=line;
+      for(var k=tags.length-1;k>=0;k--) body=body.slice(0,tags[k].s)+body.slice(tags[k].e);
+      body=body.replace(/\s+/g,' ').trim();
+      if(!body||PLACEHOLDER.test(body)) continue;
+      for(var j=0;j<tags.length;j++){
+        rows.push({ t:tags[j].t, text:body, role: isCredit(body, rows.length)?'other':'main', emptySlot:false });
+      }
+    }
     return { head:head, rows:rows };
   }
 
@@ -201,43 +375,47 @@
     return out;
   }
 
-  // 分组：每个 sub 归属"它上面最近的一条 main"
+  // 分组：每个 sub 归属"它上面最近的一条 main"；带行号（导出时用兜底时间要按下标取）
   function groupRows(rows){
     var groups=[];
     for(var i=0;i<rows.length;i++){
       var r=rows[i];
       if(!r.text) continue;                        // 空行不参与分组（新增但还没填内容）
-      if(r.role==='other'){ groups.push({ main:r, subs:[], other:true }); continue; }
+      if(r.role==='other'){ groups.push({ main:r, mi:i, subs:[], other:true }); continue; }
       if(r.role==='main'||!groups.length||groups[groups.length-1].other){
-        groups.push({ main:r, subs:[] });
+        groups.push({ main:r, mi:i, subs:[] });
       } else {
-        groups[groups.length-1].subs.push(r);
+        groups[groups.length-1].subs.push({ r:r, i:i });
       }
     }
     return groups;
   }
 
-  // 导出：正文行按分组与目标写法输出；信息行原样保留
+  // 导出：按列表顺序逐行取，最后按时间戳升序排列（只重打某一句时也能得到合法的时间轴文件）；
+  // 时间相同的行保持列表里的先后（主歌词在译文前面）
   function exportText(state, mode){
-    var groups=groupRows(state.rows), rows=[], i, g, s, nt;
-    for(i=0;i<state.rows.length;i++){
-      var r0=state.rows[i];
-      if(!r0.text) continue;                        // 空行（新增但还没填内容）不写进文件
-      if(r0.role==='other') rows.push({ t:r0.t, text:r0.text });
-    }
+    var lines=state.head.slice(), i, g, s;
+    var groups=groupRows(state.rows), subTime=[];
     for(g=0;g<groups.length;g++){
       if(groups[g].other) continue;
-      rows.push({ t:groups[g].main.t, text:groups[g].main.text });
-      nt = (mode==='same') ? groups[g].main.t : (function(){
-        for(var k=g+1;k<groups.length;k++) if(!groups[k].other) return groups[k].main.t;
-        return groups[g].main.t;
-      })();
-      for(s=0;s<groups[g].subs.length;s++) rows.push({ t:nt, text:groups[g].subs[s].text });
+      var nt=(mode==='same') ? groups[g].main.t : nextMainTime(groups,g);
+      for(s=0;s<groups[g].subs.length;s++) subTime[groups[g].subs[s].i]=nt;
     }
-    rows.sort(function(a,b){ return a.t-b.t; });
-    var lines=state.head.slice();
-    for(i=0;i<rows.length;i++) lines.push('['+msToTag(rows[i].t)+']'+rows[i].text);
+    var out=[];
+    for(i=0;i<state.rows.length;i++){
+      var r=state.rows[i];
+      if(!r.text) continue;                        // 空行（新增但还没填内容）不写进文件
+      var t=(r.role==='sub' && subTime[i]!=null) ? subTime[i] : r.t;
+      out.push({ t:t, text:r.text });
+    }
+    out.sort(function(a,b){ return a.t-b.t; });
+    for(i=0;i<out.length;i++) lines.push('['+msToTag(out[i].t)+']'+out[i].text);
     return '\uFEFF'+lines.join('\r\n')+'\r\n';
+  }
+  // 「兼容旧版」：译文写在下一句原文的时间戳上（没有下一句就用自己的原文时间）
+  function nextMainTime(groups, g){
+    for(var k=g+1;k<groups.length;k++) if(!groups[k].other) return groups[k].main.t;
+    return groups[g].main.t;
   }
 
   /* ---------- 界面 ---------- */
@@ -285,7 +463,6 @@
     var row={ t:t, text:'', role:'main', emptySlot:false };
     snapshot();
     state.rows.splice(i+1,0,row);
-    state.rows.sort(function(a,b){ return a.t-b.t; });
     pendingEditRow=row;
     commit();
   }
@@ -340,12 +517,18 @@
   var ROLE_LABEL={ main:'主', sub:'译文', other:'信息' };
 
   function render(){
-    if(!state){ listEl.innerHTML=''; pvEl.innerHTML='<div class="empty">还没有打开歌词文件</div>'; return; }
+    if(!state){
+      listEl.innerHTML='';
+      tapListEl.innerHTML='';
+      pvEl.innerHTML='<div class="empty">还没有打开歌词文件（「打开 .lrc」或「粘贴文本」）</div>';
+      renderTap();
+      return;
+    }
     var html=[], i;
     for(i=0;i<state.rows.length;i++){
       var r=state.rows[i];
       html.push('<div class="row" data-i="'+i+'">'+
-        '<input class="t" value="'+msToTag(r.t)+'" data-act="time" title="时间戳，可直接编辑">'+
+        '<input class="t" value="'+msToTag(r.t)+'" data-act="time" title="时间戳，可直接编辑；也可以到「打轴」页边听边打">'+
         '<span class="role '+r.role+'" data-act="role" title="点击切换：主 → 译文 → 主">'+ROLE_LABEL[r.role]+'</span>'+
         '<span class="txt'+(r.role==='other'?' other':'')+'" data-act="edit">'+esc(r.text)+'</span>'+
         '<span class="acts">'+
@@ -359,14 +542,33 @@
         '</span></div>');
     }
     listEl.innerHTML=html.join('');
-    statEl.textContent=state.rows.length+' 行 · '+state.rows.filter(function(x){return x.role!=='other';}).length+' 条歌词';
+    var zero=state.rows.filter(function(x){ return x.role!=='other' && x.text && x.t===0; }).length;
+    statEl.textContent=state.rows.length+' 行 · '+state.rows.filter(function(x){return x.role!=='other';}).length+' 条歌词'+
+      (zero>1?(' · '+zero+' 行还是 00:00.000（去「打轴」页打时间）'):'');
     renderPreview();
+    renderTap();
+    renderTapList();
     // 新增的行：渲染完直接进入就地编辑，省一次点击
     if(pendingEditRow){
-      var pi=state.rows.indexOf(pendingEditRow), target=pendingEditRow;
+      var pi=state.rows.indexOf(pendingEditRow), target2=pendingEditRow;
       pendingEditRow=null;
-      if(pi>=0) setTimeout(function(){ startEdit(pi, target); },0);
+      if(pi>=0) setTimeout(function(){ startEdit(pi, target2); },0);
     }
+  }
+
+  // 打轴页的只读歌词列表：点一行就从那一句开始打
+  function renderTapList(){
+    if(!state){ tapListEl.innerHTML=''; return; }
+    var target=tapTargetIndex(), html=[];
+    for(var i=0;i<state.rows.length;i++){
+      var r=state.rows[i], cls='row';
+      if(i===target) cls+=' tap'; else if(target>=0 && i<target) cls+=' past';
+      html.push('<div class="'+cls+'" data-i="'+i+'">'+
+        '<span class="t2">'+msToTag(r.t)+'</span>'+
+        '<span class="role '+r.role+'">'+ROLE_LABEL[r.role]+'</span>'+
+        '<span class="txt'+(r.role==='other'?' other':'')+'">'+esc(r.text)+'</span></div>');
+    }
+    tapListEl.innerHTML=html.join('');
   }
 
   function renderPreview(){
@@ -375,7 +577,7 @@
     for(i=0;i<groups.length;i++){
       if(groups[i].other){ continue; }
       html.push('<div class="g"><div class="m"><span class="tag">'+msToTag(groups[i].main.t)+'</span>'+esc(groups[i].main.text)+'</div>');
-      for(var s=0;s<groups[i].subs.length;s++){ subs++; html.push('<div class="s">'+esc(groups[i].subs[s].text)+'</div>'); }
+      for(var s=0;s<groups[i].subs.length;s++){ subs++; html.push('<div class="s">'+esc(groups[i].subs[s].r.text)+'</div>'); }
       html.push('</div>');
     }
     if(!html.length) html.push('<div class="empty">没有歌词行（可能整首都识别成了信息行）</div>');
@@ -393,8 +595,7 @@
     var t=toMs(e.target.value);
     if(isNaN(t)){ render(); return; }
     snapshot();
-    state.rows[i].t=t;
-    state.rows.sort(function(a,b){ return a.t-b.t; });
+    state.rows[i].t=t;                      // 只改时间，不重排行序（列表顺序 = 文件顺序）
     commit();
   });
 
@@ -409,10 +610,27 @@
     state.rows=autoAssign(state.rows);
     commit();
   });
+  // 交替配对：首行保持当前角色，其余歌词行按「主 / 译文」交替
+  document.getElementById('btnAltPair').addEventListener('click', function(){
+    if(!state) return;
+    snapshot();
+    var n=0, first=null, changed=0;
+    for(var i=0;i<state.rows.length;i++){
+      var r=state.rows[i];
+      if(r.role==='other') continue;               // 信息行不参与交替
+      if(first===null) first=r.role;
+      var want=(n%2===0)?first:(first==='main'?'sub':'main');
+      if(r.role!==want){ r.role=want; changed++; }
+      n++;
+    }
+    commit();
+    toast(n?('已按对交替：'+n+' 行歌词，改了 '+changed+' 行'+(first==='sub'?'（首行按译文开头）':'')):'没有可配对的歌词行');
+  });
   document.getElementById('btnUndo').addEventListener('click', function(){
     if(!undoStack.length) return;
     redoStack.push(JSON.stringify(state.rows));
     applySnapshot(undoStack.pop());
+    stepTapBack();                            // 撤销也把打轴目标退回上一句
   });
   document.getElementById('btnRedo').addEventListener('click', function(){
     if(!redoStack.length) return;
@@ -420,13 +638,35 @@
     applySnapshot(redoStack.pop());
   });
   document.addEventListener('keydown', function(e){
-    if(!(e.ctrlKey||e.metaKey)) return;
-    if(e.key==='z'){ e.preventDefault(); document.getElementById('btnUndo').click(); }
-    if(e.key==='y'){ e.preventDefault(); document.getElementById('btnRedo').click(); }
+    var tag=(e.target.tagName||'').toUpperCase();
+    var typing=(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT');
+    if(e.ctrlKey||e.metaKey){
+      if(typing) return;                     // 正在改某一行时，Ctrl+Z 交给输入框自己处理
+      if(e.key==='z'){ e.preventDefault(); document.getElementById('btnUndo').click(); }
+      if(e.key==='y'){ e.preventDefault(); document.getElementById('btnRedo').click(); }
+      return;
+    }
+    if(pasteWrap.classList.contains('on')){   // 粘贴面板打开时：Esc 关闭，其它按键不触发打轴
+      if(e.key==='Escape'){ e.preventDefault(); closePaste(); }
+      return;
+    }
+    if(typing) return;
+    var k=e.key;
+    if(k===' '||k==='Spacebar'||k==='Enter'){ e.preventDefault(); doTap(); return; }
+    if(k==='Backspace'){ e.preventDefault(); document.getElementById('btnUndo').click(); return; }
+    if(k==='p'||k==='P'){ e.preventDefault(); togglePlay(); return; }
+    if(k==='s'||k==='S'){ e.preventDefault(); playFromTarget(); return; }
+    if(k==='ArrowLeft'||k==='ArrowRight'){
+      e.preventDefault();
+      var d=(k==='ArrowLeft'?-1:1)*(e.shiftKey?0.5:3);
+      nudge(d);
+    }
   });
 
   document.getElementById('btnSave').addEventListener('click', function(){
     if(!state) return;
+    var zeros=state.rows.filter(function(r){ return r.role!=='other' && r.text && r.t===0; }).length;
+    if(zeros>1 && !confirm('有 '+zeros+' 行的时间戳还是 00:00.000（多半是还没打轴）。\n\n这些行会在文件里全部压在开头。要先切到「打轴」页把它们打了再导出吗？\n\n（选「确定」= 仍然导出）')) return;
     var txt=exportText(state, document.getElementById('selOut').value);
     var blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
     var a=document.createElement('a');
@@ -441,7 +681,7 @@
   document.getElementById('fileInput').addEventListener('change', function(){ if(this.files.length) addFiles(this.files); this.value=''; });
   // 清空：回到初始状态，接着拖下一个文件即可（不用刷新页面）
   document.getElementById('btnClear').addEventListener('click', function(){
-    files=[]; curIdx=-1; state=null; undoStack=[]; redoStack=[];
+    files=[]; curIdx=-1; state=null; undoStack=[]; redoStack=[]; tapIdx=-1; tapDone=false;
     dropEl.style.display='';
     renderFiles(); render();
   });
@@ -453,7 +693,12 @@
   document.addEventListener('dragleave', function(e){ if(--dragDepth<=0){ dragDepth=0; dropHintEl.style.display='none'; } });
   document.addEventListener('drop', function(e){
     e.preventDefault(); dragDepth=0; dropHintEl.style.display='none';
-    if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+    if(!(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length)) return;
+    var all=Array.prototype.slice.call(e.dataTransfer.files);
+    var aud=all.filter(isAudioFile), lyr=all.filter(function(f){ return !isAudioFile(f); });
+    if(aud.length) loadSong(aud[aud.length-1]);      // 多个音频时用最后一个
+    if(lyr.length) addFiles(lyr);
+    else if(aud.length && state) toast('已载入歌曲，歌词还是当前这份');
   });
   // 面板内的拖放（初始空状态）
   ['dragenter','dragover'].forEach(function(t){ dropEl.addEventListener(t,function(e){ e.preventDefault(); dropEl.classList.add('over'); }); });
@@ -492,11 +737,282 @@
     curIdx=i;
     var parsed=parseLRC(decodeBytes(files[i].buf));
     state={ name:files[i].name, head:parsed.head, rows:parsed.rows };
-    undoStack=[]; redoStack=[];
+    undoStack=[]; redoStack=[]; tapIdx=-1;
     state.rows=autoAssign(state.rows);      // 打开就先按机械规则识别一遍，再让用户改
     renderFiles(); render();
     dropEl.style.display='none';
   }
+
+  /* ================= 播放 + 打轴 ================= */
+  var audio=document.getElementById('audio');
+  var tapCurEl=document.getElementById('tapCur'), tapNextEl=document.getElementById('tapNext');
+  var tapProgEl=document.getElementById('tapProgress'), tapBtn=document.getElementById('btnTap');
+  var tapListEl=document.getElementById('tapList'), tapStatEl=document.getElementById('tapStat');
+  var chkSkipSub=document.getElementById('chkSkipSub');
+  var songNameEl=document.getElementById('songName'), seekEl=document.getElementById('seek');
+  var posEl=document.getElementById('tpos'), durEl=document.getElementById('tdur');
+  var playBtn=document.getElementById('btnPlay'), rateSel=document.getElementById('selRate');
+  var pasteWrap=document.getElementById('pasteWrap'), pasteText=document.getElementById('pasteText');
+  var toastEl=document.getElementById('toast');
+  var songUrl=null, seeking=false, toastTimer=null;
+  var AUDIO_EXT=/\.(mp3|flac|m4a|aac|ogg|oga|opus|wav|wave|aif|aiff|mka|webm|mp4|wma|ape|tak|wv|dsf|dff)$/i;
+
+  function toast(msg){
+    toastEl.textContent=msg; toastEl.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){ toastEl.classList.remove('on'); },2800);
+  }
+  function isAudioFile(f){
+    return (f.type && f.type.indexOf('audio/')===0) || AUDIO_EXT.test(f.name||'');
+  }
+  function fmtT(sec){
+    if(typeof sec!=='number' || !isFinite(sec) || sec<0) return '--:--.---';
+    return msToTag(sec*1000);
+  }
+
+  function loadSong(file){
+    if(!file) return;
+    if(songUrl) URL.revokeObjectURL(songUrl);
+    songUrl=URL.createObjectURL(file);
+    audio.src=songUrl;
+    audio.playbackRate=+rateSel.value;
+    songNameEl.textContent=file.name;
+    songNameEl.title=file.name;
+    songNameEl.classList.add('on');
+    seekEl.disabled=false; rateSel.disabled=false;
+    playBtn.disabled=false;
+    document.getElementById('btnBack5').disabled=false;
+    document.getElementById('btnFwd5').disabled=false;
+    audio.load();
+    audio.play().catch(function(){});
+    toast('已载入歌曲：'+file.name);
+  }
+  audio.addEventListener('error', function(){
+    if(!audio.src) return;
+    toast('这个音频打不开：浏览器多半不支持该编码（APE / WMA / DSD 等）。请用 mp3 / m4a / flac / wav / ogg。');
+  });
+  audio.addEventListener('play', function(){ playBtn.textContent='❚❚'; });
+  audio.addEventListener('pause', function(){ playBtn.textContent='▶'; });
+  audio.addEventListener('loadedmetadata', function(){
+    durEl.textContent=fmtT(audio.duration);
+    posEl.textContent=fmtT(audio.currentTime);
+  });
+  audio.addEventListener('timeupdate', function(){
+    posEl.textContent=fmtT(audio.currentTime);
+    if(!seeking && audio.duration) seekEl.value=String(Math.round(audio.currentTime/audio.duration*10000));
+  });
+  seekEl.addEventListener('input', function(){
+    seeking=true;
+    if(audio.duration){
+      audio.currentTime=+seekEl.value/10000*audio.duration;
+      posEl.textContent=fmtT(audio.currentTime);
+    }
+  });
+  seekEl.addEventListener('change', function(){ seeking=false; });
+  rateSel.addEventListener('change', function(){ audio.playbackRate=+rateSel.value; });
+  function togglePlay(){
+    if(!audio.src){ document.getElementById('songInput').click(); return; }
+    if(audio.paused) audio.play().catch(function(){});
+    else audio.pause();
+  }
+  function nudge(d){
+    if(!audio.src || !isFinite(audio.duration)) return;
+    audio.currentTime=Math.max(0, Math.min(audio.duration, audio.currentTime+d));
+  }
+  playBtn.addEventListener('click', togglePlay);
+  document.getElementById('btnBack5').addEventListener('click', function(){ nudge(-5); });
+  document.getElementById('btnFwd5').addEventListener('click', function(){ nudge(5); });
+  document.getElementById('btnSong2').addEventListener('click', function(){ document.getElementById('songInput').click(); });
+  document.getElementById('songInput').addEventListener('change', function(){ if(this.files[0]) loadSong(this.files[0]); this.value=''; });
+
+  /* --- 打轴目标：tapIdx 是当前目标行下标（-1 = 还没定位，取第一句可打轴的）；tapDone = 打到最后一句之后 --- */
+  var tapIdx=-1, tapDone=false;
+  function tapEligible(i){
+    var r=state && state.rows[i];
+    if(!r || !r.text) return false;
+    if(r.role==='other') return false;                                   // 信息行从来不打轴
+    if(chkSkipSub.checked && r.role==='sub') return false;               // 跳过译文行
+    return true;
+  }
+  function eligibleList(){
+    var out=[];
+    if(state) for(var i=0;i<state.rows.length;i++) if(tapEligible(i)) out.push(i);
+    return out;
+  }
+  function tapTargetIndex(){
+    if(!state || tapDone) return -1;
+    if(tapIdx>=0 && tapIdx<state.rows.length && tapEligible(tapIdx)) return tapIdx;
+    var list=eligibleList();
+    return list.length?list[0]:-1;
+  }
+  function renderTap(){
+    var i=tapTargetIndex(), list=eligibleList(), pos=-1;
+    for(var k=0;k<list.length;k++) if(list[k]===i){ pos=k; break; }
+    tapBtn.disabled=(i<0);
+    if(!state){
+      tapProgEl.textContent='—'; tapStatEl.textContent='';
+    } else {
+      tapProgEl.textContent=list.length?('第 '+(pos<0?list.length:pos+1)+' / '+list.length+' 句')+'（共 '+state.rows.length+' 行）':'没有可打轴的行';
+      tapStatEl.textContent=list.length+' 句待打轴'+(tapDone?' · 已到最后一句':'');
+    }
+    if(i<0){
+      tapCurEl.className='tap-cur empty';
+      tapCurEl.textContent=!state?'还没有歌词行'
+        :(tapDone?'打到最后一句了 —— 点某一行从那句继续，或「回到第一句」重来':'没有可打轴的行（检查一下角色和「跳过译文行」）');
+      tapNextEl.textContent='';
+      return;
+    }
+    var r=state.rows[i];
+    tapCurEl.className='tap-cur';
+    tapCurEl.innerHTML='<span class="sub">'+msToTag(r.t)+'</span>'+esc(r.text);
+    var nx=-1;
+    for(var j=i+1;j<state.rows.length;j++) if(tapEligible(j)){ nx=j; break; }
+    tapNextEl.textContent=(nx<0)?'（这是最后一句）':('下一句：'+state.rows[nx].text);
+  }
+  function scrollToTap(){
+    var i=tapTargetIndex();
+    if(i<0) return;
+    var el=tapListEl.querySelector('.row[data-i="'+i+'"]');
+    if(el && el.scrollIntoView) el.scrollIntoView({block:'center'});   // 连续打轴时不加动画，避免跟不上
+  }
+  // 前进到下一句可打轴的行；没有下一句就进入「打完了」状态
+  function advanceTap(from){
+    for(var j=from+1;j<state.rows.length;j++) if(tapEligible(j)){ tapIdx=j; tapDone=false; return; }
+    tapIdx=-1; tapDone=true;
+  }
+  function setTapTarget(i){
+    if(!state || !tapEligible(i)) return;
+    tapIdx=i; tapDone=false;
+    render();
+    scrollToTap();
+  }
+  // 撤销后把打轴目标退回上一句（数据回滚了，指针也跟着退）
+  function stepTapBack(){
+    if(!state){ return; }
+    var list=eligibleList();
+    if(!list.length){ tapIdx=-1; tapDone=false; return; }
+    var cur=-1;
+    if(!tapDone){ for(var k=0;k<list.length;k++) if(list[k]===tapIdx){ cur=k; break; } }
+    if(cur<0) cur=list.length;                       // 没定位过 / 已打完 → 退到最后一句
+    tapIdx=list[Math.max(0,cur-1)];
+    tapDone=false;
+    render();
+    scrollToTap();
+  }
+  function doTap(){
+    if(!state) return;
+    if(!audio.src){ toast('先载入歌曲：点「载入歌曲」，或把音频文件拖进窗口'); return; }
+    var i=tapTargetIndex();
+    if(i<0){ toast(tapDone?'已经打到最后一句了（点某一行从那句继续，或「回到第一句」重来）':'没有可打轴的行'); return; }
+    snapshot();
+    var t=Math.round(audio.currentTime*1000);
+    var r=state.rows[i];
+    r.t=t;
+    // 跳过译文行时：紧跟其后的译文行也写上同一个时间（导出时仍按所选写法重算）
+    if(chkSkipSub.checked){
+      for(var j=i+1;j<state.rows.length && state.rows[j].role==='sub';j++) state.rows[j].t=t;
+    }
+    advanceTap(i);
+    render();
+    scrollToTap();
+  }
+  function playFromTarget(){
+    if(!state) return;
+    if(!audio.src){ toast('先载入歌曲：点「载入歌曲」，或把音频文件拖进窗口'); return; }
+    var i=tapTargetIndex();
+    if(i>=0) audio.currentTime=Math.max(0, state.rows[i].t/1000-1.2);
+    else if(!audio.currentTime) audio.currentTime=0;
+    audio.play().catch(function(){});
+  }
+  tapBtn.addEventListener('click', doTap);
+  document.getElementById('btnPlayHere').addEventListener('click', playFromTarget);
+  document.getElementById('btnTapUndo').addEventListener('click', function(){
+    document.getElementById('btnUndo').click();     // stepTapBack 会把目标退回上一句
+  });
+  document.getElementById('btnFirstLine').addEventListener('click', function(){
+    if(!state) return;
+    tapIdx=-1; tapDone=false;
+    render();
+    scrollToTap();
+    toast('目标已回到第一句（已打的时间戳还在，要重打先点「全部归零」）');
+  });
+  document.getElementById('btnZeroAll').addEventListener('click', function(){
+    if(!state) return;
+    snapshot();
+    for(var i=0;i<state.rows.length;i++){
+      var r=state.rows[i];
+      if(r.role==='other') continue;            // 信息行不动（它们本来就在文件头）
+      r.t=0;
+    }
+    tapIdx=-1; tapDone=false;
+    render();
+    toast('所有歌词行的时间戳已归零，可以从头打了（Ctrl+Z 可撤销）');
+  });
+  chkSkipSub.addEventListener('change', function(){ tapIdx=-1; tapDone=false; render(); });
+
+  /* --- 分页 --- */
+  function showPage(which){
+    var tap=(which==='tap');
+    document.getElementById('pageEdit').classList.toggle('on', !tap);
+    document.getElementById('pageTap').classList.toggle('on', tap);
+    document.getElementById('tabEdit').classList.toggle('on', !tap);
+    document.getElementById('tabTap').classList.toggle('on', tap);
+    render();
+    if(tap) scrollToTap();
+  }
+  document.getElementById('tabEdit').addEventListener('click', function(){ showPage('edit'); });
+  document.getElementById('tabTap').addEventListener('click', function(){ showPage('tap'); });
+
+  // 打轴页列表：点一行 = 从那一句开始打
+  tapListEl.addEventListener('click', function(e){
+    var row=e.target.closest('.row');
+    if(!row) return;
+    var i=+row.dataset.i;
+    if(!tapEligible(i)){
+      var r=state && state.rows[i];
+      toast(!r||!r.text?'这一行是空的，不打轴'
+        :(r.role==='other'?'信息行不打轴（可以到「编辑歌词」页把它改成歌词行）'
+        :'译文行不打轴（取消勾选「跳过译文行」才能单独打它）'));
+      return;
+    }
+    setTapTarget(i);
+  });
+
+  /* --- 粘贴文本 --- */
+  function openPaste(){ pasteWrap.classList.add('on'); pasteText.focus(); pasteText.select(); }
+  function closePaste(){ pasteWrap.classList.remove('on'); }
+  function applyPaste(append){
+    var txt=pasteText.value;
+    if(!txt || !txt.trim()){ toast('先粘贴歌词文本'); return; }
+    var parsed=parseLyricText(txt);
+    if(!parsed.rows.length){ toast('没解析出歌词行（是不是整段都是制作信息？）'); return; }
+    if(!state) state={ name:'粘贴的歌词.lrc', head:[], rows:[] };
+    if(!append){ undoStack=[]; redoStack=[]; }    // 换了整份内容，撤销历史不跨文件
+    snapshot();
+    if(append){
+      state.rows=state.rows.concat(parsed.rows);
+      if(parsed.head.length) state.head=state.head.concat(parsed.head);
+    } else {
+      state.head=parsed.head;
+      state.rows=parsed.rows;
+      curIdx=-1;
+    }
+    if(document.getElementById('chkPasteAuto').checked) state.rows=autoAssign(state.rows);
+    tapIdx=-1; tapDone=false;
+    closePaste();
+    dropEl.style.display='none';
+    renderFiles(); render(); scrollToTap();
+    // 纯文本（没有时间戳）粘贴进来 → 这些行的时间戳就是 0，等着去「打轴」页打
+    var zeros=state.rows.filter(function(r){ return r.role!=='other' && r.t===0; }).length;
+    toast(append?('已追加 '+parsed.rows.length+' 行'+(zeros?('，其中 '+zeros+' 行是 00:00.000'):''))
+                :('已载入 '+state.rows.length+' 行'+(zeros>1?('，其中 '+zeros+' 行是 00:00.000 —— 到「打轴」页打时间'):'')));
+  }
+  document.getElementById('btnPaste').addEventListener('click', openPaste);
+  document.getElementById('btnPasteCancel').addEventListener('click', closePaste);
+  document.getElementById('btnPasteReplace').addEventListener('click', function(){ applyPaste(false); });
+  document.getElementById('btnPasteAppend').addEventListener('click', function(){ applyPaste(true); });
+  pasteWrap.addEventListener('click', function(e){ if(e.target===pasteWrap) closePaste(); });
+
   render();
 })();
 </script>
