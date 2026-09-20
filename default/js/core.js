@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   const CM = window.CloudMusic = window.CloudMusic || {};
-  CM.version = 'V2.5.1-modify';
+  CM.version = 'V2.5.2-modify';
 
   /* ============================================
    * API 包装器 — 出错时resolve null，调用方只需判空

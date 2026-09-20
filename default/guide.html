@@ -173,7 +173,7 @@
   <h1>CloudMusic 主题功能指南</h1>
   <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">版本 <b>v2.5.1</b></div>
+    <div class="hero-meta-item">版本 <b>v2.5.2</b></div>
     <div class="hero-meta-item">作者 <b>灵芝含</b></div>
     <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.13.0</b></div>
   </div>
@@ -216,11 +216,20 @@
       <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
     </div>
     <div>
-      <div class="section-title">更新日志 · v2.5.1</div>
-      <div class="section-desc">歌词显示与解析修复 · 多编码识别修正 · 批量删除 · 沉浸式 3D 斜墙</div>
+      <div class="section-title">更新日志 · v2.5.2</div>
+      <div class="section-desc">双语配对自动归一 · 副标题行归位 · 歌词面板右键菜单</div>
     </div>
   </div>
   <div class="section-body">
+    <strong>v2.5.2 · 双语配对自动归一（新功能）</strong>
+    <ul>
+      <li><strong>两种双语写法自动归一到「原文为主、译文为副」</strong>：同刻协议（原文与译文同一时间戳）与延后协议（译文写在下一句原文的时间戳上，TME / QQ 音乐等来源常见）在结构上互为相位平移，任何局部特征都判不出，只能靠两个整体事实：相位（延后协议下首句原文必然落单）与关系式（每条译文行的时间戳 == 紧随其后原文行的时间戳）。实测两种协议的匹配率呈双峰（≈0% / ≈100%），阈值不敏感；任一条件不成立就一行都不改（部分翻译、多行同刻、两侧同脚本、自相矛盾的文件一律维持现状）。</li>
+      <li><strong>副标题行（第三语言）归位</strong>：英文原词、罗马音、中英混排的译文（如「无比炽热 Like a Bloody Stone」——按拉丁占比会被分到第三脚本族）此前不参与回移，那一组会变成 3 行、主行还是上一句译文。现在按位置特征（与下一行同刻 + 脚本族不同 + 文字不同 + 下一行属原文侧）挂回所属原文；同时非译文侧的第三族行也参与「最近原文」推进，修掉「英文原文行之后的中文译文被挂到更早一句上」的错配（如 <code>God Knows…</code>）。本地 445 个歌词文件全量回归：<strong>13 个文件改善、0 个变差</strong>（「一组≥3 行」82 → 39），<code>God Knows…</code> / <code>Bloody Stream</code> / <code>IRIS OUT</code> / <code>Butter-Fly</code> 等逐条人工核对。</li>
+      <li><strong>歌词面板右键菜单</strong>：在歌词面板或沉浸式页面的歌词区右键 ——「翻译对齐方式」是二级菜单（悬停展开，当前项带 ✓）：<strong>自动识别 / 标准双语 / 兼容旧版</strong>，选择<strong>按文件记忆</strong>（选「自动识别」即恢复）；下方是 刷新歌词 / 复制歌词 / 打开所在文件夹。歌词没有同刻行时（纯文本、逐字歌词等）不显示对齐项；判不出来的文件用手动模式即可。</li>
+      <li><strong>其它修复</strong>：归一后组时间戳可能倒退（会导致高亮二分查找跳错行）、<code>localStorage</code> 损坏时崩溃、歌词为空时右键菜单残留上一首的识别结果、二级菜单不跟随主菜单滚动。</li>
+      <li><strong>清理</strong>：移除判定路上重复的脚本族分类与最坏 O(n²) 的关系式扫描（单文件分析耗时最坏情况下减半）；解析缓存 key 加入配对模式，切换模式后不会命中旧结果。</li>
+    </ul>
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:18px 0">
     <strong>v2.5.1 · 歌词显示与解析修复</strong>
     <ul>
       <li><strong>GBK 中文歌词不再被误判成乱码</strong>：原评分按“脚本出现即加固定分”，而 LRC 以 ASCII 时间戳为主、基础分被稀释，导致同一段字节流用 euc-kr / windows-874 / windows-1251 解码同样“干净”却能胜出 —— 实测本地 582 个歌词文件（其中 544 个可独立判定）里有 75 个（13.8%）GBK 中文歌词被判成谚文 / 泰文乱码。现改为按脚本<strong>纯度</strong>评分，只对不可伪造的决定性标记（假名占比、谚文纯度 ≥ 0.85）给高权重，其余交给“gb18030 能否无损解释全部字节”与先验；同时把 C1 控制符 / Latin-1 符号从“良字符”分类中拆出（单字节编码靠它们刷虚高分）。同一语料复测：<strong>0 误判</strong>。</li>
@@ -534,7 +543,12 @@
       <li><strong>点击跳转</strong>：点击任意歌词行可跳转到对应时间点播放</li>
       <li><strong>歌词来源</strong>：通过 ESLyric 组件获取，需安装 foo_uie_eslyric</li>
       <li><strong>多编码支持</strong>：内置 8 层编码检测引擎，可正确识别 GBK/GB18030、UTF-8、UTF-16 编码的 LRC 文件；其他亚洲双字节编码（Big5 / Shift_JIS / EUC）按评分制区分。含引号等特殊标签名也能正确定位</li>
+      <li><strong>右键菜单</strong>：在<strong>歌词面板</strong>或<strong>沉浸式页面的歌词区</strong>右键即可打开菜单 ——「翻译对齐方式」是一个二级菜单（鼠标悬停展开，当前项带 ✓）：<strong>自动识别</strong>（自动判断歌词格式）/ <strong>标准双语</strong>（原词和翻译在同一时间）/ <strong>兼容旧版</strong>（翻译在下一句时间）；下方是 刷新歌词 / 复制歌词 / 打开所在文件夹。选择<strong>按文件记忆</strong>，选「自动识别」即恢复。歌词没有重复时间戳时（纯文本、逐字歌词等）<strong>不显示这一项</strong>，因为此时不存在对齐问题</li>
     </ul>
+    <div class="callout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="callout-text"><b>两种歌词格式</b>：<b>标准双语</b>——原词与翻译写在同一时间戳下；<b>兼容旧版</b>——翻译被写在了下一句原词的时间戳上（TME / QQ 音乐等来源常见）。后者若按同刻归组，会把翻译当主行、下一句原词当成它的副行。主题会自动判断并统一成「原词为主、翻译为副」，并在菜单里显示识别结果；判断不出来时（例如未翻译的英文原词夹在日文行之间、整首只有部分句子有译文）可在菜单里手动指定，选择会被记住。</div>
+    </div>
   </div>
 </div>
 
@@ -890,7 +904,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p class="footer-author">CloudMusic 主题 v2.5.1 · 作者：灵芝含</p>
+  <p class="footer-author">CloudMusic 主题 v2.5.2 · 作者：灵芝含</p>
   <p>基于 foo_ui_webview2 SDK 1.13.0 · foobar2000 v2</p>
   <p>感谢使用，享受音乐</p>
 </div>
