@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "foo-webview-sdk": "^1.13.0",
+    "@applemusic-like-lyrics/core": "^0.6.0",
+    "@applemusic-like-lyrics/lyric": "^1.1.0"
+  }
+}

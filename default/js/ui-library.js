@@ -624,7 +624,7 @@
   // opts.pageKey: 分页页码缓存键；opts.onBack: 自定义返回；opts.titleHtml: 自定义标题（如面包屑）
   CM.renderLibraryDrill = function (title, subtitle, tracks, opts) {
     opts = opts || {};
-    const paged = !!(opts.pageSizes && opts.pageSizes.length);
+    const paged = !!opts.pageSizes?.length;
     const extraHtml = opts.extraHtml || '';
     const titleInner = opts.titleHtml || esc(title);
     const html = `

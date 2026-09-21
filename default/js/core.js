@@ -141,13 +141,11 @@
    * 设置持久化
    * ============================================ */
   CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, autoUpdate: true };
-  CM.loadSettings = function () {
-    fb2k.invoke('config.getAll').then(({ success, items }) => {
-      if (!success) return CM.showToast('获取配置失败', null, 'error');
-      Object.assign(CM.settings, items);
-    });
+  CM.loadSettings = async function () {
+    const { success, items } = await fb2k.invoke('config.getAll');
+    if (!success) return CM.showToast('获取配置失败', null, 'error');
+    Object.assign(CM.settings, items);
   };
-  CM.loadSettings();
 
   CM.setSettings = function (key, value) {
     if (CM.settings[key] === value) return;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CloudMusic</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@applemusic-like-lyrics/core/dist/style.css"/>
+<link rel="stylesheet" href="@applemusic-like-lyrics/style.css"/>
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/components.css">
@@ -383,13 +383,16 @@
   </div>
 </dialog>
 
-<!-- foo_ui_webview2 SDK v1.13.0 -->
+<!-- foo_ui_webview2 SDK -->
 <script src="sdk/bridge.global.js"></script>
 <script src="sdk/components.global.js"></script>
 <script src="sdk/smp-compat.global.js"></script>
+<!-- applemusic-like-lyrics -->
+<script src="@applemusic-like-lyrics/amll-core.js"></script>
+<script src="@applemusic-like-lyrics/amll-lyric.js"></script>
 <!-- CloudMusic Theme -->
-<script type="module" src="js/amll.js"></script>
 <script src="js/core.js"></script>
+<script src="js/amll.js"></script>
 <script src="js/lyric-core.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/ui-lyrics.js"></script>

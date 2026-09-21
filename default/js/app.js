@@ -242,8 +242,9 @@
     if (CM.settings.autoUpdate) CM.checkUpdate();
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  document.readyState === 'loading'
+    ? document.addEventListener('DOMContentLoaded', CM.loadSettings().then(boot), { once: true })
+    : CM.loadSettings().then(boot);
   document.addEventListener('contextmenu', e => { if (!e.shiftKey) e.preventDefault(); }, true);
 
   /* ============================================
