@@ -18,10 +18,12 @@
       els.npOverlay.classList.add('open');
       document.body.style.overflow = 'hidden';
       els.npLyrics.replaceChildren(CM.player.getElement());
+      CM.showDynamicBackground(CM.settings.background, els.npOverlay)
     } else {
       els.npOverlay.classList.remove('open');
       document.body.style.overflow = '';
       els.lyricsScroll.replaceChildren(CM.player.getElement());
+      CM.showDynamicBackground(CM.settings.background)
     }
   };
 

@@ -3,6 +3,13 @@
   --amll-lp-color: var(--accent);
 }
 
+canvas{position:absolute;width:100%;height:100%;filter:brightness(35%);}
+#rightPanel.dynamic #lyricsBlurBg,
+#npOverlay.dynamic #npBgBlur{
+  background:transparent!important;
+  &::after{content:none}
+}
+
 .np-container {
   --amll-lp-font-size: 2.5rem;
 }

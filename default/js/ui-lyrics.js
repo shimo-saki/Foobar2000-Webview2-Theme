@@ -24,7 +24,7 @@
     els.app.classList.toggle('lyrics-hidden', !visible);
   };
 
-  function contextMenu(e) {
+  function contextMenu(x, y) {
     const hidden = !CM.checkComponent('foo_uie_eslyric');
     const items = [
       {
@@ -47,10 +47,15 @@
         action: () => CM.getGuid('ESLyric')
           .then(({ guid }) => fb2k.invoke('menu.runMainMenuCommand', { command: guid }))
       },
+      { divider: true },
+      {
+        label: '使用动态背景', icon: CM.icons.dynamic, checked: CM.settings.background,
+        action: () => CM.showDynamicBackground(!CM.settings.background, CM.state.npOpen ? els.npOverlay : els.rightPanel)
+      }
     ];
-    CM.showCtxMenu(e.clientX, e.clientY, items);
+    CM.showCtxMenu(x, y, items);
   }
 
-  els.lyricsScroll.addEventListener('contextmenu', e => contextMenu(e));
-  els.npLyrics.addEventListener('contextmenu', e => contextMenu(e));
+  els.lyricsScroll.addEventListener('contextmenu', e => contextMenu(e.clientX, e.clientY));
+  els.npOverlay.addEventListener('contextmenu', e => contextMenu(e.clientX, e.clientY));
 })();

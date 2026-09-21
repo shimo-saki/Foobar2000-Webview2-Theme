@@ -140,7 +140,7 @@
   /* ============================================
    * 设置持久化
    * ============================================ */
-  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, autoUpdate: true };
+  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, autoUpdate: true, background: true };
   CM.loadSettings = async function () {
     const { success, items } = await fb2k.invoke('config.getAll');
     if (!success) return CM.showToast('获取配置失败', null, 'error');
@@ -380,6 +380,7 @@
     copy: '<span class="icon"></span>',
     redo: '<span class="icon"></span>',
     undo: '<span class="icon"></span>',
+    dynamic: '<span class="icon"></span>',
     artist: '<span class="icon"></span>',
     album: '<span class="icon"></span>',
     group: '<span class="icon"></span>',

@@ -236,8 +236,11 @@
             if (CM.state.currentTab === 'playlist') CM.renderPlaylistView(use);
           }
         });
+
       });
     }).catch(() => {/* 宿主桥接未就绪，以受限模式运行 */ });
+    // 加载动态背景
+    CM.showDynamicBackground(CM.settings.background);
     // 检测更新
     if (CM.settings.autoUpdate) CM.checkUpdate();
   }

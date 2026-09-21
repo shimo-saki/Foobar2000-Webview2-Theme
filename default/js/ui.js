@@ -405,6 +405,7 @@
       el.onerror = () => el.src = DEFAULT_TRACK_COVER;
     });
 
+    CM.background?.setAlbum(next);
     els.lyricsBlurBg.style.backgroundImage = `url("${next}")`;
     CM.extractColorFromImage(next);
   };
