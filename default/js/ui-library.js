@@ -42,7 +42,7 @@
       els.libraryTree.innerHTML = LIB_NODES.map(n =>
         `<div class="tree-node${state.libraryView === n.id ? ' active' : ''}" data-view="${n.id}">${n.icon}<span>${n.name}</span></div>`
       ).join('');
-      _libTreeNodes = els.libraryTree.querySelectorAll('.tree-node');
+      _libTreeNodes = els.libraryTree.$$('.tree-node');
     }
 
     // 事件委托：一次性绑定在 libraryTree 上
@@ -78,7 +78,7 @@
   };
   CM.libError = function (retry) {
     els.libraryDetail.innerHTML = `<div class="section-error">${CM.icons.error}<span>加载失败，媒体库可能未就绪</span><button class="retry-btn">重试</button></div>`;
-    els.libraryDetail.querySelector('.retry-btn')?.addEventListener('click', retry);
+    els.libraryDetail.$('.retry-btn')?.addEventListener('click', retry);
   };
   // 从下钻详情返回列表时恢复滚动位置（专辑/艺术家/流派网格通用）
   CM._restoreLibScroll = function () {
@@ -91,7 +91,7 @@
   CM.renderLibraryStats = function () {
     const cancelLoading = CM.libLoadingDelayed();
 
-    CM.api('library.getStats').then(r => {
+    fb.library.getStats().then(r => {
       cancelLoading();
       if (!r) return CM.libError(CM.renderLibraryStats);
 
@@ -121,13 +121,13 @@
       CM.libFadeIn();
 
       // 添加全部按钮
-      const addAllBtn = CM.$('libAddAllBtn');
+      const addAllBtn = $('#libAddAllBtn');
       if (addAllBtn) {
         let resetAddAllBtn = () => { };
         addAllBtn.addEventListener('click', e => {
           resetAddAllBtn = CM.setBtnLoading(addAllBtn, '加载曲目中...');
 
-          CM.api('library.getCount').then(cr => {
+          fb.library.getCount().then(cr => {
             if (!cr) return fail('加载失败');
             const total = CM.respCount(cr);
             if (!total) return fail('媒体库为空');
@@ -137,7 +137,7 @@
             let pos = 0;
 
             const fetchPage = () => {
-              CM.api('library.getAll', { start: pos, count: Math.min(pageSize, total - pos) }).then(pr => {
+              fb.library.getAll(pos, Math.min(pageSize, total - pos)).then(pr => {
                 if (!pr) {
                   resetAddAllBtn();
                   CM.showToast('加载失败', null, 'error');
@@ -162,19 +162,19 @@
       }
 
       // 最近添加列表
-      CM.api('library.getRecentlyAdded', { limit: 10 }).then(rr => {
-        const box = CM.$('libRecentRows');
+      fb.library.getRecentlyAdded(10).then(rr => {
+        const box = $('#libRecentRows');
         if (box) CM.renderTrackRows(box, CM.respTracks(rr), '暂无曲目');
       });
     });
   };
 
   // 通用卡片网格渲染（艺术家 / 流派共用；传入 pageKey 则启用客户端分页）
-  CM._renderLibraryGrid = function (apiMethod, apiParams, title, emptyText, cardRenderer, pageKey) {
+  CM._renderLibraryGrid = function (method, params, title, emptyText, cardRenderer, pageKey) {
     const cancelLoading = CM.libLoadingDelayed();
-    CM.api(apiMethod, apiParams).then(r => {
+    fb.invoke(method, params).then(r => {
       cancelLoading();
-      if (!r?.success) return CM.libError(() => CM._renderLibraryGrid(apiMethod, apiParams, title, emptyText, cardRenderer, pageKey));
+      if (!r?.success) return CM.libError(() => CM._renderLibraryGrid(method, params, title, emptyText, cardRenderer, pageKey));
 
       const items = r.items || r.artists || r.genres || [];
       if (!items.length) {
@@ -193,7 +193,7 @@
       if (pageKey) {
         els.libraryDetail.innerHTML = CM._pagerBarHtml('libGrid', title, items.length) + '<div class="artist-grid" id="libGridRows"></div>';
         CM._bindPager('libGrid', items.length, pageKey, (start, size) => {
-          const box = CM.$('libGridRows');
+          const box = $('#libGridRows');
           if (box) box.innerHTML = cardsHTML(start, start + size);
         });
       } else {
@@ -239,7 +239,7 @@
     state.libraryBack = 'stats';
     const cancelLoading = CM.libLoadingDelayed();
 
-    CM.api('library.getCount').then(cr => {
+    fb.library.getCount().then(cr => {
       const total = CM.respCount(cr);
       if (!total) {
         cancelLoading();
@@ -253,7 +253,7 @@
 
       // 串行拉取下一页：全部加载完 resolve，任一出错 reject
       const loadNext = () =>
-        CM.api('library.getAll', { start: offset, count: Math.min(PAGE, total - offset) })
+        fb.library.getAll(offset, Math.min(PAGE, total - offset))
           .then(r => {
             if (!r || r.success === false) return Promise.reject(r);
             const batch = CM.respTracks(r);
@@ -279,7 +279,7 @@
 
   // 在“添加到播放列表”按钮旁插入“刷新媒体库”按钮
   CM._addRefreshLibButton = function () {
-    const parent = CM.$('libAddToPlBtn')?.parentElement;
+    const parent = $('#libAddToPlBtn')?.parentElement;
     if (!parent) return;
 
     const btn = document.createElement('button');
@@ -289,7 +289,7 @@
 
     btn.addEventListener('click', () => {
       const resetBtn = CM.setBtnLoading(btn, '扫描中...');
-      CM.api('library.refresh').then(res => {
+      fb.library.refresh().then(res => {
         if (res.success) {
           CM.showToast('媒体库已刷新', '正在重新加载歌曲列表', 'success');
           CM.renderLibraryTracks();
@@ -342,18 +342,18 @@
 
       onPage((page - 1) * pageSize, pageSize, page, totalPages);
 
-      const info = CM.$(`${prefix}PageInfo`);
+      const info = $(`#${prefix}PageInfo`);
       if (info) info.textContent = `${page} / ${totalPages}`;
 
-      const prev = CM.$(`${prefix}Prev`);
-      const next = CM.$(`${prefix}Next`);
+      const prev = $(`#${prefix}Prev`);
+      const next = $(`#${prefix}Next`);
       if (prev) prev.disabled = page <= 1;
       if (next) next.disabled = page >= totalPages;
 
       if (scrollTop) els.libraryDetail.scrollTop = 0;
     };
 
-    const sizeEl = CM.$(`${prefix}PageSize`);
+    const sizeEl = $(`#${prefix}PageSize`);
     if (sizeEl) {
       sizeEl.addEventListener('change', () => {
         pageSize = parseInt(sizeEl.value, 10) || LIB_PAGE_SIZES[0];
@@ -362,8 +362,8 @@
       });
     }
 
-    const prevBtn = CM.$(`${prefix}Prev`);
-    const nextBtn = CM.$(`${prefix}Next`);
+    const prevBtn = $(`#${prefix}Prev`);
+    const nextBtn = $(`#${prefix}Next`);
     if (prevBtn) prevBtn.addEventListener('click', () => {
       if (page > 1) { page--; renderPage(true); }
     });
@@ -377,7 +377,7 @@
   CM.renderLibraryAlbums = function () {
     const cancelLoading = CM.libLoadingDelayed();
     // 全量拉取专辑（解除 limit:200 上限），客户端分页渲染
-    CM.api('library.getAlbums', { limit: 1000000 }).then(r => {
+    fb.library.getAlbums({ limit: 1000000 }).then(r => {
       cancelLoading();
       if (!r) return CM.libError(CM.renderLibraryAlbums);
 
@@ -387,7 +387,7 @@
       els.libraryDetail.innerHTML = CM._pagerBarHtml('libAlbum', '全部专辑', albums.length) + '<div class="album-grid" id="libAlbumRows"></div>';
 
       CM._bindPager('libAlbum', albums.length, 'albums', (start, size) => {
-        const box = CM.$('libAlbumRows');
+        const box = $('#libAlbumRows');
         if (!box) return;
 
         const slice = albums.slice(start, start + size);
@@ -531,7 +531,7 @@
     state.libraryBack = 'stats';
 
     const cancelLoading = CM.libLoadingDelayed();
-    CM.api('library.getRoots').then(r => {
+    fb.library.getRoots().then(r => {
       cancelLoading();
       if (!r?.success) return CM.libError(CM.renderLibraryFolders);
 
@@ -564,7 +564,7 @@
     state.libraryBack = 'folders';
     const cancelLoading = CM.libLoadingDelayed();
 
-    CM.api('library.browseTree', { rootId, pathId, includeFiles: true, recursiveFiles: false }).then(r => {
+    fb.library.browseTree({ rootId, pathId, includeFiles: true, recursiveFiles: false }).then(r => {
       cancelLoading();
       if (!r?.success) return CM.libError(() => CM.renderLibraryFolder(arg));
 
@@ -587,7 +587,7 @@
 
       if (!dirs.length && !files.length) {
         els.libraryDetail.innerHTML = header() + CM.emptyHTML('此文件夹为空');
-        CM.$('libBackBtn').addEventListener('click', CM._folderGoBack);
+        $('#libBackBtn').addEventListener('click', CM._folderGoBack);
         return;
       }
 
@@ -611,7 +611,7 @@
         );
       } else {
         els.libraryDetail.innerHTML = header(stats) + extraHtml;
-        CM.$('libBackBtn').addEventListener('click', CM._folderGoBack);
+        $('#libBackBtn').addEventListener('click', CM._folderGoBack);
       }
 
       CM.libFadeIn();
@@ -644,7 +644,7 @@
     <div class="dc-tracklist" id="libDrillRows"></div>`;
     els.libraryDetail.innerHTML = html;
 
-    CM.$('libBackBtn').addEventListener('click', () => {
+    $('#libBackBtn').addEventListener('click', () => {
       if (opts.onBack) return opts.onBack();
       state.libraryView = state.libraryBack || 'artists';
       state.libraryArg = null;
@@ -652,24 +652,24 @@
       CM.renderLibrary();
     });
 
-    CM.$('libPlayAllBtn').addEventListener('click', () => CM.playAllTracks(tracks, title));
-    CM.$('libAddToPlBtn').addEventListener('click', e => CM.addToPlaylistMenu(tracks, e.clientX, e.clientY));
+    $('#libPlayAllBtn').addEventListener('click', () => CM.playAllTracks(tracks, title));
+    $('#libAddToPlBtn').addEventListener('click', e => CM.addToPlaylistMenu(tracks, e.clientX, e.clientY));
 
     if (paged) {
       CM._bindPager('libDrill', tracks.length, opts.pageKey || 'drill', (start, size) => {
-        CM.renderTrackRows(CM.$('libDrillRows'), tracks.slice(start, start + size), '未找到曲目', start);
+        CM.renderTrackRows($('#libDrillRows'), tracks.slice(start, start + size), '未找到曲目', start);
       });
     } else {
-      CM.renderTrackRows(CM.$('libDrillRows'), tracks, '未找到曲目');
+      CM.renderTrackRows($('#libDrillRows'), tracks, '未找到曲目');
     }
   };
 
   // 通用下钻详情：设置 backView → loading → API → drill 渲染
   // resultFilter/resultSorter：含引号标签走 ? 通配查询时，按原值客户端精确过滤并排序
-  CM._renderLibraryDetail = function (backView, apiMethod, apiParams, title, subtitleBuilder, retryFn, resultFilter, resultSorter) {
+  CM._renderLibraryDetail = function (backView, method, params, title, subtitleBuilder, retryFn, resultFilter, resultSorter) {
     state.libraryBack = backView;
     const cancelLoading = CM.libLoadingDelayed();
-    CM.api(apiMethod, apiParams).then(r => {
+    fb.invoke(method, params).then(r => {
       cancelLoading();
       if (!r || r.success === false) return CM.libError(retryFn);
       const tracks = CM.respTracks(r);

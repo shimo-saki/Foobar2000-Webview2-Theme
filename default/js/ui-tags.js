@@ -44,7 +44,7 @@
     els.tagEditor.showModal();
 
     // 读取元数据（扁平格式，大写键名）
-    CM.api('metadata.readByPath', { path }).then(r => {
+    fb.metadata.readByPath(path).then(r => {
       if (!_tagCtx || _tagCtx.mode !== 'single') return; // 已关闭或切换
       if (!r || r.success === false) {
         CM.showToast('读取失败', '无法读取文件标签', 'error');
@@ -72,7 +72,7 @@
     _renderTagFields(true, {});
 
     // 批量模式隐藏封面区
-    const coverSec = els.tagEditorBody.querySelector('.tag-cover-section');
+    const coverSec = els.tagEditorBody.$('.tag-cover-section');
     if (coverSec) coverSec.style.display = 'none';
 
     els.tagEditor.showModal();
@@ -111,9 +111,9 @@
 
     // 批量模式：checkbox 启用/禁用对应输入框
     if (!isBatch) return;
-    els.tagEditorBody.querySelectorAll('.tag-field-check').forEach(cb =>
+    els.tagEditorBody.$$('.tag-field-check').forEach(cb =>
       cb.addEventListener('change', () => {
-        const input = els.tagEditorBody.querySelector(`.tag-field-input[data-field="${cb.dataset.field}"]`);
+        const input = els.tagEditorBody.$(`.tag-field-input[data-field="${cb.dataset.field}"]`);
         if (input) input.disabled = !cb.checked;
       })
     );
@@ -121,9 +121,9 @@
 
   // 渲染封面预览
   function _renderTagCover(path) {
-    CM.api('artwork.getForTrack', { path, type: 'front' }).then(r => {
+    fb.artwork.getForTrack(path, 'front').then(r => {
       if (!r || r.success === false || !r.dataUrl) return;
-      const preview = CM.$('tagCoverPreview');
+      const preview = $('#tagCoverPreview');
       if (preview) preview.innerHTML = `<img src="${r.dataUrl}" alt="">`;
     });
   }
@@ -146,7 +146,7 @@
     const tags = {};
 
     for (const f of TAG_FIELDS) {
-      const input = els.tagEditorBody.querySelector(`.tag-field-input[data-field="${f.key}"]`);
+      const input = els.tagEditorBody.$(`.tag-field-input[data-field="${f.key}"]`);
       if (!input) continue;
       const newVal = input.value.trim();
       const oldVal = original[f.key] ?? '';
@@ -160,7 +160,7 @@
     }
 
     els.tagEditorHint.textContent = '正在写入...';
-    CM.api('metadata.write', { path, tags }).then(r => {
+    fb.metadata.write(path, tags).then(r => {
       if (!r || r.success === false) {
         if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
         CM.showToast('写入失败', '标签写入出错', 'error');
@@ -188,9 +188,9 @@
     const tags = {};
 
     for (const f of TAG_FIELDS) {
-      const cb = els.tagEditorBody.querySelector(`.tag-field-check[data-field="${f.key}"]`);
+      const cb = els.tagEditorBody.$(`.tag-field-check[data-field="${f.key}"]`);
       if (!cb?.checked) continue;
-      const input = els.tagEditorBody.querySelector(`.tag-field-input[data-field="${f.key}"]`);
+      const input = els.tagEditorBody.$(`.tag-field-input[data-field="${f.key}"]`);
       if (!input) continue;
       tags[f.key] = input.value.trim() || null;
     }
@@ -202,7 +202,7 @@
       .map(track => (track && CM.trackPath(track) ? { path: CM.trackPath(track), tags } : null))
       .filter(Boolean);
 
-    CM.api('metadata.writeBatch', { items }).then(r => {
+    fb.metadata.writeBatch(items).then(r => {
       if (!r || r.success === false) {
         if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
         CM.showToast('批量写入失败', '标签写入出错', 'error');
@@ -241,10 +241,10 @@
 
     CM.showModal({ title: '移除封面', desc: '确定要移除这首曲目的嵌入封面吗？', okText: '移除', danger: true }).then(ok => {
       if (!ok) return;
-      return CM.api('metadata.removeEmbeddedArt', { path, removeAll: true }).then(r => {
+      return fb.metadata.removeEmbeddedArt(path, { removeAll: true }).then(r => {
         if (r && r.success !== false) {
           CM.showToast('封面已移除', null, 'success');
-          const preview = CM.$('tagCoverPreview');
+          const preview = $('#tagCoverPreview');
           if (preview) preview.innerHTML = CM.icons.note;
         } else {
           CM.showToast('移除失败', '该格式可能不支持嵌入封面操作', 'error');
@@ -265,10 +265,10 @@
     reader.onload = ({ target }) => {
       const { result: dataUrl } = target;
       const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1); // 去掉 data:image/...;base64, 前缀
-      CM.api('metadata.embedArtwork', { path, imageData: base64, type: 'front' }).then(r => {
+      fb.metadata.embedArtwork(path, { imageData: base64 }).then(r => {
         if (r && r.success !== false) {
           CM.showToast('封面已更新', null, 'success');
-          const preview = CM.$('tagCoverPreview');
+          const preview = $('#tagCoverPreview');
           if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="">`;
         } else {
           CM.showToast('嵌入失败', '该格式可能不支持嵌入封面', 'error');

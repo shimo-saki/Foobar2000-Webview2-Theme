@@ -74,7 +74,7 @@
           return onDone?.(false);
         }
 
-        CM.api('playlist.replaceAllAndPlay', { paths, playIndex: 0, autoPlay: true, stop: true }).then(res => {
+        fb.playlist.replaceAllAndPlay({ paths, playIndex: 0, autoPlay: true, stop: true }).then(res => {
           const ok = res?.success !== false;
           if (ok) {
             if (!onDone) CM.showToast('开始播放', `${title || '全部'} · ${paths.length} 首`, 'success');
@@ -91,19 +91,19 @@
   CM.ensureWritableActivePlaylist = function () {
     const TEMP = 'CloudMusic 播放';
 
-    return CM.api('playlist.getActive').then(active => {
+    return fb.playlist.getActive().then(active => {
       if (active?.found && active && !active.isLocked && !active.isAutoplaylist(active)) return active.index;
 
-      return CM.api('playlist.getAll').then(r => {
+      return fb.playlist.getAll().then(r => {
         const pls = Array.isArray(r) ? r : [];
         const reused = pls.find(p => p && !p.isLocked && !p.isAutoplaylist && p.name === TEMP);
 
         const getIdx = reused
           ? Promise.resolve(reused.index)
-          : CM.api('playlist.create', { name: TEMP }).then(r2 => r2?.index ?? r2?.playlist ?? -1);
+          : fb.playlist.create(TEMP).then(r2 => r2?.index ?? r2?.playlist ?? -1);
 
         return getIdx.then(idx =>
-          idx < 0 ? -1 : CM.api('playlist.setActive', { playlist: idx }).then(() => idx)
+          idx < 0 ? -1 : fb.playlist.setActive(idx).then(() => idx)
         );
       });
     });
@@ -112,7 +112,7 @@
   // 若正处于 JIT 无痕试听，则静默停止并复位状态；否则直接完成
   CM.stopPreviewIfActive = function () {
     if (!CM.state.previewActive) return Promise.resolve();
-    return CM.api('jitQueue.stop').then(r => {
+    return fb.jitQueue.stop().then(r => {
       if (r && r.success !== false) CM.state.previewActive = false;
     });
   };
@@ -252,7 +252,7 @@
     const menu = els.ctxMenu;
     if (menu.classList.contains('hidden') || menu.classList.contains('removing')) return;
 
-    menu.querySelectorAll('.ctx-submenu').forEach(sub => {
+    menu.$$('.ctx-submenu').forEach(sub => {
       if (!sub.classList.contains('hidden')) {
         sub.removeEventListener('animationend', sub._hideListener);
         sub.classList.add('hidden');
@@ -281,7 +281,7 @@
 
   els.ctxMenu.addEventListener('mouseover', e => {
     const item = e.target.closest('.ctx-menu-item');
-    const sub = item?.querySelector('.ctx-submenu');
+    const sub = item?.$('.ctx-submenu');
     if (!sub) return;
 
     if (!sub.classList.contains('hidden')) {
@@ -296,7 +296,7 @@
 
   els.ctxMenu.addEventListener('mouseout', e => {
     const item = e.target.closest('.ctx-menu-item');
-    const sub = item?.querySelector('.ctx-submenu');
+    const sub = item?.$('.ctx-submenu');
     if (!sub || item.contains(e.relatedTarget)) return;
     _hideElement(sub);
   });
@@ -308,18 +308,18 @@
    * 标题栏（窗口控制按钮）
    * ============================================ */
   CM.initTitlebar = function () {
-    CM.$('capMin').addEventListener('click', () => CM.api('window.minimize'));
-    CM.$('capMax').addEventListener('click', () => CM.api('window.toggleMaximize'));
-    CM.$('capClose').addEventListener('click', () => CM.api('window.close'));
-    els.titlebarDrag.addEventListener('mousedown', e => { if (e.button === 0) CM.api('window.startDrag'); });
-    els.titlebarDrag.addEventListener('dblclick', () => CM.api('window.toggleMaximize'));
+    $('#capMin').addEventListener('click', () => fb.ui.minimize());
+    $('#capMax').addEventListener('click', () => fb.ui.toggleMaximize());
+    $('#capClose').addEventListener('click', () => fb.ui.close());
+    els.titlebarDrag.addEventListener('mousedown', e => { if (e.button === 0) fb.ui.startDrag(); });
+    els.titlebarDrag.addEventListener('dblclick', () => fb.ui.toggleMaximize());
     CM.updateMaxIcon();
     fb.on('window:stateChanged', e => CM.updateMaxIcon(e.maximized));
   };
   CM.updateMaxIcon = function (maximized = null) {
-    if (maximized !== null) return CM.$('capMax').classList.toggle('is-max', maximized);
-    CM.api('window.isMaximized').then(r =>
-      CM.$('capMax').classList.toggle('is-max', r.maximized ?? r.isMaximized ?? false)
+    if (maximized !== null) return $('#capMax').classList.toggle('is-max', maximized);
+    fb.ui.isMaximized().then(r =>
+      $('#capMax').classList.toggle('is-max', r.maximized ?? r.isMaximized ?? false)
     );
   };
 
@@ -336,9 +336,9 @@
     CM.setSettings('tab', tab);
 
     // 三组导航元素懒查询 + 统一同步 active 状态
-    _tabNavItems ||= document.querySelectorAll('.nav-item[data-tab]');
-    _tabMainTabs ||= document.querySelectorAll('.main-tab[data-tab]');
-    _tabContents ||= document.querySelectorAll('.tab-content');
+    _tabNavItems ||= $$('.nav-item[data-tab]');
+    _tabMainTabs ||= $$('.main-tab[data-tab]');
+    _tabContents ||= $$('.tab-content');
 
     _tabNavItems.forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
     _tabMainTabs.forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
@@ -359,7 +359,7 @@
   CM.updateOrderIcon = function () {
     const order = CM.ORDERS[CM.orderIndexOf(state.order)];
     els.btnOrder.classList.toggle('active', order.id !== 0);
-    els.btnOrder.querySelectorAll('.icon').forEach(el =>
+    els.btnOrder.$$('.icon').forEach(el =>
       el.classList.toggle('active', el.dataset.order === order.label)
     );
     els.btnOrder.title = `播放顺序： ${order.name}`;
@@ -367,7 +367,7 @@
 
   CM.updateVolumeIcon = function () {
     const value = state.volume;
-    const icons = [...els.volBtn.querySelectorAll('.icon')];
+    const icons = [...els.volBtn.$$('.icon')];
     const target = icons.find(el => value <= +el.dataset.vol);
     icons.forEach(el => el.classList.toggle('active', el === target));
     els.volSlider.value = value;
@@ -430,7 +430,7 @@
   let _artworkLoadId = 0;
   CM.loadCurrentArtwork = function () {
     const loadId = ++_artworkLoadId;
-    CM.api('artwork.getFb2kUrl', { type: 'front', maxSize: 600 }).then(r => {
+    fb.artwork.getFb2kUrl('front', { maxSize: 600 }).then(r => {
       if (loadId !== _artworkLoadId) return;
       // 宿主响应无 success 字段：{available, dataUrl, type}
       CM.setArtwork(r?.dataUrl && r.available !== false ? r.dataUrl : null);
@@ -444,7 +444,7 @@
   // 批量填充封面：分批请求避免大批量超时（每批 50 个）
   // 各批并行发起（原串行递归 N 批延迟 ×N），全部完成后统一结束
   CM.fillArtworkBatch = function (container, maxSize) {
-    const slots = container.querySelectorAll('[data-art-path]');
+    const slots = container.$$('[data-art-path]');
     if (!slots.length) return Promise.resolve();
     const CHUNK = 50;
     // 先收集未填充的 slot：跳过已有封面的（"加载更多"重渲染时避免重复请求）
@@ -477,7 +477,7 @@
       const chunkPaths = pendPaths.slice(start, start + CHUNK);
 
       reqs.push(
-        CM.api('artwork.getFb2kUrlByPathBatch', { paths: chunkPaths, type: 'front', maxSize: maxSize || 160 }).then(r =>
+        fb.artwork.getFb2kUrlByPathBatch(chunkPaths, { maxSize: maxSize || 160 }).then(r =>
           r?.artworks.forEach((entry, i) => fillOne(chunkSlots[i], entry))
         )
       );
@@ -538,7 +538,7 @@
   CM._loadAlbumCovers = function (container, albums, maxSize) {
     if (!albums?.length) return;
 
-    const cards = container.querySelectorAll('.album-card');
+    const cards = container.$$('.album-card');
     if (!cards.length) return;
 
     const CHUNK = 24, size = maxSize || 320;
@@ -549,7 +549,7 @@
       const artist = al.artist || al.albumArtist || undefined;
       if (!name) return Promise.resolve(null);
 
-      return CM.api('library.getAlbumTracks', { album: name, artist, limit: 1 }).then(r => {
+      return fb.library.getAlbumTracks(name, artist).then(r => {
         const tracks = r ? CM.respTracks(r) : [];
         if (tracks.length) return { index: i, path: CM.trackPath(tracks[0]) };
 
@@ -558,7 +558,7 @@
         const wild = CM.wildValue(name);
         if (!wild) return null;
 
-        return CM.api('library.search', { query: `album IS "${wild}"`, limit: 500 }).then(sr => {
+        return fb.library.search(`album IS "${wild}"`, 500).then(sr => {
           const st = CM.respTracks(sr).filter(t => t.album === name);
           return st.length ? { index: i, path: CM.trackPath(st[0]) } : null;
         });
@@ -570,7 +570,7 @@
         const target = entry && valid[i];
         if (!target) return;
         const card = cards[target.index];
-        const artEl = card?.querySelector('.art-placeholder');
+        const artEl = card?.$('.art-placeholder');
         const url = entry.dataUrl || entry.url;
         if (entry.success !== false && url && artEl) {
           artEl.style.backgroundImage = `url("${url}")`;
@@ -589,11 +589,7 @@
         const valid = results.filter(v => v?.path);
         if (!valid.length) return processChunk(start + CHUNK);
 
-        CM.api('artwork.getFb2kUrlByPathBatch', {
-          paths: valid.map(v => v.path),
-          type: 'front',
-          maxSize: size
-        }).then(r => {
+        fb.artwork.getFb2kUrlByPathBatch(valid.map(v => v.path), { maxSize: size }).then(r => {
           applyArtworks(valid, r?.artworks);
           processChunk(start + CHUNK);
         });
@@ -605,7 +601,7 @@
 
   CM.playAlbum = function (album, artist) {
     CM.showToast('正在加载', `正在获取专辑「${album}」...`, null);
-    CM.api('library.getAlbumTracks', { album, artist: artist || undefined }).then(r => {
+    fb.library.getAlbumTracks(album, artist).then(r => {
       const tracks = CM.respTracks(r);
       if (!tracks.length) return CM.showToast('无法播放', '未找到专辑曲目', 'error');
       CM.playAllTracks(tracks, `专辑 ${album}`);
@@ -634,15 +630,15 @@
 
     // 先停掉 JIT 无痕试听，避免与正常播放同时输出（两首一起播）
     CM.stopPreviewIfActive().then(() =>
-      CM.api('queue.getCount').then(r => {
+      fb.queue.getCount().then(r => {
         const insertIdx = CM.respCount(r);
 
-        CM.api('queue.addPaths', { paths: [path] }).then(res => {
-          if (!res || res.success === false) return CM.api('playback.playPath', { path });
+        fb.queue.addPaths([path]).then(res => {
+          if (!res || res.success === false) return fb.player.playPath(path);
 
           // 队列非空：先将新曲目移到队首，再播放下一首
-          if (insertIdx > 0) CM.api('queue.moveToTop', { index: insertIdx }).then(() => CM.api('playback.next'));
-          else CM.api('playback.next'); // 队列为空：新曲目已在队首
+          if (insertIdx > 0) fb.queue.moveToTop(insertIdx).then(() => fb.player.next());
+          else fb.player.next(); // 队列为空：新曲目已在队首
         });
       })
     );

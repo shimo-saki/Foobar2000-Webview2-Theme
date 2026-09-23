@@ -35,7 +35,7 @@
   }
 
   CM.loadPlaylists = function () {
-    return CM.api('playlist.getAll').then(r => {
+    return fb.playlist.getAll().then(r => {
       // 宿主直接返回数组 [{index,name,trackCount,isActive,isPlaying,...}]
       const lists = Array.isArray(r) ? r : (r?.playlists || []);
       CM.playlists = lists;
@@ -83,7 +83,7 @@
     { name: '播放列表', extensions: ['cue', 'm3u', 'm3u8', 'pls', 'xspf'] }
   ];
   CM.addFilesToPlaylist = function (playlistIdx) {
-    CM.api('dialog.openFile', { title: '选择要添加的音频文件', multiple: true, filters: AUDIO_FILTERS }).then(r => {
+    fb.dialog.openFile({ title: '选择要添加的音频文件', multiple: true, filters: AUDIO_FILTERS }).then(r => {
       if (!r || r.canceled) return;
       const paths = (r.filePaths || []).filter(Boolean);
       if (paths.length) CM._addPaths(playlistIdx, paths, `正在添加 ${paths.length} 个文件`);
@@ -92,7 +92,7 @@
 
   // 本地文件夹 → 歌单（系统文件夹对话框）
   CM.addFolderToPlaylist = function (playlistIdx) {
-    CM.api('dialog.openFolder', { title: '选择要添加的音乐文件夹' }).then(r => {
+    fb.dialog.openFolder({ title: '选择要添加的音乐文件夹' }).then(r => {
       if (r.canceled || !r.folderPath) return;
       // 宿主 addPathsAsync 不会展开文件夹，会把它当单音轨加入导致"格式不支持"，
       // 这里复用 expandPaths 递归枚举文件夹内的音频文件后再添加。
@@ -104,10 +104,10 @@
 
   // 统一路径添加（本地/文件夹/网络共用）
   CM._addPaths = function (playlistIdx, paths, okMsg) {
-    const params = { paths };
-    if (playlistIdx >= 0) params.playlist = playlistIdx;
+    // const params = [paths];
+    // if (playlistIdx >= 0) params.a(playlistIdx);
 
-    CM.api('playlist.addPathsAsync', params).then(res => {
+    fb.playlist.addAsync(playlistIdx >= 0 ? playlistIdx : null, paths).then(res => {
       if (res?.success !== false) CM.showToast(okMsg, null, 'success');
       else CM.showToast('添加失败', res?.error ?? '路径可能无效', 'error');
     });
@@ -120,7 +120,7 @@
       { label: pl.isAutoplaylist ? '自动播放列表' : pl.isLocked ? '锁定播放列表' : '普通播放列表', isLabel: true },
       {
         label: '播放', icon: CM.icons.play,
-        action: () => CM.api('playlist.playTrack', { playlist: idx, index: 0 })
+        action: () => fb.playlist.playTrack(idx, 0)
       },
       { divider: true },
       { label: '添加到歌单', isLabel: true },
@@ -140,26 +140,26 @@
       { label: '歌单操作', isLabel: true },
       {
         label: '复制歌单', icon: CM.icons.copy,
-        action: () => CM.api('playlist.duplicate', { playlist: idx })
+        action: () => fb.playlist.duplicate(idx)
       },
       {
         label: '重命名', icon: CM.icons.rename,
         action: () => CM.showModal({ title: '重命名歌单', input: pl.name || '', okText: '重命名' })
-          .then(name => CM.api('playlist.rename', { playlist: idx, name })
+          .then(name => fb.playlist.rename(idx, name)
             .then(r => { if (r?.success) CM.showToast('已重命名', name, 'success'); })
           )
       },
       {
         label: '清空歌单', icon: CM.icons.trash, disabled: pl.isAutoplaylist,
         action: () => CM.showModal({ title: '清空歌单', desc: `将移除「${pl.name || ''}」中的全部曲目，此操作不可撤销。`, okText: '清空', danger: true })
-          .then(ok => { if (ok) CM.api('playlist.clear', { playlist: idx }); })
+          .then(ok => { if (ok) fb.playlist.clear(idx); })
       },
       {
         label: '删除歌单', icon: CM.icons.trash, danger: true,
         action: () => CM.showModal({ title: '删除歌单', desc: `确定删除「${pl.name || ''}」吗？此操作不可撤销。`, okText: '删除', danger: true })
           .then(ok => {
             if (!ok) return;
-            CM.api('playlist.remove', { playlist: idx }).then(r => {
+            fb.playlist.remove(idx).then(r => {
               if (r?.success === false) return CM.showToast('删除失败', r?.error || '未知错误', 'error');
               CM.showToast('删除成功', pl.name, 'success');
               CM.openPlaylist(0);
@@ -198,18 +198,17 @@
       }
     });
 
-    CM.api('playlist.getTracks', { playlist: idx, count: 5000 }).then(r => {
+    fb.playlist.getTracks(idx, 0, 5000).then(tracks => {
       cancelLoading();
       if (loadId !== _playlistViewLoadId) return;
 
-      if (!r) {
+      if (!tracks) {
         els.trackTbody.innerHTML = '<tr><td colspan="6"><div class="table-error">加载失败</div></td></tr>';
         return;
       }
 
-      const tracks = CM.respTracks(r);
       state.trackCache = tracks;
-      state.playlistTracksTotal = r.total ?? tracks.length;
+      state.playlistTracksTotal = tracks.length;
       const totalDur = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
       els.playlistHeaderMeta.textContent = `${state.playlistTracksTotal} 首曲目 · ${CM.formatTime(totalDur)}`;
 
@@ -218,7 +217,7 @@
       // 封面处理
       if (tracks.length) {
         const i = state.playingPlaylistIndex === idx ? Math.max(state.playingTrackIndex, 0) : 0;
-        CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[i]), maxSize: 600 })
+        fb.artwork.getFb2kUrlByPath(CM.trackPath(tracks[i]), 'front', { maxSize: 600 })
           .then(ar => {
             if (loadId !== _playlistViewLoadId) return;
             els.plCover.src = ar?.dataUrl ?? CM.DEFAULT_TRACK_COVER;
@@ -231,7 +230,7 @@
       CM.preloadTrackMetadata(tracks);
 
       // 滚动到当前播放曲目
-      els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center' });
+      els.trackTbody.$(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center' });
     });
   };
 
@@ -271,7 +270,7 @@
       { length: Math.ceil(missing.length / BATCH) },
       (_, i) => missing.slice(i * BATCH, (i + 1) * BATCH)
     ).forEach(batch => {
-      CM.api('metadata.readBatch', { paths: batch.map(track => track.path) }).then(({ results }) => {
+      fb.metadata.readBatch(batch.map(track => track.path)).then(({ results }) => {
         if (!results || state.trackCache !== currentCache) return; // 歌单已切换，放弃写入
 
         // 主逻辑
@@ -302,7 +301,7 @@
   // 增量更新表格行（仅更新指定索引的单元格内容，不重建整个表格）
   CM._updateTrackRows = function (idxs) {
     idxs.forEach(idx => {
-      const tr = els.trackTbody.querySelector(`tr[data-index="${idx}"]`);
+      const tr = els.trackTbody.$(`tr[data-index="${idx}"]`);
       if (!tr) return;
       const track = state.trackCache[idx];
       if (!track) return;
@@ -325,7 +324,7 @@
 
     const clearAll = () => {
       state.batchSelected.clear();
-      els.trackTbody.querySelectorAll('tr').forEach(r =>
+      els.trackTbody.$$('tr').forEach(r =>
         r.classList.remove('batch-selected', 'selected')
       );
     };
@@ -336,7 +335,7 @@
       state.batchSelected[isSelected ? 'delete' : 'add'](idx);
       tr.classList.toggle('batch-selected', !isSelected);
       if (state.batchSelected.size > 0)
-        els.trackTbody.querySelector('tr.selected')?.classList.remove('selected');
+        els.trackTbody.$('tr.selected')?.classList.remove('selected');
       CM._updateBatchBar();
       return;
     }
@@ -348,7 +347,7 @@
       const end = Math.max(rangeAnchor, idx);
       for (let i = start; i <= end; i++) {
         state.batchSelected.add(i);
-        els.trackTbody.querySelector(`tr[data-index="${i}"]`)?.classList.add('batch-selected');
+        els.trackTbody.$(`tr[data-index="${i}"]`)?.classList.add('batch-selected');
       }
       state.focusedTrackIndex = idx;
       CM._updateBatchBar();
@@ -366,7 +365,7 @@
     const tr = e.target.closest('tr[data-index]');
     if (!tr) return;
     const idx = +tr.dataset.index;
-    CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: idx });
+    fb.playlist.playTrack(state.currentPlaylistIndex, idx);
   });
   els.trackTbody.addEventListener('contextmenu', e => {
     const tr = e.target.closest('tr[data-index]');
@@ -410,7 +409,7 @@
     if (state.sortKey)
       return bail('无法调整顺序', '请先点击已排序的表头取消排序');
 
-    return CM.api('playlist.moveTracks', { playlist: idx, items: indices, delta }).then(r => {
+    return fb.playlist.moveTracks(idx, indices, delta).then(r => {
       if (r?.success !== true) {
         CM.showToast('移动失败', r?.error ?? '请稍后重试', 'error');
         return null;
@@ -476,9 +475,9 @@
     }
 
     // 更新表头排序箭头
-    if (!_sortHeaders) _sortHeaders = els.trackTable.querySelectorAll('thead th[data-sort]');
+    if (!_sortHeaders) _sortHeaders = els.trackTable.$$('thead th[data-sort]');
     _sortHeaders.forEach(th => {
-      const arrow = th.querySelector('.sort-arrow');
+      const arrow = th.$('.sort-arrow');
       if (th.dataset.sort === state.sortKey) {
         th.classList.add('sorted');
         arrow.textContent = state.sortAsc ? '▲' : '▼';
@@ -533,7 +532,7 @@
         tr.classList.remove('batch-selected', 'selected');
         const numCell = tr.children[0];
         if (playing) {
-          if (!numCell.querySelector('.eq-bars')) numCell.innerHTML = EQ_HTML;
+          if (!numCell.$('.eq-bars')) numCell.innerHTML = EQ_HTML;
         } else if (numCell.textContent !== String(row + 1)) {
           numCell.textContent = row + 1;
         }
@@ -570,18 +569,18 @@
     const tr = _lastPlayingTr;
     if (tr?.parentNode) {
       tr.classList.remove('playing');
-      const num = tr.querySelector('.track-num');
-      if (num?.querySelector('.eq-bars')) num.textContent = String(tr.sectionRowIndex + 1);
+      const num = tr.$('.track-num');
+      if (num?.$('.eq-bars')) num.textContent = String(tr.sectionRowIndex + 1);
       _lastPlayingTr = null;
     }
 
     // 设置新的播放行
     if (isPlayingList && state.playingTrackIndex >= 0) {
-      const tr = els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`);
+      const tr = els.trackTbody.$(`tr[data-index="${state.playingTrackIndex}"]`);
       if (tr) {
         tr.classList.add('playing');
         tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        tr.querySelector('.track-num').innerHTML = '<span class="eq-bars"><i></i><i></i><i></i></span>';
+        tr.$('.track-num').innerHTML = '<span class="eq-bars"><i></i><i></i><i></i></span>';
         _lastPlayingTr = tr;
       }
     }
@@ -596,7 +595,7 @@
     const curPath = CM.trackPath(CM.currentTrack);
     if (!curPath) return;
 
-    const node = Array.from(els.mainContent.querySelectorAll('.dc-track, .search-result-item'))
+    const node = Array.from(els.mainContent.$$('.dc-track, .search-result-item'))
       .find(n => n.dataset.path === curPath);
 
     if (node) {
@@ -621,7 +620,7 @@
         label: '播放', icon: CM.icons.play,
         action: () => {
           if (ctx?.playlist != null) {
-            CM.stopPreviewIfActive().then(() => CM.api('playlist.playTrack', { playlist: ctx.playlist, index: ctx.index }));
+            CM.stopPreviewIfActive().then(() => fb.playlist.playTrack(ctx.playlist, ctx.index));
           } else CM.playNow(path);
         }
       },
@@ -636,8 +635,8 @@
       {
         label: '下一首播放', icon: CM.icons.queue,
         action: () => (ctx?.playlist != null
-          ? CM.api('queue.add', { playlist: ctx.playlist, tracks: [ctx.index] })
-          : CM.api('queue.addPaths', { paths: [path] })
+          ? fb.queue.add({ playlist: ctx.playlist, tracks: [ctx.index] })
+          : fb.queue.addPaths({ paths: [path] })
         ).then(r => {
           if (r?.success !== false) {
             CM.showToast('已加入播放队列', CM.trackName(track), 'success');
@@ -655,20 +654,20 @@
         submenu: [
           {
             label: '相同标题', icon: CM.icons.title, disabled: !track.title,
-            action: () => fb2k.invoke('playlist.createAutoplaylist', { name: `查找 - ${track.title}`, query: `%title% HAS ${track.title}` })
+            action: () => fb.playlist.createAutoplaylist(`查找 - ${track.title}`, `%title% HAS ${track.title}`, '%artist% | %album% | %tracknumber%', true)
               .then(r => CM.openPlaylist(r?.index ?? 0))
           },
           {
             label: '相同艺术家', icon: CM.icons.group, disabled: !track.artist,
             submenu: track.artist?.split(', ').map(artist => ({
               label: artist, icon: CM.icons.artist,
-              action: () => fb2k.invoke('playlist.createAutoplaylist', { name: `查找 - ${artist}`, query: `%artist% HAS ${artist}` })
+              action: () => fb.playlist.createAutoplaylist(`查找 - ${artist}`, `%artist% HAS ${artist}`, '%artist% | %album% | %tracknumber%', true)
                 .then(r => CM.openPlaylist(r?.index ?? 0))
             }))
           },
           {
             label: '相同专辑', icon: CM.icons.album, disabled: !track.album,
-            action: () => fb2k.invoke('playlist.createAutoplaylist', { name: `查找 - ${track.album}`, query: `%album% HAS ${track.album}` })
+            action: () => fb.playlist.createAutoplaylist(`查找 - ${track.album}`, `%album% HAS ${track.album}`, '%artist% | %album% | %tracknumber%', true)
               .then(r => CM.openPlaylist(r?.index ?? 0))
           }
         ]
@@ -676,7 +675,7 @@
       { divider: true },
       {
         label: '在资源管理器中显示', icon: CM.icons.folder,
-        action: () => CM.api('shell.showInExplorer', { path })
+        action: () => fb.shell.showInExplorer(path)
       },
       {
         label: '编辑标签', icon: CM.icons.tag,
@@ -711,7 +710,7 @@
       { divider: true },
       {
         label: '从歌单中删除', icon: CM.icons.trash, disabled: pl.isLocked, danger: true,
-        action: () => CM.api('playlist.removeTracks', { playlist: ctx.playlist, items: state.batchSelected.size ? [...state.batchSelected] : [ctx.index] })
+        action: () => fb.playlist.removeTracks(ctx.playlist, state.batchSelected.size ? [...state.batchSelected] : [ctx.index])
       },
       {
         label: '菜单选项',
@@ -732,11 +731,11 @@
         ? { divider: true }
         : {
           label, disabled: !children && !enabled,
-          action: children ? null : () => fb2k.invoke('menu.runContextCommandById', { id: commandId, mode: 'handles', handles }),
+          action: children ? null : () => fb.menu.runContextCommandById(commandId, { mode: 'handles', handles }),
           submenu: children?.map(toItem),
         };
 
-    const { items } = await fb2k.invoke('menu.getContextMenu', { mode: 'handles', handles });
+    const { items } = await fb.menu.getContextMenu({ mode: 'handles', handles });
     return items?.map(toItem);
   }
 
@@ -748,7 +747,7 @@
   CM.previewTrack = function (track, path) {
     if (!path) return CM.showToast('无法试听', '未找到文件路径', 'error');
     const title = CM.trackName(track);
-    CM.api('jitQueue.playNow', { title, trackId: path, url: path }).then(r => {
+    fb.jitQueue.playNow({ title, trackId: path, url: path }).then(r => {
       if (!r.succes) {
         CM.state.previewActive = true;
         CM.showToast('正在试听', title, 'success');
@@ -758,7 +757,7 @@
     });
   };
   CM.stopPreview = function () {
-    CM.api('jitQueue.stop').then(r => {
+    fb.jitQueue.stop().then(r => {
       if (!r?.success) {
         CM.state.previewActive = false;
         CM.showToast('已停止试听');
@@ -782,7 +781,7 @@
           const count = pl.trackCount || pl.itemCount;
           return {
             label: `${pl.name}${count ? ` (${count})` : ''}`,
-            action: () => CM.api('playlist.addPathsAsync', { playlist: pl.index, paths }).then(res => {
+            action: () => fb.playlist.addAsync(pl.index, paths).then(res => {
               if (res?.success !== false) CM.showToast('已添加', `${paths.length} 首到「${pl.name}」`, 'success');
               else CM.showToast('添加失败', res?.error || '歌单可能被锁定', 'error');
             })
@@ -795,9 +794,9 @@
           action: async () => {
             const name = await CM.showModal({ title: '新建歌单', input: '', okText: '创建并添加' });
             if (!name) return;
-            const res = await fb2k.invoke('playlist.create', { name });
+            const res = await fb.playlist.create(name);
             if (res?.success === false) return CM.showToast('创建失败', '无法创建歌单', 'error');
-            await fb2k.invoke('playlist.addPathsAsync', { playlist: res.index, paths });
+            await fb.playlist.addAsync(res.index, paths);
             CM.showToast('已创建并添加', `${name} · ${paths.length} 首`, 'success');
           }
         }
@@ -806,7 +805,7 @@
     };
 
     if (CM.playlists?.length) renderMenu(CM.playlists);
-    else CM.api('playlist.getAll').then(r => renderMenu(Array.isArray(r) ? r : (r?.playlists || [])));
+    else fb.playlist.getAll().then(r => renderMenu(r));
   };
 
   /* ============================================
@@ -814,7 +813,7 @@
    * ============================================ */
   CM.clearBatchSelection = function () {
     state.batchSelected.clear();
-    els.trackTbody.querySelectorAll('tr.batch-selected').forEach(tr => tr.classList.remove('batch-selected'));
+    els.trackTbody.$$('tr.batch-selected').forEach(tr => tr.classList.remove('batch-selected'));
     CM._updateBatchBar();
   };
 
@@ -835,7 +834,7 @@
   CM._batchDeleteFromBar = function () {
     const n = state.batchSelected.size;
     if (n < 2) return;
-    CM.api('playlist.removeTracks', { playlist: state.currentPlaylistIndex, items: [...state.batchSelected] })
+    fb.playlist.removeTracks(state.currentPlaylistIndex, [...state.batchSelected])
       .then(r => { if (r.success) CM.showToast(`已从歌单删除 ${n} 首曲目`, null, 'success'); });
   };
 })();

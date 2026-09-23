@@ -4,86 +4,80 @@
  * ============================================ */
 (function () {
   'use strict';
-  const CM = window.CloudMusic = window.CloudMusic || {};
+  const CM = window.CloudMusic ??= {};
   CM.version = 'V2.5.2-modify';
-
-  /* ============================================
-   * API 包装器 — 出错时resolve null，调用方只需判空
-   * ============================================ */
-  CM.api = function (method, params) {
-    return fb.invoke(method, params || {}).catch(() => null);
-  };
 
   /* ============================================
    * DOM 引用
    * ============================================ */
-  CM.$ = function (id) {
-    return document.getElementById(id);
-  };
+  window.$ = document.querySelector.bind(document);
+  window.$$ = document.querySelectorAll.bind(document);
+  Element.prototype.$ = Element.prototype.querySelector;
+  Element.prototype.$$ = Element.prototype.querySelectorAll;
 
   CM.els = {
-    app: CM.$('app'),
-    titlebar: CM.$('titlebar'), titlebarDrag: CM.$('titlebarDrag'), titlebarControls: CM.$('titlebarControls'),
-    sidebarSearchWrap: CM.$('sidebarSearchWrap'), sidebarSearch: CM.$('sidebarSearch'), sidebarSearchClear: CM.$('sidebarSearchClear'),
-    sidebarNav: CM.$('sidebarNav'), playlistList: CM.$('playlistList'), addPlaylistBtn: CM.$('addPlaylistBtn'),
-    mainTabs: CM.$('mainTabs'), mainBody: CM.$('mainBody'), mainContent: CM.$('mainContent'),
+    app: $('#app'),
+    titlebar: $('#titlebar'), titlebarDrag: $('#titlebarDrag'), titlebarControls: $('#titlebarControls'),
+    sidebarSearchWrap: $('#sidebarSearchWrap'), sidebarSearch: $('#sidebarSearch'), sidebarSearchClear: $('#sidebarSearchClear'),
+    sidebarNav: $('#sidebarNav'), playlistList: $('#playlistList'), addPlaylistBtn: $('#addPlaylistBtn'),
+    mainTabs: $('#mainTabs'), mainBody: $('#mainBody'), mainContent: $('#mainContent'),
     // Discover
-    heroDate: CM.$('heroDate'), heroTitle: CM.$('heroTitle'), heroSub: CM.$('heroSub'),
-    btnPlayDaily: CM.$('btnPlayDaily'), btnRefreshDiscover: CM.$('btnRefreshDiscover'),
-    discoverAlbums: CM.$('discoverAlbums'), discoverRecent: CM.$('discoverRecent'), discoverRandom: CM.$('discoverRandom'),
-    moreAlbums: CM.$('moreAlbums'), moreRecent: CM.$('moreRecent'), refreshRandom: CM.$('refreshRandom'),
+    heroDate: $('#heroDate'), heroTitle: $('#heroTitle'), heroSub: $('#heroSub'),
+    btnPlayDaily: $('#btnPlayDaily'), btnRefreshDiscover: $('#btnRefreshDiscover'),
+    discoverAlbums: $('#discoverAlbums'), discoverRecent: $('#discoverRecent'), discoverRandom: $('#discoverRandom'),
+    moreAlbums: $('#moreAlbums'), moreRecent: $('#moreRecent'), refreshRandom: $('#refreshRandom'),
     // Playlist
-    playlistHeader: CM.$('playlistHeader'), plCoverWrap: CM.$('plCoverWrap'), plCover: CM.$('plCover'),
-    playlistHeaderName: CM.$('playlistHeaderName'), playlistHeaderMeta: CM.$('playlistHeaderMeta'),
-    playlistHeaderTag: CM.$('playlistHeaderTag'),
-    btnPlayAll: CM.$('btnPlayAll'), btnPlaylistMore: CM.$('btnPlaylistMore'),
-    trackTableWrap: CM.$('trackTableWrap'), trackTable: CM.$('trackTable'), trackTbody: CM.$('trackTbody'),
-    position: CM.$('position'),
+    playlistHeader: $('#playlistHeader'), plCoverWrap: $('#plCoverWrap'), plCover: $('#plCover'),
+    playlistHeaderName: $('#playlistHeaderName'), playlistHeaderMeta: $('#playlistHeaderMeta'),
+    playlistHeaderTag: $('#playlistHeaderTag'),
+    btnPlayAll: $('#btnPlayAll'), btnPlaylistMore: $('#btnPlaylistMore'),
+    trackTableWrap: $('#trackTableWrap'), trackTable: $('#trackTable'), trackTbody: $('#trackTbody'),
+    position: $('#position'),
     // Library / Search
-    libraryTree: CM.$('libraryTree'), libraryDetail: CM.$('libraryDetail'),
-    searchInput: CM.$('searchInput'), searchResults: CM.$('searchResults'),
+    libraryTree: $('#libraryTree'), libraryDetail: $('#libraryDetail'),
+    searchInput: $('#searchInput'), searchResults: $('#searchResults'),
     // Right panel
-    rightPanel: CM.$('rightPanel'), lyricsBlurBg: CM.$('lyricsBlurBg'), lyricsArt: CM.$('lyricsArt'),
-    lyricsTrackTitle: CM.$('lyricsTrackTitle'), lyricsTrackArtist: CM.$('lyricsTrackArtist'),
-    lyricsScroll: CM.$('lyricsScroll'), lyricsEmpty: CM.$('lyricsEmpty'),
+    rightPanel: $('#rightPanel'), lyricsBlurBg: $('#lyricsBlurBg'), lyricsArt: $('#lyricsArt'),
+    lyricsTrackTitle: $('#lyricsTrackTitle'), lyricsTrackArtist: $('#lyricsTrackArtist'),
+    lyricsScroll: $('#lyricsScroll'), lyricsEmpty: $('#lyricsEmpty'),
     // Bottom bar
-    bottomArtWrap: CM.$('bottomArtWrap'), bottomArt: CM.$('bottomArt'),
-    bottomTitle: CM.$('bottomTitle'), bottomArtist: CM.$('bottomArtist'),
-    btnOrder: CM.$('btnOrder'),
-    btnPrev: CM.$('btnPrev'), btnPlayPause: CM.$('btnPlayPause'), iconPlay: CM.$('iconPlay'), iconPause: CM.$('iconPause'),
-    btnNext: CM.$('btnNext'), btnStop: CM.$('btnStop'),
-    seekBar: CM.$('seekBar'), seekCurrent: CM.$('seekCurrent'), seekTotal: CM.$('seekTotal'),
-    miniSpectrum: CM.$('miniSpectrum'), btnVisualizer: CM.$('btnVisualizer'),
-    volBtn: CM.$('volBtn'), volIcon: CM.$('volIcon'), volSlider: CM.$('volSlider'),
-    btnQueue: CM.$('btnQueue'), queueBadge: CM.$('queueBadge'),
-    btnLyricsToggle: CM.$('btnLyricsToggle'), btnMore: CM.$('btnMore'),
+    bottomArtWrap: $('#bottomArtWrap'), bottomArt: $('#bottomArt'),
+    bottomTitle: $('#bottomTitle'), bottomArtist: $('#bottomArtist'),
+    btnOrder: $('#btnOrder'),
+    btnPrev: $('#btnPrev'), btnPlayPause: $('#btnPlayPause'), iconPlay: $('#iconPlay'), iconPause: $('#iconPause'),
+    btnNext: $('#btnNext'), btnStop: $('#btnStop'),
+    seekBar: $('#seekBar'), seekCurrent: $('#seekCurrent'), seekTotal: $('#seekTotal'),
+    miniSpectrum: $('#miniSpectrum'), btnVisualizer: $('#btnVisualizer'),
+    volBtn: $('#volBtn'), volIcon: $('#volIcon'), volSlider: $('#volSlider'),
+    btnQueue: $('#btnQueue'), queueBadge: $('#queueBadge'),
+    btnLyricsToggle: $('#btnLyricsToggle'), btnMore: $('#btnMore'),
     // Queue drawer
-    queueDrawer: CM.$('queueDrawer'), queueCount: CM.$('queueCount'), queueList: CM.$('queueList'), queueNow: CM.$('queueNow'),
-    queueClear: CM.$('queueClear'), queueClose: CM.$('queueClose'),
+    queueDrawer: $('#queueDrawer'), queueCount: $('#queueCount'), queueList: $('#queueList'), queueNow: $('#queueNow'),
+    queueClear: $('#queueClear'), queueClose: $('#queueClose'),
     // Overlays
-    modal: CM.$('modal'), modalTitle: CM.$('modalTitle'), modalDesc: CM.$('modalDesc'),
-    modalInput: CM.$('modalInput'), modalOk: CM.$('modalOk'), modalCancel: CM.$('modalCancel'),
-    toastContainer: CM.$('toastContainer'), ctxMenu: CM.$('ctxMenu'), drop: CM.$('drop'),
+    modal: $('#modal'), modalTitle: $('#modalTitle'), modalDesc: $('#modalDesc'),
+    modalInput: $('#modalInput'), modalOk: $('#modalOk'), modalCancel: $('#modalCancel'),
+    toastContainer: $('#toastContainer'), ctxMenu: $('#ctxMenu'), drop: $('#drop'),
     // Immersive NowPlaying
-    npOverlay: CM.$('npOverlay'), npBgBlur: CM.$('npBgBlur'), npVinylDisc: CM.$('npVinylDisc'),
-    npTonearm: CM.$('npTonearm'), npArtwork: CM.$('npArtwork'),
-    npTrackTitle: CM.$('npTrackTitle'), npTrackArtist: CM.$('npTrackArtist'),
-    npTrackFormat: CM.$('npTrackFormat'), npWaveform: CM.$('npWaveform'),
-    npSpectrum: CM.$('npSpectrum'), npLyrics: CM.$('npLyrics'),
-    npSeekBar: CM.$('npSeekBar'), npTimeCurrent: CM.$('npTimeCurrent'), npTimeTotal: CM.$('npTimeTotal'),
-    npCloseBtn: CM.$('npCloseBtn'), npModeBtn: CM.$('npModeBtn'),
-    npBtnPrev: CM.$('npBtnPrev'), npBtnPlay: CM.$('npBtnPlay'), npBtnNext: CM.$('npBtnNext'),
-    npLcPrev: CM.$('npLcPrev'), npLcPlay: CM.$('npLcPlay'), npLcNext: CM.$('npLcNext'),
-    rpImmersiveBtn: CM.$('rpImmersiveBtn'),
+    npOverlay: $('#npOverlay'), npBgBlur: $('#npBgBlur'), npVinylDisc: $('#npVinylDisc'),
+    npTonearm: $('#npTonearm'), npArtwork: $('#npArtwork'),
+    npTrackTitle: $('#npTrackTitle'), npTrackArtist: $('#npTrackArtist'),
+    npTrackFormat: $('#npTrackFormat'), npWaveform: $('#npWaveform'),
+    npSpectrum: $('#npSpectrum'), npLyrics: $('#npLyrics'),
+    npSeekBar: $('#npSeekBar'), npTimeCurrent: $('#npTimeCurrent'), npTimeTotal: $('#npTimeTotal'),
+    npCloseBtn: $('#npCloseBtn'), npModeBtn: $('#npModeBtn'),
+    npBtnPrev: $('#npBtnPrev'), npBtnPlay: $('#npBtnPlay'), npBtnNext: $('#npBtnNext'),
+    npLcPrev: $('#npLcPrev'), npLcPlay: $('#npLcPlay'), npLcNext: $('#npLcNext'),
+    rpImmersiveBtn: $('#rpImmersiveBtn'),
     // Tag Editor
-    tagEditor: CM.$('tagEditor'), tagEditorTitle: CM.$('tagEditorTitle'),
-    tagEditorTrack: CM.$('tagEditorTrack'), tagEditorBody: CM.$('tagEditorBody'),
-    tagEditorHint: CM.$('tagEditorHint'), tagEditorSave: CM.$('tagEditorSave'),
-    tagEditorCancel: CM.$('tagEditorCancel'), tagEditorClose: CM.$('tagEditorClose'),
-    tagCoverFile: CM.$('tagCoverFile'),
+    tagEditor: $('#tagEditor'), tagEditorTitle: $('#tagEditorTitle'),
+    tagEditorTrack: $('#tagEditorTrack'), tagEditorBody: $('#tagEditorBody'),
+    tagEditorHint: $('#tagEditorHint'), tagEditorSave: $('#tagEditorSave'),
+    tagEditorCancel: $('#tagEditorCancel'), tagEditorClose: $('#tagEditorClose'),
+    tagCoverFile: $('#tagCoverFile'),
     // Batch Bar
-    batchBar: CM.$('batchBar'), batchBarCount: CM.$('batchBarCount'),
-    batchEditTags: CM.$('batchEditTags'), batchDeleteTracks: CM.$('batchDeleteTracks'), batchClear: CM.$('batchClear')
+    batchBar: $('#batchBar'), batchBarCount: $('#batchBarCount'),
+    batchEditTags: $('#batchEditTags'), batchDeleteTracks: $('#batchDeleteTracks'), batchClear: $('#batchClear')
   };
 
   /* ============================================
@@ -142,14 +136,14 @@
    * ============================================ */
   CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, autoUpdate: true, background: true };
   CM.loadSettings = async function () {
-    const { success, items } = await fb2k.invoke('config.getAll');
+    const { success, items } = await fb.config.getAll();
     if (!success) return CM.showToast('获取配置失败', null, 'error');
     Object.assign(CM.settings, items);
   };
 
   CM.setSettings = function (key, value) {
     if (CM.settings[key] === value) return;
-    fb2k.invoke('config.set', { key, value }).then(({ success }) => {
+    fb.config.set(key, value).then(({ success }) => {
       if (!success) return CM.showToast('保存配置失败', `${key}: ${value}`, 'error');
       CM.settings[key] = value;
     });
@@ -245,7 +239,7 @@
   // 用法：var resetBtn = CM.setBtnLoading(btn, '加载中...'); ... resetBtn();
   CM.setBtnLoading = function (btn, loadingText) {
     if (!btn) return () => { };
-    const span = btn.querySelector('span');
+    const span = btn.$('span');
     const prevText = span?.textContent;
     btn.disabled = true;
     if (span) span.textContent = loadingText;
@@ -276,7 +270,7 @@
     if (!query) return;
     if (CM.GuidCache.has(query)) return CM.GuidCache.get(query);
 
-    const { results } = await fb2k.invoke('discovery.searchCommands', { query, includeHidden: true });
+    const { results } = await fb.discovery.searchCommands(query, { includeHidden: true });
     const cmd = results.find(item => item.name.includes(query));
     const guid = { name: cmd?.name, guid: cmd?.guid, subGuid: cmd?.subGuid };
     CM.GuidCache.set(query, guid);
@@ -284,7 +278,7 @@
   };
 
   // 获取所有组件
-  fb2k.invoke('discovery.getComponents').then(data => CM.components = data.components);
+  fb.discovery.getComponents().then(data => CM.components = data.components);
 
   CM.checkCompCache = new Map();
   CM.checkComponent = function (name) {

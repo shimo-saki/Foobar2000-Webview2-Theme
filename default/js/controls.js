@@ -12,13 +12,13 @@
    * 导航 / Tab
    * ============================================ */
   CM.bindNavigation = function () {
-    document.querySelectorAll('.nav-item[data-tab]').forEach(el => {
+    $$('.nav-item[data-tab]').forEach(el => {
       el.addEventListener('click', () => CM.switchTab(el.dataset.tab));
       el.addEventListener('keydown', e => {
         if (e.key === 'Enter' || e.key === ' ') CM.switchTab(el.dataset.tab);
       });
     });
-    document.querySelectorAll('.main-tab[data-tab]').forEach(el =>
+    $$('.main-tab[data-tab]').forEach(el =>
       el.addEventListener('click', () => CM.switchTab(el.dataset.tab))
     );
 
@@ -46,7 +46,7 @@
     els.addPlaylistBtn.addEventListener('click', () => {
       CM.showModal({ title: '新建歌单', input: '', okText: '创建' }).then(name => {
         if (!name) return;
-        CM.api('playlist.create', { name }).then(r => {
+        fb.playlist.create(name).then(r => {
           if (r?.success !== false) CM.showToast('已创建歌单', name, 'success');
         });
       });
@@ -88,7 +88,7 @@
   CM.bindPlaylistView = function () {
     els.btnPlayAll.addEventListener('click', () => {
       if (state.currentPlaylistIndex < 0) return;
-      CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: 0 });
+      fb.playlist.playTrack(state.currentPlaylistIndex, 0);
     });
     els.btnPlaylistMore.addEventListener('click', e => {
       e.stopPropagation();
@@ -115,29 +115,29 @@
         { divider: true },
         {
           label: '随机排列', icon: CM.icons.random, disabled,
-          action: () => CM.api('playlist.shuffle', { playlist: idx }),
+          action: () => fb.playlist.shuffle(idx),
         },
         {
           label: '按标题排序', icon: CM.icons.title, disabled,
-          action: () => CM.api('playlist.sort', { playlist: idx, pattern: '%title%' }),
+          action: () => fb.playlist.sort(idx, '%title%'),
         },
         {
           label: '按艺术家排序', icon: CM.icons.artist, disabled,
-          action: () => CM.api('playlist.sort', { playlist: idx, pattern: '%artist% | %album% | %tracknumber%' }),
+          action: () => fb.playlist.sort(idx, '%artist% | %album% | %tracknumber%'),
         },
         {
           label: '反转列表', icon: CM.icons.reverse, disabled,
-          action: () => CM.api('playlist.reverse', { playlist: idx })
+          action: () => fb.playlist.reverse(idx)
             .then(r => { if (r?.success !== false) CM.showToast('已反转列表顺序', null, 'success'); }),
         },
         { divider: true },
         {
           label: '撤销上一步', icon: CM.icons.undo, disabled,
-          action: () => CM.api('playlist.undo', { playlist: idx }),
+          action: () => fb.playlist.undo(idx),
         },
         {
           label: '恢复上一步', icon: CM.icons.redo, disabled,
-          action: () => CM.api('playlist.redo', { playlist: idx }),
+          action: () => fb.playlist.redo(idx),
         },
       ];
       CM.showCtxMenu(rect.left, rect.bottom + 6, items);
@@ -161,7 +161,7 @@
   };
 
   CM.els.position.addEventListener('click', () =>
-    els.trackTbody.querySelector(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    els.trackTbody.$(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   );
 
   /* ============================================
@@ -176,7 +176,7 @@
     bar.addEventListener('change', () => {
       // 不在此处更新 state.position，交给 playback:seeked / timeHighRes 事件统一处理，
       // 避免因 API 返回 undefined/null 时误把旧位置覆盖掉 seeked 事件已写入的正确位置。
-      CM.api('playback.setPosition', { seconds: bar.value / 100 * state.duration }).then(() => {
+      fb.player.seek(bar.value / 100 * state.duration).then(() => {
         state[seekingKey] = false;
         updateFn();
       });
@@ -187,14 +187,14 @@
    * 底栏播放控制
    * ============================================ */
   CM.bindPlaybackControls = function () {
-    els.btnPlayPause.addEventListener('click', () => CM.api('playback.playOrPause'));
-    els.btnPrev.addEventListener('click', () => CM.api('playback.previous'));
-    els.btnNext.addEventListener('click', () => CM.api('playback.next'));
+    els.btnPlayPause.addEventListener('click', () => fb.player.playPause());
+    els.btnPrev.addEventListener('click', () => fb.player.prev());
+    els.btnNext.addEventListener('click', () => fb.player.next());
 
     // 播放顺序：单按钮循环 顺序→列表循环→单曲循环→随机
     els.btnOrder.addEventListener('click', () => {
       const next = CM.ORDERS[(CM.orderIndexOf(state.order) + 1) % CM.ORDERS.length];
-      CM.api('playback.setPlaybackOrder', { order: next.id }).then(r => {
+      fb.player.setOrder(next.id).then(r => {
         if (!r) return CM.showToast('切换失败', null, 'error');
         state.order = next.id;
         CM.updateOrderIcon();
@@ -204,13 +204,13 @@
 
     // 停止播放
     els.btnStop.addEventListener('click', () => {
-      fb2k.invoke('playback.stop');
+      fb.player.stop();
       CM.showToast('已停止播放', null, 'success');
     });
 
     // 播完当前停止
     els.btnStop.addEventListener('contextmenu', () => {
-      CM.api('playback.toggleStopAfterCurrent').then(r => {
+      fb.player.toggleStopAfterCurrent().then(r => {
         state.stopAfterCurrent = r.enabled;
         CM.updateStopIcon();
         CM.showToast(state.stopAfterCurrent ? '将在当前曲目播完后停止' : '已取消单曲停止', null);
@@ -226,17 +226,17 @@
       state.volume = volume;
       state.muted = false;
       els.volSlider.style.setProperty('--vol-pct', `${volume}%`);
-      CM.api('playback.setVolume', { volume });
+      fb.player.setVolume(volume);
       CM.updateVolumeIcon();
     });
-    els.volBtn.addEventListener('click', () => CM.api('playback.toggleMute'));
+    els.volBtn.addEventListener('click', () => fb.player.toggleMute());
     // 音量滚轮微调
     els.volBtn.parentElement.addEventListener('wheel', e => {
       e.preventDefault();
       const volume = Math.max(0, Math.min(100, state.volume + (e.deltaY < 0 ? 5 : -5)));
       state.volume = volume;
       state.muted = false;
-      CM.api('playback.setVolume', { volume });
+      fb.player.setVolume(volume);
       CM.updateVolumeIcon();
     }, { passive: false });
 
@@ -244,7 +244,7 @@
     els.btnQueue.addEventListener('click', () => CM.toggleQueue());
     els.queueClose.addEventListener('click', () => CM.toggleQueue(false));
     els.queueClear.addEventListener('click', () =>
-      CM.api('queue.clear').then(() => {
+      fb.queue.clear().then(() => {
         CM.renderQueue();
         CM.refreshQueueBadge();
         CM.showToast('已清空播放队列', null);
@@ -317,7 +317,7 @@
         label: '输出设备', icon: CM.icons.output,
         submenu: outputDevice.map(d => ({
           label: d.name, checked: d.isCurrent,
-          action: () => CM.api('config.setOutputDevice', { outputId: d.outputId, deviceId: d.deviceId })
+          action: () => fb.config.setOutputDevice(d.outputId, d.deviceId)
             .then(() => { CM.showToast('已切换', d.name, 'success'); syncOutputDevice(); })
             .catch(() => CM.showToast('切换失败', null, 'error'))
         }))
@@ -327,15 +327,15 @@
       { label: 'Foobar 2000', isLabel: true },
       {
         label: '打开控制台', icon: CM.icons.console,
-        action: () => CM.api('misc.showConsole')
+        action: () => fb.misc.showConsole()
       },
       {
         label: '首选项', icon: CM.icons.preferences,
-        action: () => CM.api('misc.showPreferences')
+        action: () => fb.misc.showPreferences()
       },
       {
         label: '刷新媒体库缓存', icon: CM.icons.folder,
-        action: () => CM.api('library.refresh').then(() => {
+        action: () => fb.library.refresh().then(() => {
           CM.showToast('媒体库缓存已刷新', null, 'success');
           if (state.currentTab === 'discover') CM.renderDiscover();
         })
@@ -375,12 +375,12 @@
     const item = (label, field, value, current) => ({
       label, checked: current === value,
       action: () => {
-        CM.api('replaygain.setMode', { [field]: value });
+        fb.invoke('replaygain.setMode', { [field]: value });
         syncReplaygain();
       }
     });
 
-    CM.api('replaygain.getSettings').then(res => {
+    fb.replaygain.getSettings().then(res => {
       replaygain = [
         {
           label: '增益来源',
@@ -451,9 +451,9 @@
   CM.expandPaths = async function (raw) {
     return (await Promise.all(
       raw.filter(Boolean).map(async path => {
-        const info = await fb2k.invoke('file.getInfo', { path });
+        const info = await fb.file.getInfo(path);
         if (info.isFile) return [path];
-        if (info.isDirectory) return (await fb2k.invoke('file.list', { path, pattern: '*.*', recursive: true })).files ?? [];
+        if (info.isDirectory) return (await fb.file.list(path, { pattern: '*.*', recursive: true })).files ?? [];
       })
     )).flat().filter(f => AUDIO_EXT.test(f));
   };
@@ -463,10 +463,7 @@
     CM.expandPaths(raw).then(paths => {
       if (!paths.length) return;
 
-      const params = { paths };
-      if (state.currentPlaylistIndex >= 0) params.playlist = state.currentPlaylistIndex;
-
-      CM.api('playlist.addPathsAsync', params).then(res => {
+      fb.playlist.addAsync(state.currentPlaylistIndex >= 0 ? state.currentPlaylistIndex : null, paths).then(res => {
         if (res?.success !== false) CM.showToast(`正在添加 ${paths.length} 个项目`, null, 'success');
       });
     });
@@ -478,12 +475,12 @@
     fb.on('dnd:enter', () => els.drop.showModal());
     fb.on('dnd:leave', () => els.drop.close());
     fb.on('dnd:drop', data => {
-      els.drop.close()
+      els.drop.close();
       if (!CM.playlists.length) return CM.showToast('请先添加歌单', null, 'error');
       if (CM.playlists?.find(p => p.index === CM.state.currentPlaylistIndex)?.isLocked)
         return CM.showToast('当前歌单已锁定，无法添加项目', null, 'error');
 
-      CM.api('dnd.getPathsAsync', { sessionId: data?.sessionId }).then(r => {
+      fb.dnd.getPathsAsync(data?.sessionId).then(r => {
         const paths = r.paths?.length ? r.paths : data?.paths;
         CM.addDroppedPaths(paths);
       });
@@ -504,28 +501,28 @@
       switch (e.key) {
         case ' ':
           e.preventDefault();
-          CM.api('playback.playOrPause');
+          fb.player.playPause();
           break;
         case 'arrowleft':
-          if (e.ctrlKey) CM.api('playback.previous');
-          else CM.api('playback.setPosition', { seconds: Math.max(0, state.position - 5) });
+          if (e.ctrlKey) fb.player.prev();
+          else fb.player.seek(Math.max(0, state.position - 5));
           break;
         case 'arrowright':
-          if (e.ctrlKey) CM.api('playback.next');
-          else CM.api('playback.setPosition', { seconds: Math.min(state.duration, state.position + 5) });
+          if (e.ctrlKey) fb.player.next();
+          else fb.player.seek(Math.min(state.duration, state.position + 5));
           break;
         case 'arrowup':
           e.preventDefault();
           if (e.altKey) CM.keyboardMoveTracks(-1); // Alt+↑ 上移选中/聚焦曲目
-          else CM.api('playback.volumeUp');
+          else fb.player.volumeUp();
           break;
         case 'arrowdown':
           e.preventDefault();
           if (e.altKey) CM.keyboardMoveTracks(1);  // Alt+↓ 下移选中/聚焦曲目
-          else CM.api('playback.volumeDown');
+          else fb.player.volumeDown();
           break;
         case 'm': case 'M':
-          CM.api('playback.toggleMute');
+          fb.player.toggleMute();
           break;
         case 'l': case 'L':
           CM.setLyricsVisible(!state.lyricsVisible);
@@ -553,7 +550,7 @@
    * ============================================ */
   CM.initTaskbar = function () {
     // 探测任务栏 API 可用性（进度条依赖）；不可用时静默跳过
-    CM.api('taskbar.setProgress', { state: 'none' }).then(r => CM.taskbarAvailable = !!r?.success);
+    fb.taskbar.setProgress({ state: 'none' }).then(r => CM.taskbarAvailable = !!r?.success);
   };
 
   // 节流：仅当可见进度 1% 变化时才通过 IPC 更新任务栏，避免 timeHighRes 高频事件（~30次/秒）反复调用宿主 API
@@ -563,7 +560,7 @@
     if (!CM.currentTrack || state.duration <= 0) {
       if (_lastTaskbarVal !== -2) {
         _lastTaskbarVal = -2;
-        CM.api('taskbar.setProgress', { state: 'none' });
+        fb.taskbar.setProgress({ state: 'none' });
       }
       return;
     }
@@ -576,7 +573,7 @@
 
     _lastTaskbarVal = pct;
     _lastTaskbarState = stateName;
-    CM.api('taskbar.setProgress', { state: stateName, value });
+    fb.taskbar.setProgress({ state: stateName, value });
   };
 
   /* ============================================
@@ -589,20 +586,18 @@
     els.npCloseBtn.addEventListener('click', () => CM.toggleNpOverlay(false));
 
     // 沉浸式顶部拖拽条：无系统标题栏时仍可移动窗口
-    const npDrag = CM.$('npDragHandle');
-    if (npDrag) {
-      npDrag.addEventListener('mousedown', e => { if (e.button === 0) CM.api('window.startDrag'); });
-      npDrag.addEventListener('dblclick', () => CM.api('window.toggleMaximize'));
-    }
+    const npDrag = $('#npDragHandle');
+    npDrag?.addEventListener('mousedown', e => { if (e.button === 0) fb.ui.startDrag(); });
+    npDrag?.addEventListener('dblclick', () => fb.ui.toggleMaximize());
 
     // 模式切换
     els.npModeBtn.addEventListener('click', () => CM.toggleNpMode());
 
     // 播放控制（主视图 + 纯歌词模式两套，动作相同）
     const bindTransport = (play, prev, next) => {
-      play.addEventListener('click', () => CM.api('playback.playOrPause'));
-      prev.addEventListener('click', () => CM.api('playback.previous'));
-      next.addEventListener('click', () => CM.api('playback.next'));
+      play.addEventListener('click', () => fb.player.playPause());
+      prev.addEventListener('click', () => fb.player.prev());
+      next.addEventListener('click', () => fb.player.next());
     };
     bindTransport(els.npBtnPlay, els.npBtnPrev, els.npBtnNext);
     bindTransport(els.npLcPlay, els.npLcPrev, els.npLcNext);
@@ -625,7 +620,7 @@
   function executeEslyricCommand(desc, onSuccess) {
     CM.getGuid(desc).then(cmd => {
       if (!cmd) return CM.showToast('执行失败', '请确认已安装 ESLyric 插件', 'error');
-      CM.api('discovery.executeMainMenuCommand', cmd).then(r => {
+      fb.discovery.executeMainMenuCommand(cmd).then(r => {
         if (r?.success === false) return CM.showToast('执行失败', '命令执行失败', 'error');
         onSuccess();
       });
@@ -634,10 +629,10 @@
 
   // 同步状态
   function syncEslyricState() {
-    [['显示桌面歌词', 'show'], ['窗口置顶', 'pin'], ['锁定桌面歌词', 'lock']].forEach((([query, key]) =>
-      CM.api('discovery.searchCommands', { query, includeHidden: true })
+    [['显示桌面歌词', 'show'], ['窗口置顶', 'pin'], ['锁定桌面歌词', 'lock']].forEach(([query, key]) =>
+      fb.discovery.searchCommands(query, { includeHidden: true })
         .then(cmd => ESLYRIC_STATE[key] = cmd?.results?.find(c => c.name.includes(query))?.checked ?? false)
-    ));
+    );
   };
   syncEslyricState();
 
@@ -683,20 +678,21 @@
   };
 
   function syncEQState() {
-    CM.api('dsp.getChain').then(r => eqMode = findEQInChain(r?.dsps) >= 0);
+    fb.dsp.getChain().then(r => eqMode = findEQInChain(r?.dsps) >= 0);
   }
   syncEQState();
 
   CM.toggleEQ = function () {
-    CM.api('dsp.getChain').then(r => {
+    fb.dsp.getChain().then(r => {
       if (!r) return CM.showToast('操作失败', '无法获取 DSP 链', 'error');
       const eqIndex = findEQInChain(r.dsps);
       const isActive = eqIndex >= 0;
-      CM.api(`dsp.${isActive ? 'removeDsp' : 'addDsp'}`, isActive ? { index: eqIndex } : { guid: EQ_GUID }).then(res => {
-        if (res?.success !== false) {
-          eqMode = !isActive;
-          CM.showToast(eqMode ? '均衡器已开启' : '均衡器已关闭', null, eqMode ? 'success' : null);
-        } else CM.showToast('操作失败', null, 'error');
+      const p = isActive ? fb.dsp.removeDsp(eqIndex) : fb.dsp.addDsp(EQ_GUID);
+      p.then(res => {
+        if (res?.success === false) return CM.showToast('操作失败', null, 'error');
+
+        eqMode = !isActive;
+        CM.showToast(eqMode ? '均衡器已开启' : '均衡器已关闭', null, eqMode ? 'success' : null);
       });
     });
   };
@@ -706,7 +702,7 @@
    * ============================================ */
   let outputDevice = [];
   function syncOutputDevice() {
-    fb2k.invoke('config.getOutputDevices').then(devices => {
+    fb.config.getOutputDevices().then(devices => {
       if (!devices.length) return CM.showToast('无法获取输出设备', null, 'error');
       outputDevice = devices;
     });
@@ -718,10 +714,10 @@
    * ============================================ */
   CM.showAbout = function () {
     Promise.all([
-      CM.api('config.getVersionInfo'),
-      CM.api('playcount.getStats'),
-      CM.api('config.getOutputConfig'),
-      CM.api('audio.getStreamInfo')
+      fb.config.getVersionInfo(),
+      fb.playcount.getStats(),
+      fb.config.getOutputConfig(),
+      fb.audio.getStreamInfo()
     ]).then(([ver = {}, stats = {}, out = {}, stream = {}]) => {
       const info = (label, value, disabled) => ({
         disabled,
@@ -797,7 +793,7 @@
   CM.fetchTagsOnline = function (path) {
     if (!path) return;
 
-    CM.api('discovery.executeContextMenuCommand', CM.getGuid('freedb')).then(r => {
+    fb.discovery.executeContextMenuCommand(CM.getGuid('freedb')).then(r => {
       if (!r?.success) return CM.showToast('获取失败', '命令执行失败，请尝试在 foobar2000 中手动操作', 'error');
       CM.showToast('已触发在线获取', '请在弹出的窗口中完成操作', null);
     });

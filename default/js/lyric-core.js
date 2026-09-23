@@ -27,7 +27,7 @@
     if (useCache && lrcCache.has(path)) return setLyrics(lrcCache.get(path));
 
     const loadId = ++_lyricLoadId;
-    CM.api('lyrics.get', { path }).then(r => {
+    fb.lyrics.get(path).then(r => {
       if (loadId !== _lyricLoadId) return; // 已被新的切歌请求取代
       if (!r?.lyrics) return setLyrics(EMPTY_LYRIC); // 没有歌词
 

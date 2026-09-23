@@ -14,7 +14,7 @@
    * ============================================ */
   CM.refreshQueueBadge = function () {
     if (_queueRebuilding) return; // 排序重建期间跳过，完成后统一刷新
-    CM.api('queue.getCount').then(r => {
+    fb.queue.getCount().then(r => {
       if (_queueRebuilding) return;
       const n = CM.respCount(r);
       els.queueBadge.textContent = n > 99 ? '99+' : n;
@@ -49,10 +49,10 @@
     if (!path || !state.queueOpen) return;
 
     // 封面小图；响应到达时校验曲目未变更，避免切歌竞态贴错封面
-    CM.api('artwork.getFb2kUrl', { maxSize: 120 }).then(r => {
+    fb.artwork.getFb2kUrl('front', { maxSize: 120 }).then(r => {
       if (!r?.dataUrl || r.available === false) return;
       if (CM.trackPath(CM.currentTrack) !== path) return;
-      const art = box.querySelector('.queue-now-art');
+      const art = box.$('.queue-now-art');
       if (art) {
         art.style.backgroundImage = `url("${r.dataUrl}")`;
         art.classList.remove('ph');
@@ -76,7 +76,7 @@
       els.queueList.innerHTML = CM.loadingHTML('');
     }, CM._queueItems ? 150 : 0);
 
-    CM.api('queue.get').then(r => {
+    fb.queue.get().then(r => {
       cancelLoading();
       if (_queueRebuilding) return;
       if (_qDragIndex >= 0) { CM._queueRefreshPending = true; return; } // 取数期间用户又开始了拖拽
@@ -139,7 +139,7 @@
   }
   // 按纵坐标计算落点：目标行上半 → 插到该行之前，否则插到最后
   function _queueDropTargetAt(clientY) {
-    const items = [...els.queueList.querySelectorAll('.queue-item')];
+    const items = [...els.queueList.$$('.queue-item')];
     if (!items.length) return null;
 
     const el = items.find(el => {
@@ -159,7 +159,7 @@
     _qPointerDrag = null;
     _qDragIndex = -1;
     document.body.classList.remove('is-reordering');
-    els.queueList.querySelectorAll('.queue-item.dragging').forEach(el => el.classList.remove('dragging'));
+    els.queueList.$$('.queue-item.dragging').forEach(el => el.classList.remove('dragging'));
 
     if (CM._queueRefreshPending) {
       CM._queueRefreshPending = false;
@@ -176,7 +176,7 @@
         const idx = parseInt(btn.closest('.queue-item').dataset.i, 10);
         if (isNaN(idx)) return;
 
-        CM.api('queue.remove', { index: idx }).then(() => {
+        fb.queue.remove(idx).then(() => {
           CM.renderQueue();
           CM.refreshQueueBadge();
         });
@@ -211,7 +211,7 @@
           if (Math.abs(e.clientX - drag.startX) + Math.abs(e.clientY - drag.startY) < 4) return;
           drag.active = true;
           _qDragIndex = drag.index;
-          els.queueList.querySelector(`.queue-item[data-i="${drag.index}"]`)?.classList.add('dragging');
+          els.queueList.$(`.queue-item[data-i="${drag.index}"]`)?.classList.add('dragging');
           document.body.classList.add('is-reordering');
         }
 
@@ -286,15 +286,15 @@
 
     const readd = async it => {
       const ref = playlistRef(it);
-      if (ref) return CM.api('queue.add', { playlist: ref.playlist, tracks: [ref.playlistItem] });
+      if (ref) return fb.queue.add({ playlist: ref.playlist, tracks: [ref.playlistItem] });
       const tt = it.track || it;
       const pp = tt.absolutePath || tt.path || '';
-      return pp ? CM.api('queue.addPaths', { paths: [pp] }) : null;
+      return pp ? fb.queue.addPaths([pp]) : null;
     };
 
     _queueRebuilding = true;
     try {
-      const clearRes = await CM.api('queue.clear');
+      const clearRes = await fb.queue.clear();
       if (clearRes?.success === false) {
         CM.showToast('调整失败', clearRes.error || '无法清空队列', 'error');
         return null;

@@ -27,10 +27,7 @@
       setTimeout(() => CM.renderNpOverlay(), 200);
     }
     // 同步"正在播放"标记（列表行 / 侧栏歌单徽标）
-    Promise.all([
-      CM.api('playback.getPlayingPlaylist'),
-      CM.api('playback.getCurrentTrackIndex')
-    ]).then(([pl, ti]) => {
+    Promise.all([fb.player.getPlayingPlaylist(), fb.player.getCurrentTrackIndex()]).then(([pl, ti]) => {
       const newPl = pl?.playlist ?? pl?.index ?? -1;
       const changed = newPl !== CM.state.playingPlaylistIndex;
       CM.state.playingPlaylistIndex = newPl;
@@ -44,30 +41,30 @@
    * 初始状态同步（fb.ready 之后）
    * ============================================ */
   function syncInitialState() {
-    CM.api('playback.getState').then(r => {
+    fb.player.getState().then(r => {
       CM.changePlayerState(r.state);
       setPlayingVisual(r.state === "playing");
     });
-    CM.api('playback.getCurrentTrack').then(r => {
+    fb.player.getCurrentTrack().then(r => {
       const track = r && (r.track || (r.title || r.path ? r : null));
       if (track) onTrackChanged(track);
     });
-    CM.api('playback.getPosition').then(r => {
+    fb.player.getPosition().then(r => {
       CM.state.position = r.position || 0;
       CM.state.duration = r.duration || 0;
       CM.updateSeekUI();
     });
-    CM.api('playback.getVolume').then(r => {
+    fb.player.getVolume().then(r => {
       CM.state.volume = Math.round(r.volume);
       CM.state.muted = r.isMuted;
       if (CM.els.volSlider) CM.els.volSlider.value = CM.state.volume;
       CM.updateVolumeIcon();
     });
-    CM.api('playback.getPlaybackOrder').then(r => {
+    fb.player.getOrder().then(r => {
       CM.state.order = r.order;
       CM.updateOrderIcon();
     });
-    CM.api('playback.getStopAfterCurrent').then(r => {
+    fb.player.getStopAfterCurrent().then(r => {
       CM.state.stopAfterCurrent = r.enabled;
       CM.updateStopIcon();
     });
@@ -227,7 +224,7 @@
         const saved = CM.settings.lastPlaylist;
         const lists = CM.playlists || [];
         const target = saved ? lists.find(item => item.name === saved)?.index ?? -1 : -1;
-        CM.api('playlist.getActive').then(r => {
+        fb.playlist.getActive().then(r => {
           const idx = r?.index ?? r?.playlist;
           const use = target >= 0 ? target : (idx >= 0 ? idx : target);
           if (use >= 0) {
@@ -280,6 +277,6 @@
       }
     });
 
-    fb2k.invoke('http.get', { url: 'https://api.github.com/repos/shimo-saki/Foobar2000-Webview2-Theme/releases/latest' });
+    fb.http.get('https://api.github.com/repos/shimo-saki/Foobar2000-Webview2-Theme/releases/latest');
   };
 })();

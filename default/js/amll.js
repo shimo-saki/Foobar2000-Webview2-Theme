@@ -21,7 +21,7 @@ requestAnimationFrame(loop);
 
 player.addEventListener("line-click", async event => {
   const time = event.line.getLine().startTime;
-  await fb2k.invoke('playback.setPosition', { position: time / 1000 });
+  await fb.player.seek(time / 1000);
   player.setCurrentTime(time, true);
 });
 

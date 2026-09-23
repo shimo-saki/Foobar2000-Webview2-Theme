@@ -24,7 +24,7 @@
   CM.renderDiscoverAlbums = function () {
     els.discoverAlbums.innerHTML = CM.loadingHTML('加载中...', 'grid-column:1/-1');
     // 不传 includeCover 避免阻塞 UI（getAlbums+cover 耗时 1000ms+）；改用 fillArtworkBatch 懒加载
-    CM.api('library.getAlbums', { limit: 200 }).then(r => {
+    fb.library.getAlbums(200).then(r => {
       const showError = html => els.discoverAlbums.innerHTML = html;
 
       if (!r) return showError(`<div class="section-error" style="grid-column:1/-1">${CM.icons.error}<span>媒体库不可用</span></div>`);
@@ -49,21 +49,22 @@
 
   CM.renderDiscoverRecent = function () {
     els.discoverRecent.innerHTML = CM.loadingHTML();
-    CM.api('library.getRecentlyAdded', { limit: 8 }).then(r => {
+    fb.library.getRecentlyAdded(10).then(r => {
       CM.renderTrackRows(els.discoverRecent, CM.respTracks(r), '暂无最近添加的曲目');
     });
   };
 
   CM.renderDiscoverRandom = function () {
     els.discoverRandom.innerHTML = CM.loadingHTML();
-    CM.api('library.getRandomTracks', { count: 10 })
-      .then(r => CM.renderTrackRows(els.discoverRandom, CM.respTracks(r), '媒体库为空'));
+    fb.library.getRandomTracks(10).then(r =>
+      CM.renderTrackRows(els.discoverRandom, CM.respTracks(r), '媒体库为空')
+    );
   };
 
   // 每日推荐：随机 30 首，原子替换播放列表并播放
   CM.playDaily = function () {
     const resetBtn = CM.setBtnLoading(els.btnPlayDaily, '加载中...');
-    CM.api('library.getRandomTracks', { count: 30 }).then(r => {
+    fb.library.getRandomTracks(30).then(r => {
       const tracks = CM.respTracks(r);
       if (!tracks.length) { CM.showToast('媒体库为空', '请先在 foobar2000 中配置媒体库', 'error'); resetBtn(); return; }
       CM.playAllTracks(tracks, '每日推荐', ok => {
@@ -83,7 +84,7 @@
       return;
     }
     els.searchResults.innerHTML = CM.loadingHTML('搜索中...');
-    CM.api('library.search', { query, limit: 200 }).then(r => {
+    fb.library.search(query, 200).then(r => {
       if (!r || r.success === false) {
         els.searchResults.innerHTML = `<div class="section-error">${CM.icons.error}<span>搜索失败，媒体库可能未就绪</span></div>`;
         return;
@@ -120,7 +121,7 @@
 
       els.searchResults.innerHTML = header + items.join('');
       CM.fillArtworkBatch(els.searchResults, 120);
-      els.searchResults.querySelector('#searchAddAllBtn')
+      els.searchResults.$('#searchAddAllBtn')
         ?.addEventListener('click', e => CM.addToPlaylistMenu(tracks, e.clientX, e.clientY));
       CM._ensureMainContentDelegation(); // 搜索结果事件由 mainContent 统一委托
     });

@@ -18,12 +18,12 @@
       els.npOverlay.classList.add('open');
       document.body.style.overflow = 'hidden';
       els.npLyrics.replaceChildren(CM.player.getElement());
-      CM.showDynamicBackground(CM.settings.background, els.npOverlay)
+      CM.showDynamicBackground(CM.settings.background, els.npOverlay);
     } else {
       els.npOverlay.classList.remove('open');
       document.body.style.overflow = '';
       els.lyricsScroll.replaceChildren(CM.player.getElement());
-      CM.showDynamicBackground(CM.settings.background)
+      CM.showDynamicBackground(CM.settings.background);
     }
   };
 
@@ -51,7 +51,7 @@
     const el = els.npTrackFormat;
     if (!el) return;
 
-    CM.api('audio.getStreamInfo').then(s => {
+    fb.audio.getStreamInfo().then(s => {
       if (!s?.codec) { el.textContent = ''; return; }
 
       const parts = [s.codec];
@@ -112,9 +112,7 @@
     }
 
     _wavePending = { taskId: null };
-    CM.api('audio.generateFullWaveform', {
-      path, resolution: 256, method: 'rms', preferCache: true
-    }).then(r => {
+    fb.audio.generateFullWaveform(path).then(r => {
       if (r?.taskId) {
         if (_wavePending) _wavePending.taskId = r.taskId;
       } else if (r?.waveform?.length) {
@@ -130,8 +128,8 @@
   };
 
   CM.updateNpModeIcon = function () {
-    const vinylIcon = els.npModeBtn.querySelector('.np-mode-vinyl');
-    const lyricsIcon = els.npModeBtn.querySelector('.np-mode-lyrics');
+    const vinylIcon = els.npModeBtn.$('.np-mode-vinyl');
+    const lyricsIcon = els.npModeBtn.$('.np-mode-lyrics');
     if (state.npMode === 'lyrics') {
       vinylIcon.style.display = 'none';
       lyricsIcon.style.display = 'inline';
