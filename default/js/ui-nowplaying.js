@@ -39,8 +39,6 @@
     CM.loadNpWaveform(CM.trackPath(CM.currentTrack));
     // 同步进度条
     CM.updateNpSeekUI();
-    // 初始化频谱
-    CM.initNpSpectrum();
     // 设置初始模式
     els.npOverlay.classList.toggle('lyrics-only', state.npMode === 'lyrics');
     CM.updateNpModeIcon();
@@ -150,16 +148,4 @@
   CM.updateNpSeekUI = function () {
     CM._updateSeekBar(els.npSeekBar, els.npTimeCurrent, els.npTimeTotal, '--np-seek-pct', 'npSeeking');
   };
-
-  const NP_SPEC_BARS = 32;
-  let npSpecBarEls = [];
-  CM.initNpSpectrum = function () {
-    npSpecBarEls = CM.createSpectrumBars(els.npSpectrum, NP_SPEC_BARS, 'np-spec-bar');
-  };
-
-  CM.updateNpSpectrum = function (data) {
-    if (!state.npOpen || !npSpecBarEls.length) return;
-    CM.updateSpectrumBars(npSpecBarEls, data?.spectrum, NP_SPEC_BARS, 36, 28);
-  };
-
 })();

@@ -23,9 +23,7 @@
     CM.loadLyrics();
     CM._renderQueueNow(); // 队列抽屉"正在播放"卡片
     // 如果沉浸式页面打开，重新渲染
-    if (CM.state.npOpen) {
-      setTimeout(() => CM.renderNpOverlay(), 200);
-    }
+    if (CM.state.npOpen) setTimeout(CM.renderNpOverlay, 200);
     // 同步"正在播放"标记（列表行 / 侧栏歌单徽标）
     Promise.all([fb.player.getPlayingPlaylist(), fb.player.getCurrentTrackIndex()]).then(([pl, ti]) => {
       const newPl = pl?.playlist ?? pl?.index ?? -1;
@@ -57,7 +55,7 @@
     fb.player.getVolume().then(r => {
       CM.state.volume = Math.round(r.volume);
       CM.state.muted = r.isMuted;
-      if (CM.els.volSlider) CM.els.volSlider.value = CM.state.volume;
+      CM.els.volSlider.value = CM.state.volume;
       CM.updateVolumeIcon();
     });
     fb.player.getOrder().then(r => {
@@ -74,111 +72,106 @@
   /* ============================================
    * 事件订阅（全部事件驱动，不做轮询）
    * ============================================ */
-  function subscribeEvents() {
-    fb.on('playback:trackChanged', data => {
-      onTrackChanged(data);
-      if (CM.state.npOpen) { CM.updateNpFormat(); CM.loadNpWaveform(CM.trackPath(CM.currentTrack)); }
-      setPlayingVisual(true);
-    });
+  fb.on('playback:trackChanged', data => {
+    onTrackChanged(data);
+    if (CM.state.npOpen) { CM.updateNpFormat(); CM.loadNpWaveform(CM.trackPath(CM.currentTrack)); }
+    setPlayingVisual(true);
+  });
 
-    fb.on('playback:stateChanged', data => {
-      CM.changePlayerState(data.state);
-      // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
-      CM.state.duration = data.duration;
-      if (!CM.state.seeking) CM.state.position = data.position;
-      CM.updateSeekUI();
-      setPlayingVisual(data.state === 'playing');
-    });
+  fb.on('playback:stateChanged', data => {
+    CM.changePlayerState(data.state);
+    // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
+    CM.state.duration = data.duration;
+    if (!CM.state.seeking) CM.state.position = data.position;
+    CM.updateSeekUI();
+    setPlayingVisual(data.state === 'playing');
+  });
 
-    fb.on('playback:paused', data => {
-      setPlayingVisual(!data?.paused);
-    });
+  fb.on('playback:paused', data => {
+    setPlayingVisual(!data?.paused);
+  });
 
-    // 高分辨率进度事件 — 驱动进度条 + 歌词高亮 + 任务栏进度
-    fb.on('playback:timeHighRes', data => {
-      if (!CM.state.seeking) {
-        CM.state.position = data.position;
-        CM.updateSeekUI();
-      }
-      CM.updateTaskbarProgress();
-      if (CM.state.npOpen && !CM.state.npSeeking) CM.updateNpSeekUI();
-    });
-
-    fb.on('playback:seeked', data => {
+  // 高分辨率进度事件 — 驱动进度条 + 歌词高亮 + 任务栏进度
+  fb.on('playback:timeHighRes', data => {
+    if (!CM.state.seeking) {
       CM.state.position = data.position;
-      CM.player.setCurrentTime(data.position * 1000, true);
-      CM.state.seeking = false;
-      CM.state.npSeeking = false;
       CM.updateSeekUI();
-      if (CM.state.npOpen) CM.updateNpSeekUI();
-    });
+    }
+    CM.updateTaskbarProgress();
+    if (CM.state.npOpen && !CM.state.npSeeking) CM.updateNpSeekUI();
+  });
 
-    fb.on('playback:volumeChanged', data => {
-      CM.state.volume = Math.round(data.volume);
-      CM.state.muted = data.isMuted;
-      if (CM.els.volSlider) CM.els.volSlider.value = CM.state.volume;
-      CM.updateVolumeIcon();
-      CM.setSettings('volume', CM.state.volume);
-    });
+  fb.on('playback:seeked', data => {
+    CM.state.position = data.position;
+    CM.player.setCurrentTime(data.position * 1000, true);
+    CM.state.seeking = CM.state.npSeeking = false;
+    CM.updateSeekUI();
+    if (CM.state.npOpen) CM.updateNpSeekUI();
+  });
 
-    fb.on('playback:orderChanged', data => {
-      if (!data || data.order == null) return;
-      CM.state.order = data.order;
-      CM.updateOrderIcon();
-    });
+  fb.on('playback:volumeChanged', data => {
+    CM.state.volume = Math.round(data.volume);
+    CM.state.muted = data.isMuted;
+    CM.els.volSlider.value = CM.state.volume;
+    CM.updateVolumeIcon();
+    CM.setSettings('volume', CM.state.volume);
+  });
 
-    fb.on('playback:stopAfterCurrentChanged', data => {
-      CM.state.stopAfterCurrent = data.enabled;
-      CM.updateStopIcon();
-    });
+  fb.on('playback:orderChanged', data => {
+    if (!data || data.order == null) return;
+    CM.state.order = data.order;
+    CM.updateOrderIcon();
+  });
 
-    fb.on('playback:queueChanged', () => {
-      CM.refreshQueueBadge();
-      if (CM.state.queueOpen) CM.renderQueue();
-    });
+  fb.on('playback:stopAfterCurrentChanged', data => {
+    CM.state.stopAfterCurrent = data.enabled;
+    CM.updateStopIcon();
+  });
 
-    // 输出设备切换（如接入解码器）会打断宿主侧的频谱计算管线，但页面仍持有旧订阅句柄，
-    // 导致频谱流永久中断（直到刷新页面）。此处先停掉旧订阅再重新订阅即可恢复。
-    fb.on('audio:outputDeviceChanged', () => {
-      if (!CM.state.visualizerActive) return;
-      CM.stopSpectrum();
-      CM.startSpectrum();
-    });
+  fb.on('playback:queueChanged', () => {
+    CM.refreshQueueBadge();
+    if (CM.state.queueOpen) CM.renderQueue();
+  });
 
-    fb.on('playback:stopped', () => {
-      CM.currentTrack = null;
-      CM._renderQueueNow(); // 隐藏队列抽屉"正在播放"卡片
-      CM.state.playingTrackIndex = -1;
-      CM.state.position = CM.state.duration = 0;
-      CM.updateTrackInfo(null);
-      CM.setArtwork(null);
-      CM.updateSeekUI();
-      setPlayingVisual(false);
-      CM.refreshPlayingMarks();
-    });
+  // 输出设备切换（如接入解码器）会打断宿主侧的频谱计算管线，但页面仍持有旧订阅句柄，
+  // 导致频谱流永久中断（直到刷新页面）。此处先停掉旧订阅再重新订阅即可恢复。
+  fb.on('audio:outputDeviceChanged', () => {
+    if (!CM.state.visualizerActive) return;
+    CM.stopSpectrum();
+    CM.startSpectrum();
+  });
 
-    // 播放列表结构变化 → 刷新侧栏 + 当前列表视图
-    const refreshPlaylistUI = CM.debounce(() => {
-      CM.loadPlaylists();
-      if (CM.state.currentTab === 'playlist' && CM.state.currentPlaylistIndex >= 0) {
-        CM.renderPlaylistView(CM.state.currentPlaylistIndex);
-      }
-    }, 200);
-    ['playlist:created', 'playlist:renamed', 'playlist:removed', 'playlist:activated',
-      'playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered'
-    ].forEach(ev => fb.on(ev, refreshPlaylistUI));
+  fb.on('playback:stopped', () => {
+    CM.currentTrack = null;
+    CM._renderQueueNow(); // 隐藏队列抽屉"正在播放"卡片
+    CM.state.playingTrackIndex = -1;
+    CM.state.position = CM.state.duration = 0;
+    CM.updateTrackInfo(null);
+    CM.setArtwork(null);
+    CM.updateSeekUI();
+    setPlayingVisual(false);
+    CM.refreshPlayingMarks();
+  });
 
-    // 媒体库就绪后重绘发现页（首次启动时库可能延迟初始化）
-    fb.on('library:initialized', () => {
-      if (CM.state.currentTab === 'discover') CM.renderDiscover();
-    });
+  // 播放列表结构变化 → 刷新侧栏 + 当前列表视图
+  const refreshPlaylistUI = CM.debounce(() => {
+    CM.loadPlaylists();
+    if (CM.state.currentTab === 'playlist' && CM.state.currentPlaylistIndex >= 0) {
+      CM.renderPlaylistView(CM.state.currentPlaylistIndex);
+    }
+  }, 200);
+  ['playlist:created', 'playlist:renamed', 'playlist:removed', 'playlist:activated',
+    'playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered'
+  ].forEach(ev => fb.on(ev, refreshPlaylistUI));
 
-    // 标签写入完成事件（metadata.write / removeTag 异步完成时广播）
-    fb.on('metadata:writeComplete', e => {
-      // 刷新播放列表表格以显示更新后的标签
-      if (e?.success && CM.state.currentTab === 'playlist') CM.renderTrackTable();
-    });
-  }
+  // 媒体库就绪后重绘发现页（首次启动时库可能延迟初始化）
+  fb.once('library:initialized', () => { if (CM.state.currentTab === 'discover') CM.renderDiscover(); });
+
+  // 标签写入完成事件（metadata.write / removeTag 异步完成时广播）
+  fb.on('metadata:writeComplete', e => {
+    // 刷新播放列表表格以显示更新后的标签
+    if (e?.success && CM.state.currentTab === 'playlist') CM.renderTrackTable();
+  });
 
   /* ============================================
    * 启动
@@ -186,17 +179,6 @@
   function boot() {
     CM.state.lyricsVisible = CM.settings.lyricsVisible ?? true;
     CM.state.visualizerActive = CM.settings.visualizer ?? true;
-
-    // UI 绑定（不依赖宿主，先行执行保证界面可交互）
-    CM.initTitlebar();
-    CM.bindNavigation();
-    CM.bindDiscover();
-    CM.bindPlaylistView();
-    CM.bindPlaybackControls();
-    CM.initSpectrumBars();
-    CM.initKeyboard();
-    CM.bindNpOverlay();
-    CM.bindTagEditor();
 
     CM.setLyricsVisible(CM.state.lyricsVisible);
     CM.setVisualizerActive(CM.state.visualizerActive);
@@ -212,13 +194,8 @@
     CM.switchTab(CM.settings.tab || 'discover');
 
     // 宿主就绪后：状态同步 + 事件订阅 + 宿主专属能力
-    const readyFn = typeof fb.ready === 'function' ? fb.ready.bind(fb) : () => Promise.resolve();
-
-    readyFn().then(() => {
+    fb.ready().then(() => {
       syncInitialState();
-      subscribeEvents();
-      CM.initDragDrop();
-      CM.initTaskbar();
       // 打开"上次听歌的歌单"（按名称持久化），找不到/未记忆则退回活跃歌单
       plPromise.then(() => {
         const saved = CM.settings.lastPlaylist;
@@ -233,9 +210,8 @@
             if (CM.state.currentTab === 'playlist') CM.renderPlaylistView(use);
           }
         });
-
       });
-    }).catch(() => {/* 宿主桥接未就绪，以受限模式运行 */ });
+    }).catch(() => CM.showToast('宿主桥接未就绪', '以受限模式运行', 'error'));
     // 加载动态背景
     CM.showDynamicBackground(CM.settings.background);
     // 检测更新
@@ -262,8 +238,7 @@
   };
 
   CM.checkUpdate = function (show = false) {
-    const off = fb.on('http:response', res => {
-      off();
+    fb.once('http:response', res => {
       if (!res.success) return CM.showToast('检测更新失败', '请求失败，请检查网络设置', 'error');
       if (res.headers["X-RateLimit-Remaining"] === "0")
         return CM.showToast('检测更新失败', '请求频率过高，请稍后再试', 'error');

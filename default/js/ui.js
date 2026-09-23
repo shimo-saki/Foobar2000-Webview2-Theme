@@ -24,11 +24,10 @@
       </div>`;
     els.toastContainer.appendChild(toast);
     // 进场动画由 .toast 的 animation 自动播放；定时退出
-    setTimeout(() => {
-      toast.classList.add('removing');
-      setTimeout(() => toast.remove(), 320);
-    }, 2600);
+    setTimeout(() => toast.classList.add('removing'), 3000);
   };
+  els.toastContainer.addEventListener('animationend', e => { if (e.animationName === 'toast-out') e.target.remove(); });
+  els.toastContainer.addEventListener('click', e => e.target.closest('.toast')?.classList.add('removing'));
 
   /* ============================================
    * 通用 HTML 片段
@@ -57,8 +56,6 @@
 
   // 通用：替换播放列表并原子播放（多处复用：playAlbum / renderLibraryDrill / renderLibraryTracks）
   CM.playAllTracks = function (tracks, title, onDone) {
-    const fail = (desc) => { CM.showToast('播放失败', desc, 'error'); onDone(false); };
-
     const paths = CM.trackPaths(tracks);
     if (!paths.length) {
       CM.showToast('无法播放', '未找到有效文件路径', 'error');
@@ -163,11 +160,11 @@
     const hasInput = els.modalInput.style.display !== 'none';
     CM.closeModal(hasInput ? els.modalInput.value.trim() : true);
   });
-  els.modalCancel.addEventListener('click', () => CM.closeModal(null));
-  els.modal.addEventListener('mousedown', e => { if (e.target === els.modal) CM.closeModal(null); });
+  els.modalCancel.addEventListener('click', CM.closeModal);
+  els.modal.addEventListener('mousedown', e => { if (e.target === els.modal) CM.closeModal(); });
   els.modalInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') CM.closeModal(els.modalInput.value.trim());
-    else if (e.key === 'Escape') CM.closeModal(null);
+    else if (e.key === 'Escape') CM.closeModal();
   });
 
   /* ============================================
@@ -302,26 +299,25 @@
   });
 
   document.addEventListener('mousedown', e => { if (!els.ctxMenu.contains(e.target)) CM.hideCtxMenu(); });
-  window.addEventListener('blur', () => CM.hideCtxMenu());
+  window.addEventListener('blur', CM.hideCtxMenu);
 
   /* ============================================
    * 标题栏（窗口控制按钮）
    * ============================================ */
-  CM.initTitlebar = function () {
-    $('#capMin').addEventListener('click', () => fb.ui.minimize());
-    $('#capMax').addEventListener('click', () => fb.ui.toggleMaximize());
-    $('#capClose').addEventListener('click', () => fb.ui.close());
-    els.titlebarDrag.addEventListener('mousedown', e => { if (e.button === 0) fb.ui.startDrag(); });
-    els.titlebarDrag.addEventListener('dblclick', () => fb.ui.toggleMaximize());
-    CM.updateMaxIcon();
-    fb.on('window:stateChanged', e => CM.updateMaxIcon(e.maximized));
-  };
+  $('#capMin').addEventListener('click', fb.ui.minimize);
+  $('#capMax').addEventListener('click', fb.ui.toggleMaximize);
+  $('#capClose').addEventListener('click', fb.ui.close);
+  els.titlebarDrag.addEventListener('mousedown', e => { if (e.button === 0) fb.ui.startDrag(); });
+  els.titlebarDrag.addEventListener('dblclick', fb.ui.toggleMaximize);
+  fb.on('window:stateChanged', e => CM.updateMaxIcon(e.maximized));
+
   CM.updateMaxIcon = function (maximized = null) {
     if (maximized !== null) return $('#capMax').classList.toggle('is-max', maximized);
     fb.ui.isMaximized().then(r =>
       $('#capMax').classList.toggle('is-max', r.maximized ?? r.isMaximized ?? false)
     );
   };
+  CM.updateMaxIcon();
 
   /* ============================================
    * Tab 切换
@@ -347,8 +343,8 @@
     // 按 tab 执行对应渲染（playlist 需有有效歌单索引）
     const renderers = {
       playlist: () => state.currentPlaylistIndex >= 0 && CM.renderPlaylistView(state.currentPlaylistIndex),
-      library: () => CM.renderLibrary(),
-      search: () => setTimeout(() => els.searchInput.focus(), 60)
+      library: CM.renderLibrary,
+      search: () => setTimeout(els.searchInput.focus, 60)
     };
     renderers[tab]?.();
   };
@@ -503,35 +499,31 @@
   // 主内容区统一事件委托（专辑卡片 / dc-track / 搜索结果）
   // 一次性绑定在 els.mainContent 上，所有子元素动态渲染后自动生效
   // 挂 CM 供 ui-discover.js（搜索结果）等跨模块调用
-  CM._ensureMainContentDelegation = function () {
-    CM.runOnce('mainContentDelegation', () => {
-      // 专辑卡片：播放按钮 + 点击进详情
-      els.mainContent.addEventListener('click', e => {
-        const card = e.target.closest('.album-card');
-        if (!card) return;
+  // 专辑卡片：播放按钮 + 点击进详情
+  els.mainContent.addEventListener('click', e => {
+    const card = e.target.closest('.album-card');
+    if (!card) return;
 
-        if (e.target.closest('.album-card-play')) {
-          e.stopPropagation();
-          CM.playAlbum(card.dataset.album, card.dataset.artist);
-        } else {
-          CM.openLibraryAlbum(card.dataset.album, card.dataset.artist);
-        }
-      });
-      // dc-track / search-result-item：双击播放 + 右键菜单
-      els.mainContent.addEventListener('dblclick', e => {
-        const el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');
-        if (!el) return;
-        CM.playNow(el.dataset.path);
-      });
-      els.mainContent.addEventListener('contextmenu', e => {
-        const el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');
-        if (!el) return;
+    if (e.target.closest('.album-card-play')) {
+      e.stopPropagation();
+      CM.playAlbum(card.dataset.album, card.dataset.artist);
+    } else {
+      CM.openLibraryAlbum(card.dataset.album, card.dataset.artist);
+    }
+  });
+  // dc-track / search-result-item：双击播放 + 右键菜单
+  els.mainContent.addEventListener('dblclick', e => {
+    const el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');
+    if (!el) return;
+    CM.playNow(el.dataset.path);
+  });
+  els.mainContent.addEventListener('contextmenu', e => {
+    const el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');
+    if (!el) return;
 
-        const { path: absolutePath, title, artist, album } = el.dataset;
-        CM.showTrackCtxMenu(e.clientX, e.clientY, { absolutePath, title, artist, album });
-      });
-    });
-  };
+    const { path: absolutePath, title, artist, album } = el.dataset;
+    CM.showTrackCtxMenu(e.clientX, e.clientY, { absolutePath, title, artist, album });
+  });
 
   // 批量加载专辑封面：对每张专辑取首曲路径，再批量请求封面
   // 分批处理（每批24张），避免一次性发起过多 API 调用
@@ -637,7 +629,7 @@
           if (!res || res.success === false) return fb.player.playPath(path);
 
           // 队列非空：先将新曲目移到队首，再播放下一首
-          if (insertIdx > 0) fb.queue.moveToTop(insertIdx).then(() => fb.player.next());
+          if (insertIdx > 0) fb.queue.moveToTop(insertIdx).then(fb.player.next);
           else fb.player.next(); // 队列为空：新曲目已在队首
         });
       })
@@ -672,6 +664,5 @@
       </div>`;
     }).join('');
     CM.fillArtworkBatch(container, 120);
-    CM._ensureMainContentDelegation(); // 事件由 mainContent 统一委托
   };
 })();

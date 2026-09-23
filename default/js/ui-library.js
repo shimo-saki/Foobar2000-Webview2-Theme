@@ -25,17 +25,26 @@
   let _libTreeNodes = null;
   // 视图渲染器映射
   const LIB_RENDERERS = {
-    stats: () => CM.renderLibraryStats(),
-    tracks: () => CM.renderLibraryTracks(),
-    artists: () => CM.renderLibraryArtists(),
-    albums: () => CM.renderLibraryAlbums(),
-    genres: () => CM.renderLibraryGenres(),
-    artist: () => CM.renderLibraryArtistDetail(state.libraryArg),
-    album: () => CM.renderLibraryAlbumDetail(state.libraryArg),
-    genre: () => CM.renderLibraryGenreDetail(state.libraryArg),
-    folders: () => CM.renderLibraryFolders(),
-    folder: () => CM.renderLibraryFolder(state.libraryArg)
+    stats: renderLibraryStats,
+    tracks: renderLibraryTracks,
+    artists: renderLibraryArtists,
+    albums: renderLibraryAlbums,
+    genres: renderLibraryGenres,
+    artist: () => renderLibraryArtistDetail(state.libraryArg),
+    album: () => renderLibraryAlbumDetail(state.libraryArg),
+    genre: () => renderLibraryGenreDetail(state.libraryArg),
+    folder: () => renderLibraryFolder(state.libraryArg),
+    folders: renderLibraryFolders,
   };
+
+  // 事件委托：一次性绑定在 libraryTree 上
+  els.libraryTree.addEventListener('click', e => {
+    const el = e.target.closest('.tree-node');
+    if (!el) return;
+    state.libraryView = el.dataset.view;
+    state.libraryArg = null;
+    CM.renderLibrary();
+  });
 
   CM.renderLibrary = function () {
     if (!_libTreeNodes) {
@@ -44,17 +53,6 @@
       ).join('');
       _libTreeNodes = els.libraryTree.$$('.tree-node');
     }
-
-    // 事件委托：一次性绑定在 libraryTree 上
-    CM.runOnce('libTreeDelegation', () => {
-      els.libraryTree.addEventListener('click', e => {
-        const el = e.target.closest('.tree-node');
-        if (!el) return;
-        state.libraryView = el.dataset.view;
-        state.libraryArg = null;
-        CM.renderLibrary();
-      });
-    });
 
     // 后续切换只更新 active 状态，无需 querySelectorAll
     const active = state.libraryView === 'folder' ? 'folders' : state.libraryView;
@@ -88,12 +86,12 @@
     }
   };
 
-  CM.renderLibraryStats = function () {
+   function renderLibraryStats() {
     const cancelLoading = CM.libLoadingDelayed();
 
     fb.library.getStats().then(r => {
       cancelLoading();
-      if (!r) return CM.libError(CM.renderLibraryStats);
+      if (!r) return CM.libError(renderLibraryStats);
 
       const totalSec = r.totalDuration || 0;
       const durText = totalSec >= 3600
@@ -208,20 +206,15 @@
   };
 
   // 媒体库详情区事件委托（艺术家/流派卡片点击，一次性绑定避免每次渲染都逐卡 attach）
-  function ensureLibDetailDelegation() {
-    CM.runOnce('libDetailDelegation', () => {
-      els.libraryDetail.addEventListener('click', e => {
-        const card = e.target.closest('.artist-card');
-        if (!card) return;
-        const { artist, genre } = card.dataset;
-        if (artist) CM.openLibraryDetail('artist', artist);
-        else if (genre) CM.openLibraryDetail('genre', genre);
-      });
-    });
-  }
+  els.libraryDetail.addEventListener('click', e => {
+    const card = e.target.closest('.artist-card');
+    if (!card) return;
+    const { artist, genre } = card.dataset;
+    if (artist) CM.openLibraryDetail('artist', artist);
+    else if (genre) CM.openLibraryDetail('genre', genre);
+  });
 
-  CM.renderLibraryArtists = function () {
-    ensureLibDetailDelegation();
+  function renderLibraryArtists() {
     CM._renderLibraryGrid(
       'library.getArtists', { limit: 1000000 }, '全部艺术家', '媒体库为空',
       (name, count) => `
@@ -235,7 +228,7 @@
   };
 
   // 全部歌曲视图：自动分页加载全部曲目
-  CM.renderLibraryTracks = function () {
+    function renderLibraryTracks() {
     state.libraryBack = 'stats';
     const cancelLoading = CM.libLoadingDelayed();
 
@@ -272,7 +265,7 @@
           CM.libFadeIn();
           CM._addRefreshLibButton();
         })
-        .catch(() => { if (!all.length) CM.libError(CM.renderLibraryTracks); })
+        .catch(() => { if (!all.length) CM.libError(renderLibraryTracks); })
         .finally(cancelLoading);
     });
   };
@@ -292,7 +285,7 @@
       fb.library.refresh().then(res => {
         if (res.success) {
           CM.showToast('媒体库已刷新', '正在重新加载歌曲列表', 'success');
-          CM.renderLibraryTracks();
+          renderLibraryTracks();
         } else {
           CM.showToast('刷新失败', null, 'error');
           resetBtn();
@@ -374,12 +367,12 @@
     renderPage(false);
   };
 
-  CM.renderLibraryAlbums = function () {
+  function renderLibraryAlbums() {
     const cancelLoading = CM.libLoadingDelayed();
     // 全量拉取专辑（解除 limit:200 上限），客户端分页渲染
     fb.library.getAlbums({ limit: 1000000 }).then(r => {
       cancelLoading();
-      if (!r) return CM.libError(CM.renderLibraryAlbums);
+      if (!r) return CM.libError(renderLibraryAlbums);
 
       const albums = r.albums || [];
       if (!albums.length) { els.libraryDetail.innerHTML = CM.emptyHTML('媒体库为空'); return; }
@@ -395,7 +388,6 @@
 
         // 异步批量加载封面：并行获取每张专辑首曲路径，再批量请求封面
         CM._loadAlbumCovers(box, slice, 320);
-        CM._ensureMainContentDelegation();
       });
 
       CM.libFadeIn();
@@ -403,8 +395,7 @@
     });
   };
 
-  CM.renderLibraryGenres = function () {
-    ensureLibDetailDelegation();
+  function renderLibraryGenres() {
     CM._renderLibraryGrid(
       'library.getGenres', { limit: 1000000 }, '全部流派', '暂无流派信息',
       (name, count) => `
@@ -510,30 +501,25 @@
     CM.openLibraryDetail('folder', { rootId: rootId || '', pathId: pathId || '' });
   };
 
-  function ensureFolderDelegation() {
-    CM.runOnce('folderDelegation', () => {
-      els.libraryDetail.addEventListener('click', e => {
-        const crumb = e.target.closest('.lib-crumb');
-        if (crumb) return CM._goFolderCrumb(+crumb.dataset.crumb || 0);
+  els.libraryDetail.addEventListener('click', e => {
+    const crumb = e.target.closest('.lib-crumb');
+    if (crumb) return CM._goFolderCrumb(+crumb.dataset.crumb || 0);
 
-        const card = e.target.closest('.folder-card');
-        if (card) {
-          const { rootId, pathId, folderName } = card.dataset;
-          CM._openLibraryFolder(rootId, pathId, folderName);
-        }
-      });
-    });
-  }
+    const card = e.target.closest('.folder-card');
+    if (card) {
+      const { rootId, pathId, folderName } = card.dataset;
+      CM._openLibraryFolder(rootId, pathId, folderName);
+    }
+  });
 
   // 文件夹视图：列出媒体库根目录
-  CM.renderLibraryFolders = function () {
-    ensureFolderDelegation();
+  function renderLibraryFolders() {
     state.libraryBack = 'stats';
 
     const cancelLoading = CM.libLoadingDelayed();
     fb.library.getRoots().then(r => {
       cancelLoading();
-      if (!r?.success) return CM.libError(CM.renderLibraryFolders);
+      if (!r?.success) return CM.libError(renderLibraryFolders);
 
       const roots = r.roots || r.items || r.directories || [];
       if (!roots.length) {
@@ -551,10 +537,7 @@
   };
 
   // 文件夹详情：面包屑导航 + 子文件夹网格 + 分页曲目 + 播放全部/添加到歌单
-  CM.renderLibraryFolder = function (arg) {
-    ensureFolderDelegation();
-    arg = arg || {};
-
+  function renderLibraryFolder(arg) {
     const rootId = arg.rootId || '';
     const pathId = arg.pathId || '';
 
@@ -566,7 +549,7 @@
 
     fb.library.browseTree({ rootId, pathId, includeFiles: true, recursiveFiles: false }).then(r => {
       cancelLoading();
-      if (!r?.success) return CM.libError(() => CM.renderLibraryFolder(arg));
+      if (!r?.success) return CM.libError(() => renderLibraryFolder(arg));
 
       const dirs = r.directories || r.dirs || [];
       const files = r.files || r.tracks || [];
@@ -686,9 +669,9 @@
       (a.discNumber || 0) - (b.discNumber || 0) || (a.trackNumber || 0) - (b.trackNumber || 0));
   };
 
-  CM.renderLibraryArtistDetail = function (artist) {
+  function renderLibraryArtistDetail(artist) {
     const sub = tracks => `${tracks.length} 首曲目`;
-    const retry = () => CM.renderLibraryArtistDetail(artist);
+    const retry = () => renderLibraryArtistDetail(artist);
 
     // 艺术家名含引号：宿主 getArtistTracks 内部查询无法转义必然返回空，直接走 ? 通配查询
     const wild = artist.includes('"') ? CM.wildValue(artist) : null;
@@ -706,7 +689,7 @@
     CM._renderLibraryDetail('artists', 'library.getArtistTracks', { artist, limit: 500 }, artist, sub, retry);
   };
 
-  CM.renderLibraryAlbumDetail = function (arg) {
+  function renderLibraryAlbumDetail(arg) {
     if (!arg) {
       state.libraryView = 'albums';
       CM.renderLibrary();
@@ -714,7 +697,7 @@
     }
 
     const sub = tracks => `${arg.artist ? `${arg.artist} · ` : ''}${tracks.length} 首曲目`;
-    const retry = () => CM.renderLibraryAlbumDetail(arg);
+    const retry = () => renderLibraryAlbumDetail(arg);
 
     // 专辑名或艺术家名含引号：宿主 getAlbumTracks 内部查询无法转义必然返回空，直接走 ? 通配查询
     const wild = arg.album.includes('"') ? CM.wildValue(arg.album) : null;
@@ -744,9 +727,9 @@
     );
   };
 
-  CM.renderLibraryGenreDetail = function (genre) {
+  function renderLibraryGenreDetail(genre) {
     const sub = tracks => `${tracks.length} 首曲目`;
-    const retry = () => CM.renderLibraryGenreDetail(genre);
+    const retry = () => renderLibraryGenreDetail(genre);
 
     // 流派名含引号：查询无法转义，用 ? 通配替换 + 客户端精确过滤
     const wild = genre.includes('"') ? CM.wildValue(genre) : null;

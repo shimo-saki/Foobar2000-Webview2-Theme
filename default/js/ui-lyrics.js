@@ -34,13 +34,13 @@
       {
         label: '编辑歌词', icon: CM.icons.edit, hidden,
         action: () => CM.getGuid('编辑歌词')
-          .then(guid => fb.discovery.executeMainMenuCommand(guid)),
+          .then(({ guid, subGiud }) => fb.discovery.executeMainMenuCommand(guid, subGiud)),
       },
       { divider: true, hidden },
       {
         label: '搜索歌词…', icon: CM.icons.search, hidden,
         action: () => CM.getGuid('搜索歌词')
-          .then(guid => fb.discovery.executeMainMenuCommand(guid)),
+          .then(({ guid, subGiud }) => fb.discovery.executeMainMenuCommand(guid, subGiud)),
       },
       {
         label: '显示ESLyric面板', icon: CM.icons.window, hidden,

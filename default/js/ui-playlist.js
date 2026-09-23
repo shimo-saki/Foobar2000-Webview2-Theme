@@ -13,26 +13,15 @@
    * 侧栏歌单列表
    * ============================================ */
   // 侧栏歌单列表事件委托（一次性绑定，避免每次 loadPlaylists 都逐个 attach）
-  function ensurePlaylistDelegation() {
-    CM.runOnce('playlistDelegation', () => {
-      // 命中 .pl-item 时返回其 index，否则返回 null
-      const itemIndex = e => {
-        const el = e.target.closest('.pl-item');
-        return el ? parseInt(el.dataset.index, 10) : null;
-      };
+  els.playlistList.addEventListener('click', e => {
+    const i = +e.target.closest('.pl-item')?.dataset.index;
+    if (!isNaN(i)) CM.openPlaylist(i);
+  });
 
-      els.playlistList.addEventListener('click', e => {
-        const i = itemIndex(e);
-        if (i !== null) CM.openPlaylist(i);
-      });
-
-      els.playlistList.addEventListener('contextmenu', e => {
-        const i = itemIndex(e);
-        if (i === null) return;
-        CM.showPlaylistCtxMenu(e.clientX, e.clientY, i);
-      });
-    });
-  }
+  els.playlistList.addEventListener('contextmenu', e => {
+    const i = +e.target.closest('.pl-item')?.dataset.index;
+    if (!isNaN(i)) CM.showPlaylistCtxMenu(e.clientX, e.clientY, i);
+  });
 
   CM.loadPlaylists = function () {
     return fb.playlist.getAll().then(r => {
@@ -62,7 +51,6 @@
         ? parts.join('')
         : '<div class="queue-empty" style="padding:24px">暂无歌单</div>';
 
-      ensurePlaylistDelegation();
       return lists;
     });
   };
@@ -630,7 +618,7 @@
       },
       {
         label: '停止试听', icon: CM.icons.headphone, danger: true, hidden: !CM.state.previewActive,
-        action: () => CM.stopPreview()
+        action: CM.stopPreview
       },
       {
         label: '下一首播放', icon: CM.icons.queue,

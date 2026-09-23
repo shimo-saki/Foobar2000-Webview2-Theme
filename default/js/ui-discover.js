@@ -43,7 +43,6 @@
 
       // 异步批量加载封面（不阻塞 UI）：先取每张专辑首曲路径，再批量请求封面
       CM._loadAlbumCovers(els.discoverAlbums, albums, 320);
-      CM._ensureMainContentDelegation();
     });
   };
 
@@ -123,7 +122,6 @@
       CM.fillArtworkBatch(els.searchResults, 120);
       els.searchResults.$('#searchAddAllBtn')
         ?.addEventListener('click', e => CM.addToPlaylistMenu(tracks, e.clientX, e.clientY));
-      CM._ensureMainContentDelegation(); // 搜索结果事件由 mainContent 统一委托
     });
   };
 })();

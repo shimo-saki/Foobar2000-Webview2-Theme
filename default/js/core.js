@@ -214,18 +214,8 @@
     let timer;
     return (...args) => {
       clearTimeout(timer);
-      timer = setTimeout(() => fn(...args), ms);
+      timer = setTimeout(fn, ms, ...args);
     };
-  };
-
-  // 一次性执行工厂：统一各模块"事件委托只绑一次"的守卫模式
-  // 用法：CM.runOnce('ctxMenuDelegation', function() { ...addEventListener... });
-  const _runOnceSet = new Set();
-  CM.runOnce = function (key, setupFn) {
-    if (_runOnceSet.has(key)) return false;
-    _runOnceSet.add(key);
-    setupFn();
-    return true;
   };
 
   // 延迟加载指示器：API 快速返回（<ms）时不闪烁，保留旧内容

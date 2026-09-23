@@ -123,7 +123,6 @@
           <button class="queue-item-del" title="移出队列">${CM.icons.cancel}</button>
         </div>`
       ).join('');
-      ensureQueueDelegation();
     });
   };
 
@@ -166,45 +165,44 @@
       CM.renderQueue();
     }
   }
-  function ensureQueueDelegation() {
-    CM.runOnce('queueDelegation', () => {
-      els.queueList.addEventListener('click', e => {
-        const btn = e.target.closest('.queue-item-del');
-        if (!btn) return;
 
-        e.stopPropagation();
-        const idx = parseInt(btn.closest('.queue-item').dataset.i, 10);
-        if (isNaN(idx)) return;
+  els.queueList.addEventListener('click', e => {
+    const btn = e.target.closest('.queue-item-del');
+    if (!btn) return;
 
-        fb.queue.remove(idx).then(() => {
-          CM.renderQueue();
-          CM.refreshQueueBadge();
-        });
-      });
-      // ---- 拖拽调整队列顺序（指针事件实现，不走 HTML5 DnD）----
-      // 宿主持有本窗口的原生放置目标（v1.12.0 起 dnd 改为主机原生观察）：页面内
-      // HTML5 拖拽的 dragover/drop 不会回投到页面，且宿主对非文件拖拽返回"禁止"光标，
-      // 因此队列调序用 pointerdown/move/up 自行实现，拖拽范围与提交都由页面控制。
-      // 宿主队列 API 无任意移动接口（仅 moveToTop），故排序走 清空+按新顺序重建，
-      // 重建期间 _queueRebuilding 抑制 queueChanged 引发的中间态渲染（见 renderQueue）。
-      els.queueList.addEventListener('pointerdown', e => {
-        if (e.button !== 0 || e.pointerType === 'touch') return; // 触屏保留列表滚动
-        if (_queueRebuilding || _qPointerDrag) return;
-        if (e.target.closest?.('.queue-item-del')) return;       // 删除按钮不发起拖拽
+    e.stopPropagation();
+    const idx = +btn.closest('.queue-item').dataset.i;
+    if (isNaN(idx)) return;
 
-        const qit = e.target.closest?.('.queue-item.can-drag');
-        const idx = parseInt(qit?.dataset.i, 10);
-        if (isNaN(idx) || !CM._queueItems || CM._queueItems.length < 2) return;
+    fb.queue.remove(idx).then(() => {
+      CM.renderQueue();
+      CM.refreshQueueBadge();
+    });
+  });
+  // ---- 拖拽调整队列顺序（指针事件实现，不走 HTML5 DnD）----
+  // 宿主持有本窗口的原生放置目标（v1.12.0 起 dnd 改为主机原生观察）：页面内
+  // HTML5 拖拽的 dragover/drop 不会回投到页面，且宿主对非文件拖拽返回"禁止"光标，
+  // 因此队列调序用 pointerdown/move/up 自行实现，拖拽范围与提交都由页面控制。
+  // 宿主队列 API 无任意移动接口（仅 moveToTop），故排序走 清空+按新顺序重建，
+  // 重建期间 _queueRebuilding 抑制 queueChanged 引发的中间态渲染（见 renderQueue）。
+  els.queueList.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.pointerType === 'touch') return; // 触屏保留列表滚动
+    if (_queueRebuilding || _qPointerDrag) return;
+    if (e.target.closest?.('.queue-item-del')) return;       // 删除按钮不发起拖拽
 
-        e.preventDefault();
-        // 指针捕获：保证移出窗口后仍能收到 move/up，松手必有着落
-        try { els.queueList.setPointerCapture(e.pointerId); } catch { }
+    const qit = e.target.closest?.('.queue-item.can-drag');
+    const idx = parseInt(qit?.dataset.i, 10);
+    if (isNaN(idx) || !CM._queueItems || CM._queueItems.length < 2) return;
 
-        _qPointerDrag = { index: idx, startX: e.clientX, startY: e.clientY, active: false };
-      });
-      els.queueList.addEventListener('pointermove', e => {
-        const drag = _qPointerDrag;
-        if (!drag) return;
+    e.preventDefault();
+    // 指针捕获：保证移出窗口后仍能收到 move/up，松手必有着落
+    try { els.queueList.setPointerCapture(e.pointerId); } catch { }
+
+    _qPointerDrag = { index: idx, startX: e.clientX, startY: e.clientY, active: false };
+  });
+  els.queueList.addEventListener('pointermove', e => {
+    const drag = _qPointerDrag;
+    if (!drag) return;
 
         if (!drag.active) {
           // 小位移视为点击，越过阈值才进入拖拽态
@@ -215,45 +213,43 @@
           document.body.classList.add('is-reordering');
         }
 
-        if (!_qInList(e.clientX, e.clientY)) return _qClearIndicator();
+    if (!_qInList(e.clientX, e.clientY)) return _qClearIndicator();
 
-        // 指针靠近列表上下边缘时自动滚动
-        const rect = els.queueList.getBoundingClientRect();
-        if (e.clientY < rect.top + 24) els.queueList.scrollTop -= 8;
-        else if (e.clientY > rect.bottom - 24) els.queueList.scrollTop += 8;
+    // 指针靠近列表上下边缘时自动滚动
+    const rect = els.queueList.getBoundingClientRect();
+    if (e.clientY < rect.top + 24) els.queueList.scrollTop -= 8;
+    else if (e.clientY > rect.bottom - 24) els.queueList.scrollTop += 8;
 
-        const t = _queueDropTargetAt(e.clientY);
-        if (!t) return;
-        if (_qDropTarget && _qDropTarget.el === t.el && _qDropTarget.before === t.before) return;
+    const t = _queueDropTargetAt(e.clientY);
+    if (!t) return;
+    if (_qDropTarget && _qDropTarget.el === t.el && _qDropTarget.before === t.before) return;
 
-        _qClearIndicator();
-        _qDropTarget = t;
-        t.el.classList.add(t.before ? 'drop-before' : 'drop-after');
-      });
-      // 提交：落点按释放坐标现算；在队列范围外松手视为取消
-      els.queueList.addEventListener('pointerup', e => {
-        const drag = _qPointerDrag;
-        if (!drag) return;
+    _qClearIndicator();
+    _qDropTarget = t;
+    t.el.classList.add(t.before ? 'drop-before' : 'drop-after');
+  });
+  // 提交：落点按释放坐标现算；在队列范围外松手视为取消
+  els.queueList.addEventListener('pointerup', e => {
+    const drag = _qPointerDrag;
+    if (!drag) return;
 
-        const t = drag.active && _qInList(e.clientX, e.clientY) ? _queueDropTargetAt(e.clientY) : null;
-        _qFinishDrag();
+    const t = drag.active && _qInList(e.clientX, e.clientY) ? _queueDropTargetAt(e.clientY) : null;
+    _qFinishDrag();
 
-        const targetIdx = t && parseInt(t.el.dataset.i, 10);
-        if (isNaN(targetIdx)) return;
+    const targetIdx = t && parseInt(t.el.dataset.i, 10);
+    if (isNaN(targetIdx)) return;
 
-        // 插入位置（原索引空间）：before → 目标行之前；否则目标行之后
-        CM._queueMoveTo(drag.index, t.before ? targetIdx : targetIdx + 1);
-      });
-      els.queueList.addEventListener('pointercancel', () => _qFinishDrag());
-      // Esc 取消进行中的拖拽（捕获阶段优先于全局 Esc 关闭队列抽屉）
-      document.addEventListener('keydown', e => {
-        if (e.key !== 'Escape' || !_qPointerDrag || !_qPointerDrag.active) return;
-        e.stopPropagation();
-        _qFinishDrag();
-      }, true);
-      window.addEventListener('blur', () => { if (_qPointerDrag) _qFinishDrag(); });
-    });
-  }
+    // 插入位置（原索引空间）：before → 目标行之前；否则目标行之后
+    CM._queueMoveTo(drag.index, t.before ? targetIdx : targetIdx + 1);
+  });
+  els.queueList.addEventListener('pointercancel', _qFinishDrag);
+  // Esc 取消进行中的拖拽（捕获阶段优先于全局 Esc 关闭队列抽屉）
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !_qPointerDrag || !_qPointerDrag.active) return;
+    e.stopPropagation();
+    _qFinishDrag();
+  }, true);
+  window.addEventListener('blur', () => { if (_qPointerDrag) _qFinishDrag(); });
 
   // 单项移动：from（原索引）移动到 pos（原索引空间的插入点，0..n）→ 生成置换并重建队列
   CM._queueMoveTo = function (from, pos) {
