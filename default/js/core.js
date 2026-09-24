@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   const CM = window.CloudMusic ??= {};
-  CM.version = 'V2.5.2-modify';
+  CM.version = 'V2.5.2.1-modify';
 
   /* ============================================
    * DOM 引用

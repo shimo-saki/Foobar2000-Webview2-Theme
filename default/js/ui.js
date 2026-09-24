@@ -304,6 +304,7 @@
   /* ============================================
    * 标题栏（窗口控制按钮）
    * ============================================ */
+  $('#capRestart').addEventListener('click', fb.misc.restart);
   $('#capMin').addEventListener('click', fb.ui.minimize);
   $('#capMax').addEventListener('click', fb.ui.toggleMaximize);
   $('#capClose').addEventListener('click', fb.ui.close);
