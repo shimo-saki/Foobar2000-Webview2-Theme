@@ -13,8 +13,13 @@
   const EMPTY_LYRIC = [{ startTime: 0, endTime: MAX_LRC_TIMESTAMP, words: [{ startTime: 0, endTime: MAX_LRC_TIMESTAMP, word: '暂无歌词' }] }];
 
   function setLyrics(lyrics) {
-    CM.currentLyrics = lyrics;
-    CM.player.setLyricLines(lyrics);
+    try {
+      CM.currentLyrics = lyrics;
+      CM.player.setLyricLines(lyrics);
+    } catch ({ name, message }) {
+      CM.showToast(`歌词解析失败：${name}`, message, 'error');
+      console.error(`${CM.currentTrack.title} - ${CM.currentTrack.artist}\n    ${name}: ${message}`);
+    }
   }
 
   let _lyricLoadId = 0;
