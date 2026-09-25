@@ -238,20 +238,17 @@
   };
 
   CM.checkUpdate = function (show = false) {
-    fb.once('http:response', res => {
-      if (!res.success) return CM.showToast('检测更新失败', '请求失败，请检查网络设置', 'error');
-      if (res.headers["X-RateLimit-Remaining"] === "0")
-        return CM.showToast('检测更新失败', '请求频率过高，请稍后再试', 'error');
+    fb.http.get('https://api.github.com/repos/shimo-saki/Foobar2000-Webview2-Theme/releases/latest', { async: false })
+      .then(res => {
+        if (!res.success) throw new Error('请求失败，请检查网络设置');
+        if (res.headers["X-RateLimit-Remaining"] === "0") throw new Error('请求频率过高，请稍后再试');
 
-      const { name: version } = JSON.parse(res.body);
-      if (compareVersion(version, CM.version) > 0) {
-        CM.showToast(`发现新版本 ${version}`, '可前往 Github 下载更新', 'success');
-        if (show) window.open('https://github.com/shimo-saki/Foobar2000-Webview2-Theme/releases/latest');
-      } else if (show) {
-        CM.showToast('已经是最新版本', '', 'success');
-      }
-    });
-
-    fb.http.get('https://api.github.com/repos/shimo-saki/Foobar2000-Webview2-Theme/releases/latest');
+        const { name: version } = JSON.parse(res.body);
+        if (compareVersion(version, CM.version) > 0) {
+          CM.showToast(`发现新版本 ${version}`, '可前往 Github 下载更新', 'success');
+          if (show) window.open('https://github.com/shimo-saki/Foobar2000-Webview2-Theme/releases/latest');
+        } else if (show) CM.showToast('已经是最新版本', '', 'success');
+      })
+      .catch(({ message }) => CM.showToast('检测更新失败', message, 'error'));
   };
 })();
