@@ -279,10 +279,14 @@
 (function(){
   'use strict';
 
-  var TAG_RE = /\[(\d{1,3}:\d{2}(?:[.:]\d{1,3})?)\]/g;
+  // 小数位放宽到 9 位：QQ 音乐天琴实验室等来源会写 [01:10.020004] 这类超长小数，
+  // 主题端解析本来就认，这里认不出来会把整行当无时间戳的行收进文件头（预览不可见、不可编辑）
+  var TAG_RE = /\[(\d{1,3}:\d{2}(?:[.:]\d{1,9})?)\]/g;
   var PLACEHOLDER = /^[\s\-—–·…,，.。、/\\|*]+$/;
   var CREDIT_RE = /^(?:作词|作詞|作曲|编曲|編曲|制作|製作|监制|監製|混音|母带|母帶|录音|錄音|吉他|贝斯|鼓|键盘|和声|出品|发行|發行|策划|统筹|翻译|校对|配唱|合声|词|詞|曲|OP|SP|ISRC|商务|企划|联合|鸣谢|Produced by|Arranged by|Written by|Composed by|Lyrics by|Mixed by|Mastered by|Backing Vocals)[^:：\n]{0,10}[:：]/;
-  var NOTICE_RE = /著作权|翻译作品|未经许可|以下歌词翻译/;
+  // 词表与主题 _isCreditLine 对齐：英文制作短语（Lyrics by 等）不受 40 字上限约束——
+  // 长制作行（Lyrics by：A/B/C/…）此前会被当成歌词行，主题里却是信息行，两边对不上
+  var NOTICE_RE = /著作权|翻译作品|未经许可|以下歌词翻译|Lyrics by|Composed by|Produced by|Written by|Arranged by|Mixed by|Mastered by|Music by|Words by/;
   var LABEL_RE = /^[^:：\n]{1,16}[:：]$/;
   var TOL = 10;
 
@@ -304,8 +308,8 @@
    * 标记在词前 = 该词的开始时间；行首方括号是整行时间（主题也认这种）。
    * 译文行不打字轴，按同刻整句写（主题会把它归到同刻的主歌词组里）。
    */
-  var WORD_TAG_RE = /<(\d{1,3}:\d{2}(?:[.:]\d{1,3})?)>/g;
-  var HAS_WORD_TAG = /<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>/;
+  var WORD_TAG_RE = /<(\d{1,3}:\d{2}(?:[.:]\d{1,9})?)>/g;
+  var HAS_WORD_TAG = /<\d{1,3}:\d{2}(?:[.:]\d{1,9})?>/;
   function isCJK(ch){
     var c=ch.charCodeAt(0);
     return (c>=0x3400&&c<=0x9FFF)||(c>=0xF900&&c<=0xFAFF)||(c>=0x3040&&c<=0x30FF)||(c>=0xAC00&&c<=0xD7AF);
@@ -822,7 +826,18 @@
     if(!state) return;
     var zeros=state.rows.filter(function(r){ return r.role!=='other' && r.text && r.t===0; }).length;
     if(zeros>1 && !confirm('有 '+zeros+' 行的时间戳还是 00:00.000（多半是还没打轴）。\n\n这些行会在文件里全部压在开头。要先切到「打轴」页把它们打了再导出吗？\n\n（选「确定」= 仍然导出）')) return;
-    var txt=exportText(state, document.getElementById('selOut').value);
+    var mode=document.getElementById('selOut').value;
+    // 一句多译护栏：延后写法把译文写在下一句原文的时间戳上，每句只装得下一条译文，
+    // 第二条起会被主题挂到下一句原文名下。检测到就建议改用标准双语导出。
+    if(mode==='lag' && !wordMode()){
+      var gs=groupRows(state.rows), multi=0;
+      for(var i=0;i<gs.length;i++) if(!gs[i].other && gs[i].subs.length>1) multi++;
+      if(multi && confirm('有 '+multi+' 句挂了多条译文，「兼容旧版」写法只能放下第一条，其余会被挂到下一句原文上。\n\n改用「标准双语」导出吗？\n\n（确定 = 改用标准双语；取消 = 仍按兼容旧版导出）')){
+        document.getElementById('selOut').value='same';
+        mode='same';
+      }
+    }
+    var txt=exportText(state, mode);
     var blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
     var a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
