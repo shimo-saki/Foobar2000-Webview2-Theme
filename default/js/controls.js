@@ -406,7 +406,7 @@
   };
 
   const SPEC_BARS = 16, NP_SPEC_BARS = 32;
-  const specBarEls = CM.createSpectrumBars(els.miniSpectrum, SPEC_BARS, 'spec-bar');
+  const specBarEls = CM.createSpectrumBars(els.miniSpectrum, SPEC_BARS, 'mini-spec-bar');
   const npSpecBarEls = CM.createSpectrumBars(els.npSpectrum, NP_SPEC_BARS, 'np-spec-bar');
   let spectrumUnsub = null;
 
