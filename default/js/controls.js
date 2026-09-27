@@ -462,8 +462,8 @@
 
   // v1.12.0 起 dnd 改为主机原生观察，不再注册 drop zone；
   // 读路径统一走 dnd.getPathsAsync（await 安全、不依赖消息顺序）。
-  fb.on('dnd:enter', els.drop.showModal);
-  fb.on('dnd:leave', els.drop.close);
+  fb.on('dnd:enter', () => els.drop.showModal());
+  fb.on('dnd:leave', () => els.drop.close());
   fb.on('dnd:drop', data => {
     els.drop.close();
     if (!CM.playlists.length) return CM.showToast('请先添加歌单', null, 'error');

@@ -242,13 +242,9 @@
     CM.showModal({ title: '移除封面', desc: '确定要移除这首曲目的嵌入封面吗？', okText: '移除', danger: true }).then(ok => {
       if (!ok) return;
       return fb.metadata.removeEmbeddedArt(path, { removeAll: true }).then(r => {
-        if (r && r.success !== false) {
-          CM.showToast('封面已移除', null, 'success');
-          const preview = $('#tagCoverPreview');
-          if (preview) preview.innerHTML = CM.icons.note;
-        } else {
-          CM.showToast('移除失败', '该格式可能不支持嵌入封面操作', 'error');
-        }
+        if (!r.success) return CM.showToast('移除失败', '该格式可能不支持嵌入封面操作', 'error');
+        CM.showToast('封面已移除', null, 'success');
+        $('#tagCoverPreview').innerHTML = CM.icons.note;
       });
     });
   };

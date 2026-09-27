@@ -125,46 +125,43 @@
    * 模态框（Promise 化）
    * resolve: 输入模式返回字符串 / 确认模式返回 true；取消返回 null
    * ============================================ */
-  let modalResolve = null;
-  CM.showModal = function (opts) {
+  CM.showModal = function ({ title = '', desc = '', input, okText = '确定', danger } = {}) {
+    if (els.modal.open) els.modal.close();
+    els.modal.returnValue = '';
+
+    const hasInput = input !== undefined;
+
+    els.modalTitle.textContent = title;
+    els.modalDesc.textContent = desc;
+    els.modalDesc.hidden = !desc;
+
+    els.modalInput.hidden = !hasInput;
+    els.modalInput.value = input ?? '';
+    els.modalOk.textContent = okText;
+    els.modalOk.className = `modal-btn ${danger ? 'danger' : 'primary'}`;
+
+    if (hasInput) {
+      els.modalInput.focus();
+      els.modalInput.select();
+    } else els.modalOk.focus();
+
     return new Promise(resolve => {
-      modalResolve?.(null);
-      modalResolve = resolve;
-
-      els.modalTitle.textContent = opts.title || '';
-      els.modalDesc.textContent = opts.desc || '';
-      els.modalDesc.style.display = opts.desc ? '' : 'none';
-
-      const hasInput = opts.input !== undefined;
-      els.modalInput.style.display = hasInput ? '' : 'none';
-      els.modalInput.value = hasInput ? (opts.input || '') : '';
-      els.modalOk.textContent = opts.okText || '确定';
-      els.modalOk.className = `modal-btn ${opts.danger ? 'danger' : 'primary'}`;
+      els.modal.addEventListener('close', () => resolve(els.modal.returnValue || null), { once: true });
       els.modal.showModal();
-
-      if (hasInput) {
-        setTimeout(() => {
-          els.modalInput.focus();
-          els.modalInput.select();
-        }, 80);
-      }
     });
   };
-  CM.closeModal = function (result) {
-    els.modal.close();
-    modalResolve?.(result);
-    modalResolve = null;
+
+  function closeModal(result = '') {
+    if (els.modal.open) els.modal.close(result);
   };
 
-  els.modalOk.addEventListener('click', () => {
-    const hasInput = els.modalInput.style.display !== 'none';
-    CM.closeModal(hasInput ? els.modalInput.value.trim() : true);
-  });
-  els.modalCancel.addEventListener('click', CM.closeModal);
-  els.modal.addEventListener('mousedown', e => { if (e.target === els.modal) CM.closeModal(); });
+  els.modal.addEventListener('mousedown', e => { if (e.target === els.modal) closeModal(); });
+  els.modalOk.addEventListener('click', () => closeModal(els.modalInput.hidden ? true : els.modalInput.value.trim()));
+  els.modalCancel.addEventListener('click', () => closeModal());
   els.modalInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') CM.closeModal(els.modalInput.value.trim());
-    else if (e.key === 'Escape') CM.closeModal();
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    closeModal(els.modalInput.value.trim());
   });
 
   /* ============================================

@@ -133,9 +133,10 @@
       {
         label: '重命名', icon: CM.icons.rename,
         action: () => CM.showModal({ title: '重命名歌单', input: pl.name || '', okText: '重命名' })
-          .then(name => fb.playlist.rename(idx, name)
-            .then(r => { if (r?.success) CM.showToast('已重命名', name, 'success'); })
-          )
+          .then(name => {
+            if (!name) return;
+            fb.playlist.rename(idx, name).then(r => { if (r?.success) CM.showToast('已重命名', name, 'success'); });
+          })
       },
       {
         label: '清空歌单', icon: CM.icons.trash, disabled: pl.isAutoplaylist,
@@ -148,7 +149,7 @@
           .then(ok => {
             if (!ok) return;
             fb.playlist.remove(idx).then(r => {
-              if (r?.success === false) return CM.showToast('删除失败', r?.error || '未知错误', 'error');
+              if (!r.success) return CM.showToast('删除失败', null, 'error');
               CM.showToast('删除成功', pl.name, 'success');
               CM.openPlaylist(0);
             });
@@ -736,20 +737,16 @@
     if (!path) return CM.showToast('无法试听', '未找到文件路径', 'error');
     const title = CM.trackName(track);
     fb.jitQueue.playNow({ title, trackId: path, url: path }).then(r => {
-      if (!r.succes) {
-        CM.state.previewActive = true;
-        CM.showToast('正在试听', title, 'success');
-      } else {
-        CM.showToast('试听失败', r?.error ?? '当前曲目可能无法试听', 'error');
-      }
+      if (!r.success) return CM.showToast('试听失败', r?.error ?? '当前曲目可能无法试听', 'error');
+      CM.state.previewActive = true;
+      CM.showToast('正在试听', title, 'success');
     });
   };
   CM.stopPreview = function () {
     fb.jitQueue.stop().then(r => {
-      if (!r?.success) {
-        CM.state.previewActive = false;
-        CM.showToast('已停止试听');
-      }
+      if (!r.success) return;
+      CM.state.previewActive = false;
+      CM.showToast('已停止试听');
     });
   };
 
