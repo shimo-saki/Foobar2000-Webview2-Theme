@@ -48,12 +48,11 @@
 
 ## 安装指南
 
-1.  **获取主题**: 将本项目（`foobar2000_web_theme`）下载或克隆到本地。
-2.  **定位路径**: 确认包含 `index.html` 文件的目录绝对路径。
+1.  **获取主题**: 将本项目（`foobar2000_web_theme`）下载或克隆到本地。![](/img/1.png)
+2.  **定位路径**: 确认包含 `index.html` 文件的目录绝对路径。![](/img/2.png)![](/img/3.png)![](/img/4.png)![](/img/5.png)![](/img/6.png)
 3.  **配置插件**:
-    *   打开 foobar2000，进入 `文件 -> 参数选项` (或按 `Ctrl+P`)。
-    *   依次进入 `显示` -> `WebView` 选项。
-    *   选择打开文件(或类似入口设置) 将下载的主题放入其中 （例如 "foobar2000-v2\webview-ui\default\index.html" ）。
+    *   重新进入foobar设置页面![](/img/7.png)![](/img/8.png)![](/img/9.png)
+    
 
 ## QQ 音乐在线音源
 
