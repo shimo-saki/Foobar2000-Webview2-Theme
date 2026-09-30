@@ -173,7 +173,7 @@
   <h1>CloudMusic 主题功能指南</h1>
   <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">版本 <b>v2.5.2</b></div>
+    <div class="hero-meta-item">版本 <b>v2.5.3</b></div>
     <div class="hero-meta-item">作者 <b>灵芝含</b></div>
     <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.13.0</b></div>
   </div>
@@ -204,6 +204,7 @@
     <a href="#s18"><span class="num">18</span>拖放添加</a>
     <a href="#s19"><span class="num">19</span>键盘快捷键</a>
     <a href="#s20"><span class="num">20</span>更多菜单</a>
+    <a href="#s21"><span class="num">21</span>QQ 音乐在线音源</a>
   </div>
 </div>
 
@@ -216,19 +217,50 @@
       <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
     </div>
     <div>
-      <div class="section-title">更新日志 · v2.5.2</div>
-      <div class="section-desc">双语配对自动归一 · 副标题行归位 · 歌词面板右键菜单</div>
+      <div class="section-title">更新日志 · v2.5.3</div>
+      <div class="section-desc">QQ 音乐页内桥接 · 页内原生 · 随宿主同生共死</div>
     </div>
   </div>
   <div class="section-body">
+    <strong>v2.5.3 · QQ 音乐页内桥接（新架构）</strong>
+    <ul>
+      <li><strong>整条链路搬进主题页面</strong>：QQ 音乐在线音源的功能创意与原版桥接程序来自贴吧大佬 <strong>@凌月冰天</strong>，本版在其基础上迁入页内实现 —— <code>js/qqmusic-core.js</code>（页内桥接模块）+ <code>js/ui-qqmusic.js</code>（界面）。利用插件自带的网络服务，搜索 / 直链解析 / 歌词全部走宿主 foo_ui_webview2 的原生 HTTP 客户端（<code>fb.invoke('http.get'/'http.post')</code>，无 CORS、免签名），不再需要单独的桥接程序、本地端口与开关脚本，体积更小；播放用解析出的 CDN 直链直接喂给 foobar2000，下载走宿主 http.download。<strong>随 foobar 启动而在、关闭而消</strong>，无进程、无端口、无 node.js / Python 依赖。</li>
+      <li><strong>「一键登录」改为「设置 Cookie」面板</strong>：在浏览器登录 <code>y.qq.com</code> 网页版 → F12 → 控制台(Console) → 运行面板里提供的 <code>copy(document.cookie)</code> 命令（Cookie 自动进剪贴板）→ 粘贴保存（存 localStorage，失效重贴）。<strong>免费曲库不需要登录</strong>；Cookie 失效时表现为 VIP 曲目全部解析不到。</li>
+      <li><strong>免登录能力</strong>：搜索（聚合接口匿名会被限流 → 自动降级旧版接口 / 联想搜索）、歌词（多轮放宽搜索 + 打分匹配，繁→简归一化）、免费曲库直链（128K MP3 / AAC 96K；解析时逐档轻量探测，自动沿「母带 → Hi-Res → FLAC → AAC 192 → 320 → AAC 96 → 128」降级链下探）、专辑封面直链。</li>
+      <li><strong>封面「就近兜底」改为页内原生</strong>：用宿主 <code>file.list</code> + <code>file.read</code> 在页面内完成「音频目录 → 封面子目录 → 上一级 → 上一级封面子目录」的扫描与打分（front/cover/folder 等正面词加分，封底 / 内页扫描等负面词降权），读出后以 dataURL 回给界面。宿主文件 API 对系统盘路径有白名单限制，媒体库所在盘实测可用。<strong>在线曲目也有封面了</strong>：播放 / 下载时记录「直链文件名里的 mediaMid → 专辑」映射（持久化），封面兜底从 CDN 直链反查出腾讯图床的专辑图 —— 顺带修掉宿主对在线曲目返回 <code>fb2k://</code> 代理地址但实际加载失败、界面永远显示无封面占位图的问题。</li>
+      <li><strong>「QQ音乐」歌单：追加播放</strong>：勾选播放的曲目会<strong>追加</strong>到固定唯一的「QQ音乐」歌单末尾并从新曲开播 —— 之前播的歌原地保留，听完这首可以直接在歌单里接着选下一首；宿主的 playlist.getAll 抖动曾导致同名歌单被反复新建，现查找带重试、建完复核，播放后还会把同名重复歌单清到只剩一个。注意：歌单里存的是带签名的直链，<strong>vkey 约两小时过期</strong>，过期条目再点会播放失败，回页面重新勾选播放即可刷新。</li>
+      <li><strong>在线播放固定 MP3 流播，无损走下载</strong>：QQ 的 CDN 给所有直链打的 Content-Type 都是 <code>audio/x-ogg</code>，foobar2000 按类型选解码器 —— FLAC / AAC 直链会被误当 Ogg 拒解（表现为「不支持的格式或文件损坏」；MP3 靠帧嗅探不受影响）。因此在线播放与导入固定解析 MP3 档（320 → 128，绿钻可播 320），保证可播；无损 / Hi-Res 请用「下载选中」落盘后本地播放（文件字节完好，可直接加进媒体库）。音质下拉框现在只影响下载。</li>
+      <li><strong>歌单导入（文本匹配）</strong>：官方已对账号歌单详情接口启用请求签名与加密（网页端自己走的是加密通道），第三方无法直连读取曲目 —— 采用「复制导出脚本 + 文本匹配」两步：① 主题「QQ 音乐 → 导入歌单」面板点<strong>「复制导出脚本」</strong>→ 到 y.qq.com 打开目标歌单页，F12 → 控制台(Console) 粘贴回车（脚本源码见 <code>js/qq-playlist-export.js</code>），自动滚动加载全部曲目，导出「歌名 - 歌手」每行一首（自动复制 + 下载 txt）；② 回到主题面板粘贴文本、指定目标歌单名后开始导入 —— 逐首搜索匹配（多轮放宽：原名 → 去括号 → 清轨号 → 只按歌名 → 容错写反的行；与歌词匹配同款置信阈值，宁缺勿错）→ 解直链 → 逐首追加进歌单，第一首落地即开播。单次上限 300 首、导入中随时可停，失败行会放回文本框（可编辑后单独重试），状态栏按原因归类汇总（未匹配 / 未登录拿不到付费直链 / 版权受限等）；其他播放器或文本里的同类曲目列表同样可导。</li>
+      <li><strong>歌词「实时匹配」改为页内调用</strong>：lyrics-resolver 直接调用 <code>QQBridge.lyric()</code>（多轮放宽：原文 → 清轨号 → 拆「歌手 - 标题」→ 去括号 → 只按标题；逐候选按 标题重合度 + 歌手 + 时长 吻合度打分，伴奏 / 翻唱降权），译文 LRC 追加在原文之后由主题同刻归组配对显示。DevTools 里 <code>CM.lyricStatus()</code> 可看最近一次匹配诊断。</li>
+      <li><strong>下载保存位置条</strong>：开始下载后，列表上方会出现「下载保存到 &lt;目录&gt;」的常驻条 —— 一键「打开文件夹」（资源管理器）或「复制路径」，不用再去翻配置目录。</li>
+      <li><strong>诊断入口</strong>：<code>QQBridge.bridgeInfo()</code>（版本 / Cookie / guid / 缓存）、<code>CM.qqMusic.state</code>、<code>CM.artworkStatus()</code>。</li>
+    </ul>
+
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:18px 0">
+    <strong>v2.5.3 · 在线音源稳定性与性能（修 Bug）</strong>
+    <ul>
+      <li><strong>卡死根因：宿主 HTTP 走的是同步调用</strong>。QQ 音乐的每一个请求（搜索 / 直链 / 歌词 / 封面）原来都用 <code>async:false</code> —— 实测宿主会在<strong>自己的 UI 线程</strong>上把整条请求做完才返回：请求有多慢，foobar 主窗口就假死多久。拿一个连不上的地址做对照实验（TCP 超时 21 秒），同步调用下主窗口 21 秒不响应任何系统消息（窗口探测 202 次采样里 80 次无响应）；正常请求（150–400 毫秒）则表现为一串卡顿，切歌时「歌词匹配 + 封面下载」叠加最明显。现在整条链路改为 <code>async:true</code> + <code>http:response</code> 事件（由宿主网络线程完成，页面线程全程可响应），超时用 <code>http.abort</code> 真正取消请求（普通请求 15 秒、探测 8 秒）。<strong>同一场景复测：同样的 21 秒请求，主窗口 0 次无响应（最慢响应 6 毫秒）</strong>。HTTP 监听改为模块加载时就挂上并按 requestId 缓存回包 —— 快速响应不会因为「回包比监听器先到」而丢失。</li>
+      <li><strong>在线封面不再每次重下</strong>：封面兜底对在线曲目原来<strong>没有缓存</strong>，列表每重绘一次就同步重下一遍（实测 3 张封面 1.2 秒，全程冻住主线程）。现在下载 / 缓存 / 去重都收在 <code>QQBridge.coverDataUrl()</code>：同一张专辑只下一次（上限 30 张），下载失败降级用 CDN 原始 URL 并单独计数（<code>CM.artworkStatus()</code> 新增 <code>rawFallback</code>，不再把降级当命中）。「映射还没记下来」时不写空缓存，播放后记录 mediaMid→专辑 仍然能查到封面。</li>
+      <li><strong>批量解析并发 3 条</strong>：勾一批播放 / 下载原来是串行 N 次「vkey + 可用性探测」，现在并发 3 条，<strong>结果按勾选顺序回填</strong>（第一首必须是 urls[0]，开播索引靠它定位）。实测 4 首 534 毫秒、顺序与输入完全一致，第二次同批秒回（会话缓存）。</li>
+      <li><strong>「没有结果」不再报成「搜索失败」</strong>：<code>QQBridge.search()</code> 的 <code>ok</code> 曾经等于「搜到了至少一首」，于是「没有搜到结果」与「已经到底了」两个空态代码永远走不到，用户看到的是错误提示。现在 <code>ok</code> 表示这次查询问成了：空结果走空态、翻到超范围页提示「没有第 N 页 · 已经到底了」。</li>
+      <li><strong>歌单写入失败不再静默当成功、不再播错曲目</strong>：宿主调用失败原本被包装层吞成 <code>null</code>，而 <code>playlist.getTracks</code> 取不到总数时会拿 0 当索引 —— 于是「已追加到 QQ音乐 并开播」照常提示，播的却是歌单里的第一首（可能是几天前那首）。现在歌单相关写操作（取曲目数 / 追加 / 开播 / 导入）一律要求明确回执，取不到总数直接报错并说明原因。</li>
+      <li><strong>一次网络抖动不再让歌词「暂无」半小时</strong>：在线匹配失败原来（含网络错误）会写进 30 分钟缓存；现在只有上游明确回「没有歌词」才进负缓存，网络失败不进，并且歌词面板右键的「刷新歌词」会连 <code>QQBridge</code> 的匹配缓存一起清掉（此前只清了本模块的内存缓存，刷新十次也是同一个结果）。</li>
+      <li><strong>在线曲目：原版功能给明确说法</strong>：在线曲目（直链）右键菜单的「编辑标签」「在资源管理器中显示」置灰并写明原因（在线曲目没有本地文件），批量标签编辑自动跳过在线曲目并在结果里说明（原来会混进「失败 N 首」）；单曲标签编辑器也会直接提示「先下载落盘再改」。星级评分、封面、歌词、波形这些对在线曲目本来就能用的功能保持不变。</li>
+      <li><strong>其它修复</strong>：下载中点「停止」不再报成「下载失败 / 部分失败」（改为「已停止下载：完成 N 首」）；导入失败原因区分「未匹配」与「搜索失败（网络）」；翻页 / 加载更多过期响应不再误清新操作的加载标志（原来能把正在进行的加载显示成没在加载，还能再点出重复请求）；打开下载文件夹在宿主拒绝时会真正走兜底而不是静默无反应；<code>mediaMid</code> / 歌词 / 直链 / 封面缓存统一收口裁剪（直链与歌词按时间戳淘汰最旧的，不再把还在有效期的热条目挤掉）；直链缓存键在缺 songmid 时退回 mediaMid（原来会全部落到同一个键上互相污染）；去掉重复的 <code>profilePath</code> / <code>escHtml</code> 实现，共享 <code>CM.profilePath()</code>。</li>
+    </ul>
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:18px 0">
     <strong>v2.5.2 · 双语配对自动归一（新功能）</strong>
     <ul>
+      <li><strong>手动模式完全机械化（修 Bug）</strong>：右键菜单选「标准双语 / 兼容旧版」后，解析层不再做任何语言分析 —— 同刻多行一律按「首行=主行、其余=副行」机械成组（兼容旧版先机械回移再成组）。此前归组阶段的「同族同刻对按字符重合度区分主副 / 独立行」启发式在手动模式下也会跑：<code>脑蚀.lrc</code> 的 <code>[00:07.090]用法容量度外視 合法 Doping time / 用法用量抛诸脑后…</code> 两句都无假名、同被分进汉字族、字面重合度 0.375 &lt; 0.5，即使手动指定标准双语仍被拆成两句独立原文；现在该启发式只属于自动识别，手动模式直接按所选写法处理（自动识别对该文件维持原判：首对拆开、其余成组，属预期 —— 判不准的本来就靠手动指定或 <code>tools/lrc-normalizer.html</code> 修正）。本地 444 个歌词文件 × 3 种模式回归：自动识别零变化，手动模式差异全部为「原本被拆开的同刻行按序吸收为主行的副行」（34 处 / 111 行），组时间戳零倒退。</li>
+      <li><strong>桥接服务开关合并为单文件</strong>：<code>qqmusic-bridge</code> 里的「启动服务.cmd / 关闭服务.cmd」合并为 <code>QQ音乐桥接服务.cmd</code> —— 双击后输入 1 / 2 回车即可启动 / 关闭，数字（1、2）、英文（start、close、stop）、中文（启动、关闭）任一都认；不带参数双击会先出输入提示，命令行带参数调用同样有效（<code>QQ音乐桥接服务.cmd 1</code>）。仍是 GBK + CRLF 编码，启动按所在目录找 exe、关闭按端口和进程名工作（复制到桌面 / 固定到任务栏的副本照常可用）；页面提示条与错误提示文案同步更新。</li>
+      <li><strong>配套工具（lrc-normalizer）修复与护栏</strong>：① 时间戳小数位放宽到 9 位 —— <code>[01:10.020004]</code> 这类 QQ 音乐天琴实验室来源的超长小数此前认不出来，整行被当无时间戳的行收进文件头（预览不可见、不可编辑），本地 444 个文件中 8 个中招，主题端解析本来就认；② 信息行词表与主题对齐：<code>Lyrics by / Composed by / Produced by / Written by / Arranged by / Mixed by / Mastered by / Music by / Words by</code> 等英文制作短语不再受 40 字上限约束，长制作行不再被当成歌词行；③ 导出「兼容旧版」时若检测到一句挂了多条译文，弹窗建议改用标准双语（延后写法的时间轴每句只装得下一条译文，第二条起会被主题挂到下一句原文上）。全库「工具导出 → 主题解析」回归：标准双语 437/440、兼容旧版 434/440 逐组一致，剩余差异为 <code>[Chorus: x]</code> 段落标签（主题按残留标签隐藏、工具保留可编辑）与自由翻译文件在兼容旧版下的固有挂靠差异，均不涉及歌词配对本身。</li>
       <li><strong>两种双语写法自动归一到「原文为主、译文为副」</strong>：同刻协议（原文与译文同一时间戳）与延后协议（译文写在下一句原文的时间戳上，TME / QQ 音乐等来源常见）在结构上互为相位平移，任何局部特征都判不出。现在的做法分两步：① <strong>相位判定</strong>（决定整个文件按哪种写法展开）—— 取首个「跨语言同刻组」，用它前面<strong>紧邻且自己落单</strong>的那句原文作锚点；锚点失效时改用决定性语言标记（假名 / 谚文只会出现在原文侧）；再按「跨语言同刻组的形态比例」决定是否展开，多数组本来就是同刻写法时直接判为标准双语、一行不改。② 判定为延后后按<strong>纯机械规则展开</strong>（不看语言、不做语义判断）：逐时间戳块处理 —— 块内有<strong>空槽</strong>（该时间戳下有一行无正文或只有占位符）或制作信息 → 块内正文都是原文；块内有多行正文 → 首行是「上一句的译文」（挂到上一句）、其余是原文；只有一行 → 原文。空槽是「这句没有译文」的唯一依据，解析层会保留它（此前被直接丢弃）。</li>
       <li><strong>同脚本族的同刻对</strong>用字符重合度区分：译文字面与原文高度重合（日文汉字句 ↔ 中文句，如 <code>天天天国地獄国</code> / <code>天天天国地狱国</code>）→ 保持主副；两句无关原文（重叠人声、重复段，如 <code>有了你…</code> / <code>去到每一度…</code>）→ 各自独立成行。主行也不再被制作信息抢走（<code>[00:00.555]Composed by：X</code> 与歌词同刻时，主行取歌词行、制作信息降为副行）。</li>
       <li><strong>副标题行（第三语言）归位</strong>：英文原词、罗马音、中英混排的译文（如「无比炽热 Like a Bloody Stone」——按拉丁占比会被分到第三脚本族）此前不参与回移，那一组会变成 3 行、主行还是上一句译文。现在按位置特征（与下一行同刻 + 脚本族不同 + 文字不同 + 下一行属原文侧）挂回所属原文；同时非译文侧的第三族行也参与「最近原文」推进，修掉「英文原文行之后的中文译文被挂到更早一句上」的错配（如 <code>God Knows…</code>）。本地 445 个歌词文件全量回归：<strong>13 个文件改善、0 个变差</strong>（「一组≥3 行」82 → 39），<code>God Knows…</code> / <code>Bloody Stream</code> / <code>IRIS OUT</code> / <code>Butter-Fly</code> 等逐条人工核对。</li>
       <li><strong>覆盖面对比</strong>：自动归一的文件 188 → 209、判不出的 33 → 9（后者多为「没有双语内容」或结构自相矛盾的）；逐句核对过的清单：延后格式 15/15 主行=原文、同刻格式 15/17 保持零改写（另 2 个为核对过的正确修正）；全库 581 文件 × 3 种模式 0 异常、组时间戳 0 倒退。</li>
       <li><strong>配套编辑器（独立于主题）</strong>：<code>tools/lrc-normalizer.html</code> 不放在 <code>default</code> 里、主题不加载它，浏览器直接打开、纯本地运行。一键识别打底 + 手动调整：点角色徽标切 主/译文、↑ ↓ 移动、＋ 插入/追加行、✕ 删除、时间戳与正文<strong>就地编辑</strong>（回车提交 / Esc 取消）、Ctrl+Z/Y 撤销重做、整窗口拖放换文件、清空按钮；右侧实时预览主题里的显示效果；导出两种写法。实测「一键识别 + 导出标准双语」抽样 60 个文件，在主题里 <strong>60/60 都能被确定性识别</strong>（零改写、无歧义）。</li>
       <li><strong>编辑器还能打轴 + 粘贴文本</strong>：界面分成「<strong>编辑歌词</strong>」和「<strong>打轴</strong>」两页，共用同一份歌词。歌词只有纯文本（从网页复制的原文 + 译文，没有时间戳）时不用先造 .lrc —— 点「粘贴文本」整段粘进去，<strong>所有行的时间戳就是 00:00.000</strong>；载入歌曲（点按钮或把音频拖进窗口）后播放，跟着节奏<strong>按空格</strong>就把当前播放时间打给目标行，打完自动跳下一句，勾选「跳过译文行」时译文行不会被停下来（时间在导出时按所选写法统一写）；<strong>Backspace</strong> 撤销上一次、<strong>P</strong> 播放/暂停、<strong>← →</strong> ∓3 秒、<strong>S</strong> 从此行播；打轴页的歌词列表点任意一行 = 从那一句开始打（重打某几句用），「全部归零」可清空时间戳从头打。原文 / 译文逐行交替的粘贴内容点「交替配对」就能分出译文行。导出的文件按时间戳升序排列，没打完（多行仍是 00:00.000）会在下载前弹窗确认。</li>
+      <li><strong>逐字（卡拉OK）歌词打轴</strong>：勾上工具条的「<strong>逐字歌词</strong>」后，打轴页会把这句拆成一排字/词（汉字、假名一字一格，拉丁字母按空格分词），<strong>每按一次空格打一个字</strong>，当前字高亮、打过变暗，打完最后一个字自动跳下一句；点字条上任意一个字可从那个字重打，<strong>Backspace</strong> 退回上一个字。译文行整句跳过、不打字轴，导出时写成<strong>同刻整句</strong>（主题会把它归到该行的译文位置）。导出格式为标准 <strong>ESLyric 增强型 LRC</strong>：<code>[00:12.34]&lt;00:12.34&gt;夜&lt;00:12.60&gt;色…</code>，主题的逐字歌词解析直接可读；只想整句打也可以（每句只按一次，那行就按整句导出），已有的逐字文件也能拖进来重打。</li>
       <li><strong>歌词面板右键菜单</strong>：在歌词面板或沉浸式页面的歌词区右键 ——「翻译对齐方式」是二级菜单（悬停展开，当前项带 ✓）：<strong>自动识别 / 标准双语 / 兼容旧版</strong>，选择<strong>按文件记忆</strong>（选「自动识别」即恢复）；下方是 刷新歌词 / 复制歌词 / 打开所在文件夹。歌词没有同刻行时（纯文本、逐字歌词等）不显示对齐项；判不出来的文件用手动模式即可。</li>
       <li><strong>其它修复</strong>：归一后组时间戳可能倒退（会导致高亮二分查找跳错行）→ 归一成功后恢复一次稳定排序；说话人标签（<code>Charlie Puth：</code>）按信息行处理，不再干扰相位判定；<code>localStorage</code> 损坏时崩溃、歌词为空时右键菜单残留上一首的识别结果、二级菜单不跟随主菜单滚动。</li>
       <li><strong>性能</strong>：无同刻组直接早退（单语言歌词解析 −18%）；每行脚本族只算一次、关系式由最坏 O(n²) 降为 O(n)（有同刻组的文件 −20%）；移除判定链路上重复的脚本分类与重复的同刻组检测；解析缓存 key 加入配对模式，切换模式后不会命中旧结果。</li>
@@ -545,9 +577,9 @@
       <li><strong>翻译 / 音译</strong>：同一时间戳下的多行（原文 + 译文，或再加音译）会作为一组显示 —— 主行下方以更小更暗的副行呈现，整组一起高亮、一起居中，任何一行都不会被丢弃</li>
       <li><strong>纯文本歌词</strong>：无时间轴的歌词以静态文本展示（不会误当作同步歌词而“末行恒亮”）</li>
       <li><strong>点击跳转</strong>：点击任意歌词行可跳转到对应时间点播放</li>
-      <li><strong>歌词来源</strong>：通过 ESLyric 组件获取，需安装 foo_uie_eslyric</li>
+      <li><strong>歌词来源（本地优先）</strong>：先找音频同目录的<strong>同名 <code>.lrc</code></strong> 与 <code>%profile%\lyrics</code> 歌词库 —— 你自己精修过的词优先，读文件也更快、不依赖网络；本地没有时才经页内桥接（QQBridge）联网匹配 QQ 音乐词库。桌面歌词窗口与 ESLyric 工具菜单需要 foo_uie_eslyric 组件</li>
       <li><strong>多编码支持</strong>：内置 8 层编码检测引擎，可正确识别 GBK/GB18030、UTF-8、UTF-16 编码的 LRC 文件；其他亚洲双字节编码（Big5 / Shift_JIS / EUC）按评分制区分。含引号等特殊标签名也能正确定位</li>
-      <li><strong>右键菜单</strong>：在<strong>歌词面板</strong>或<strong>沉浸式页面的歌词区</strong>右键即可打开菜单 ——「翻译对齐方式」是一个二级菜单（鼠标悬停展开，当前项带 ✓）：<strong>自动识别</strong>（自动判断歌词格式）/ <strong>标准双语</strong>（原词和翻译在同一时间）/ <strong>兼容旧版</strong>（翻译在下一句时间）；下方是 刷新歌词 / 复制歌词 / 打开所在文件夹。选择<strong>按文件记忆</strong>，选「自动识别」即恢复。歌词没有重复时间戳时（纯文本、逐字歌词等）<strong>不显示这一项</strong>，因为此时不存在对齐问题</li>
+      <li><strong>右键菜单</strong>：在<strong>歌词面板</strong>或<strong>沉浸式页面的歌词区</strong>右键即可打开菜单 ——「翻译对齐方式」是一个二级菜单（鼠标悬停展开，当前项带 ✓）：<strong>自动识别</strong>（自动判断歌词格式）/ <strong>标准双语</strong>（原词和翻译在同一时间）/ <strong>兼容旧版</strong>（翻译在下一句时间）；下方是 刷新歌词 / 复制歌词 / 打开所在文件夹。选择<strong>按文件记忆</strong>，选「自动识别」即恢复。手动指定的两种模式按所选写法<strong>机械处理</strong>、不做语言分析（标准双语下同刻多行一律「首句为主、其余为副」），自动识别判不准的文件指定一下即可。歌词没有重复时间戳时（纯文本、逐字歌词等）<strong>不显示这一项</strong>，因为此时不存在对齐问题</li>
     </ul>
     <div class="callout">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -654,7 +686,7 @@
     </div>
     <div class="callout">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      <div class="callout-text">标签写入为异步操作，保存后面板会自动关闭并在写入完成后刷新播放列表。只有实际修改的字段才会被写入文件。</div>
+      <div class="callout-text">标签写入为异步操作，保存后面板会自动关闭并在写入完成后刷新播放列表。只有实际修改的字段才会被写入文件。<strong>在线曲目</strong>（QQ 音乐直链）没有本地文件，这项会置灰并在提示里说明 —— 需要改标签请先「下载选中」落盘。</div>
     </div>
   </div>
 </div>
@@ -904,11 +936,41 @@
   </div>
 </div>
 
+<!-- 21 QQ 音乐在线音源 -->
+<div class="section" id="s21">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </div>
+    <div>
+      <div class="section-title">QQ 音乐在线音源</div>
+      <div class="section-desc">搜索试听 · 勾选播放 · 无损下载 · 歌单导入</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <p>侧边栏「<strong>QQ 音乐</strong>」页就是入口：搜索 → 勾选 → 「在 foobar2000 播放」或「下载选中」。搜索 / 直链解析 / 歌词 / 封面全部在主题页面内完成（走宿主 foo_ui_webview2 的原生网络客户端），<strong>没有本地进程、端口、开关脚本，也不需要 node.js / Python</strong> —— 随 foobar 启动而在、关闭而消。</p>
+    <ol class="steps">
+      <li><strong>搜索</strong>：输入歌名 / 歌手 / 专辑后回车。底部「加载更多」把下一页<strong>追加</strong>到列表末尾（已勾选的不受翻页影响，可以跨页攒一批）；下方翻页条可整页跳转（上游不返回总页数，「下一页」按钮的可点状态由是否还有更多决定）。</li>
+      <li><strong>勾选与播放</strong>：点行首复选框勾选（点整行也能勾），右侧「播放」按钮或双击整行 = 立刻播放这一首。点「在 foobar2000 播放」把勾选的曲目<strong>追加</strong>到固定的「QQ音乐」歌单末尾并从新曲开播 —— 之前播的歌原地保留，听完可以直接在歌单里接着选下一首。</li>
+      <li><strong>下载</strong>：点「下载选中」逐首落盘到 <code>&lt;foobar2000 配置目录&gt;\qqmusic-downloads\</code>（音频 + 同名 <code>.lrc</code> 一起写入；整目录可加进媒体库）。列表上方常驻「下载保存到 …」条，可一键打开文件夹或复制路径；下载中再点一次 = 停止（当前这首下完就停）。<strong>音质下拉框只影响下载</strong>。</li>
+      <li><strong>导入自己的歌单</strong>：点「导入歌单」→「复制导出脚本」→ 到 <code>y.qq.com</code> 歌单页按 F12 打开控制台粘贴回车（脚本自动滚动抓全曲目，导出「歌名 - 歌手」每行一首）→ 回主题粘贴文本、指定目标歌单名 → 开始导入。逐首多轮搜索匹配（宁缺勿错），失败行会放回文本框可编辑重试，单次上限 300 首、随时可停。</li>
+      <li><strong>VIP / 无损</strong>：右上角「设置 Cookie」按面板说明操作 —— 浏览器登录 <code>y.qq.com</code> → F12 控制台运行 <code>copy(document.cookie)</code> → 把 Cookie 粘回面板保存。免费曲库不需要登录；Cookie 失效时表现为 VIP 曲目全部解析不到（重贴一次即可）。</li>
+    </ol>
+    <ul>
+      <li><strong>在线播放固定 MP3 流播</strong>：QQ 的 CDN 给所有直链打的 <code>Content-Type</code> 都是 <code>audio/x-ogg</code>，foobar2000 会按类型把 FLAC / AAC 直链误当 Ogg 拒解（提示「不支持的格式或文件损坏」），所以在线播放只解析 MP3 档（320 → 128）。<strong>要无损 / Hi-Res / 母带，请用「下载选中」落盘后本地播放</strong>（文件字节完好）。</li>
+      <li><strong>vkey 过期</strong>：歌单里存的是带签名的 CDN 直链，约两小时过期 —— 过期条目再点会播放失败，回页面重新勾选播放即可刷新。想长期保存就下载落盘。</li>
+      <li><strong>封面与歌词自动匹配</strong>：在线曲目的封面由直链里的 mediaMid 反查腾讯图床（随播放 / 下载记录，缓存复用）；歌词按「标题 + 歌手 + 时长」多轮放宽搜索匹配，本地同名 <code>.lrc</code> 与 <code>%profile%\lyrics</code> 歌词库<strong>优先</strong>。歌词面板右键的「刷新歌词」会同时清掉在线匹配缓存。</li>
+      <li><strong>在线曲目没有本地文件</strong>：右键菜单的「编辑标签」「在资源管理器中显示」会置灰并说明原因，批量标签编辑自动跳过它们；星级评分、封面、歌词、波形、试听、加入队列不受影响。需要改标签请先下载落盘。</li>
+      <li><strong>诊断入口</strong>：<code>QQBridge.bridgeInfo()</code>（版本 / 登录态 / guid / 各缓存条数与在途请求数）、<code>CM.qqMusic.state</code>（页面状态）、<code>CM.artworkStatus()</code>（封面兜底统计，<code>rawFallback</code> = 降级用原始 URL 的次数）、<code>CM.lyricStatus()</code>（最近一次歌词匹配）。</li>
+    </ul>
+  </div>
+</div>
+
 </div>
 
 <!-- Footer -->
 <div class="footer">
-  <p class="footer-author">CloudMusic 主题 v2.5.2 · 作者：灵芝含</p>
+  <p class="footer-author">CloudMusic 主题 v2.5.3 · 作者：灵芝含</p>
   <p>基于 foo_ui_webview2 SDK 1.13.0 · foobar2000 v2</p>
   <p>感谢使用，享受音乐</p>
 </div>

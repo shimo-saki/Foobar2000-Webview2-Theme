@@ -38,6 +38,13 @@
   CM.showTagEditor = function(track) {
     var path = CM.trackPath(track);
     if (!path) { CM.showToast('无法编辑', '未获取到文件路径', 'error'); return; }
+    // 在线曲目（QQ 音乐直链）没有可写的文件：metadata.read 只会返回空标签、
+    // 保存必然失败。与其开一个空编辑器让人白填一遍，不如直接说清楚。
+    if (CM.isUrlPath && CM.isUrlPath(path)) {
+      CM.showToast('无法编辑标签', '在线曲目没有本地文件 —— 需要改标签请先「下载选中」落盘',
+                   'error');
+      return;
+    }
     _tagCtx = { mode: 'single', tracks: [track], path: path };
     els.tagEditorTitle.textContent = '编辑标签';
     els.tagEditorTrack.textContent = CM.trackName(track) + ' — ' + path;
@@ -68,6 +75,14 @@
     var names = tracks.slice(0, 3).map(CM.trackName).join('、');
     if (tracks.length > 3) names += ' 等' + tracks.length + '首';
     els.tagEditorTrack.textContent = names;
+    // 在线曲目写不进去：先讲清楚，别等保存完只看到"部分失败"
+    var onlineN = tracks.filter(function(t) {
+      return CM.isUrlPath && CM.isUrlPath(CM.trackPath(t));
+    }).length;
+    if (onlineN) {
+      CM.showToast('有 ' + onlineN + ' 首在线曲目不会写入',
+                   '在线曲目没有本地文件，本次批量保存会跳过它们', 'error');
+    }
     els.tagEditorHint.textContent = '勾选要批量修改的字段，未勾选的字段保持原值';
     _renderTagFields(true, {});
     // 批量模式隐藏封面区
@@ -200,10 +215,20 @@
     });
     if (!hasChecked) { CM.showToast('未选择字段', '请勾选要批量修改的标签字段', 'error'); return; }
     els.tagEditorHint.textContent = '正在批量写入...';
+    var skipped = 0;
     var items = ctx.tracks.map(function(t) {
       var p = CM.trackPath(t);
-      return p ? { path: p, tags: tags } : null;
+      if (!p) return null;
+      // 在线曲目没有可写文件：不计入 items，否则成败统计里会多出一批
+      // "失败"（其实是本来就写不了），用户还会以为写入出错
+      if (CM.isUrlPath && CM.isUrlPath(p)) { skipped++; return null; }
+      return { path: p, tags: tags };
     }).filter(Boolean);
+    if (!items.length) {
+      els.tagEditorHint.textContent = '没有可写入的本地曲目';
+      CM.showToast('没有可写入的曲目', '选中的都是在线的曲目 —— 先「下载选中」落盘再改标签', 'error');
+      return;
+    }
     CM.api('metadata.writeBatch', { items: items }).then(function(r) {
       if (!r || r.success === false) {
         if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
@@ -211,10 +236,11 @@
         return;
       }
       var ok = r.successCount || 0, fail = r.failCount || 0;
+      var skipNote = skipped ? '，' + skipped + '首在线曲目已跳过' : '';
       if (fail > 0) {
-        CM.showToast('部分成功', ok + '首成功，' + fail + '首失败', 'error');
+        CM.showToast('部分成功', ok + '首成功，' + fail + '首失败' + skipNote, 'error');
       } else {
-        CM.showToast('批量保存成功', ok + '首曲目标签已更新', 'success');
+        CM.showToast('批量保存成功', ok + '首曲目标签已更新' + skipNote, 'success');
       }
       // 更新本地缓存
       ctx.tracks.forEach(function(track) {

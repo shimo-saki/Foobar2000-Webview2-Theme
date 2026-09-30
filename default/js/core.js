@@ -235,6 +235,32 @@
     return t.absolutePath || t.path || '';
   };
 
+  // 在线曲目（QQ 音乐 CDN 直链等）：「路径」是 http(s) URL，不是磁盘文件。
+  // 标签编辑 / 在资源管理器中显示 / 读同名 .lrc 这类文件操作对它没有意义，
+  // 各调用点用这两个判定决定禁用或改走在线链路。
+  CM.isUrlPath = function(p) {
+    return /^https?:\/\//i.test(String(p || ''));
+  };
+  CM.isLocalPath = function(p) {
+    p = String(p || '');
+    if (!p || CM.isUrlPath(p)) return false;
+    return /^[a-z]:[\\/]/i.test(p) || p.indexOf('\\\\') === 0 || p.indexOf('file://') === 0;
+  };
+
+  // foobar2000 配置目录（宿主只给一次就缓存；取不到回 ''）。
+  // 下载目录、歌词库、ESLyric 数据目录都挂在它下面，多处复用。
+  var _profilePathCache = null;
+  CM.profilePath = function() {
+    if (_profilePathCache !== null) return Promise.resolve(_profilePathCache);
+    return CM.api('misc.getProfilePath').then(function(r) {
+      _profilePathCache = (r && (r.path || r.value)) || '';
+      return _profilePathCache;
+    }, function() {
+      _profilePathCache = '';
+      return '';
+    });
+  };
+
   CM.escHtml = function(s) {
     return s == null ? '' : String(s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

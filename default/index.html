@@ -50,6 +50,10 @@
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <span>搜索</span>
       </div>
+      <div class="nav-item" data-tab="qqmusic" tabindex="0" title="QQ 音乐在线音源">
+        <svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg>
+        <span>QQ 音乐</span>
+      </div>
     </div>
     <div class="sidebar-section-title">
       <span>我的歌单</span>
@@ -67,6 +71,7 @@
       <div class="main-tab" data-tab="playlist">播放列表</div>
       <div class="main-tab" data-tab="library">媒体库</div>
       <div class="main-tab" data-tab="search">搜索</div>
+      <div class="main-tab" data-tab="qqmusic">QQ 音乐</div>
     </div>
     <div class="main-body" id="mainBody">
 
@@ -176,6 +181,128 @@
               <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <span>输入关键词搜索媒体库</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- QQ 音乐在线音源（扩展页，逻辑在 js/ui-qqmusic.js + js/qqmusic-core.js） -->
+      <div class="tab-content" id="tabQqmusic">
+        <div class="qqm-root">
+          <div class="qqm-head">
+            <div>
+              <div class="qqm-title">QQ 音乐在线音源</div>
+              <div class="qqm-sub" id="qqmStatus">正在初始化页内桥接…</div>
+            </div>
+            <div class="qqm-head-actions">
+              <button class="qqm-btn" id="qqmImportBtn" title="按曲目文本匹配导入歌单">导入歌单</button>
+              <button class="qqm-btn" id="qqmLoginBtn" title="免费曲库不需要登录；VIP 曲目 / 无损音质需要有效 Cookie">设置 Cookie</button>
+            </div>
+          </div>
+
+          <!-- 下载保存位置条（首轮下载后出现）：紧贴「下载完成」状态行下方 -->
+          <div class="qqm-dlrow" id="qqmDlRow" hidden>
+            <span class="qqm-dl-label">下载保存到</span>
+            <code class="qqm-dl-path" id="qqmDlPath"></code>
+            <button class="qqm-btn qqm-btn-sm" id="qqmDlOpen" title="在资源管理器中打开该目录">打开文件夹</button>
+            <button class="qqm-btn qqm-btn-sm" id="qqmDlCopy" title="复制保存路径">复制路径</button>
+          </div>
+
+          <!-- Cookie 设置面板（页内桥接自带，无需启动任何服务） -->
+          <div class="qqm-setup" id="qqmSetup" hidden>
+            <div class="qqm-setup-t">填入 QQ 音乐 Cookie（可选）</div>
+            <div class="qqm-setup-d">
+              播放免费曲库<strong>不需要登录</strong>。想听 VIP 曲目和无损音质：在浏览器登录
+              <code>y.qq.com</code> 网页版 → 按 F12 打开开发者工具 → 控制台(Console) →
+              输入下面的命令回车（Cookie 会自动复制到剪贴板），再粘贴到下面保存。
+              Cookie 失效时（VIP 全部解析不到）回来重贴一次即可。
+            </div>
+            <div class="qqm-setup-cmd-row">
+              <code class="qqm-setup-cmd" id="qqmCookieCmd">copy(document.cookie)</code>
+              <button class="qqm-btn qqm-btn-sm" id="qqmCookieCmdCopy" title="复制这条命令，去 y.qq.com 的控制台里粘贴运行">复制命令</button>
+            </div>
+            <textarea class="qqm-setup-input" id="qqmCookieInput" rows="3" spellcheck="false"
+              placeholder="uin=123456789; qqmusic_key=Q_H_L_…; qm_keyst=Q_H_L_…; …（整串粘贴，保留分号）"></textarea>
+            <div class="qqm-setup-a">
+              <button class="qqm-btn qqm-btn-sm qqm-btn-primary" id="qqmCookieSave">保存 Cookie</button>
+              <button class="qqm-btn qqm-btn-sm" id="qqmCookieClear">清除</button>
+              <button class="qqm-btn qqm-btn-sm" id="qqmSetupRetry">收起</button>
+            </div>
+          </div>
+
+          <!-- 歌单导入面板（粘贴曲目文本 → 搜索匹配 → 解直链入歌单） -->
+          <div class="qqm-setup" id="qqmImportPanel" hidden>
+            <div class="qqm-setup-t">导入歌单（按曲目文本匹配）</div>
+            <div class="qqm-setup-d">
+              每行一首：<code>歌名 - 歌手</code>。点「复制导出脚本」→ 到 y.qq.com 的歌单页按 F12 →
+              控制台(Console) 粘贴回车，曲目会自动复制成这个格式（其他播放器 / 文本同类列表也认）。
+              官方已对账号歌单详情接口启用签名加密，故采用文本匹配方式。
+            </div>
+            <div class="qqm-setup-cmd-row">
+              <button class="qqm-btn qqm-btn-sm" id="qqmExportScriptCopy" title="复制导出脚本，粘贴到 y.qq.com 歌单页的控制台运行">复制导出脚本</button>
+              <span class="qqm-dl-label">粘贴到歌单页控制台运行 → 导出「歌名 - 歌手」清单</span>
+            </div>
+            <textarea class="qqm-setup-input" id="qqmImportText" rows="6" spellcheck="false"
+              placeholder="找到自己 - 孙一菲&#10;Destiny Journeys - Vaundy&#10;…（每行一首）"></textarea>
+            <div class="qqm-setup-cmd-row">
+              <span class="qqm-dl-label">导入到歌单</span>
+              <input type="text" class="qqm-setup-name" id="qqmImportName" value="QQ音乐导入" spellcheck="false" />
+              <button class="qqm-btn qqm-btn-sm qqm-btn-primary" id="qqmImportStart">开始导入</button>
+              <button class="qqm-btn qqm-btn-sm" id="qqmImportStop" hidden>停止</button>
+              <button class="qqm-btn qqm-btn-sm" id="qqmImportClose">收起</button>
+            </div>
+          </div>
+
+          <div class="qqm-bar">
+            <div class="qqm-search">
+              <svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="qqmInput" placeholder="搜索 QQ 音乐：歌名 / 歌手 / 专辑，回车搜索" spellcheck="false" />
+            </div>
+            <select class="qqm-select" id="qqmQuality" title="下载音质（母带 / Hi-Res / 无损需要超级会员登录）。在线播放固定使用 MP3：无损直链会被 CDN 的 audio/x-ogg 类型干扰、foobar 无法流播，无损请用下载落盘">
+              <option value="master">臻品母带</option>
+              <option value="hires">Hi-Res 24bit</option>
+              <option value="flac">SQ 无损 FLAC</option>
+              <option value="aac192">AAC 192K</option>
+              <option value="320">320K MP3</option>
+              <option value="aac96">AAC 96K</option>
+              <option value="128">128K MP3</option>
+            </select>
+            <button class="qqm-btn qqm-btn-primary" id="qqmSearchBtn">搜索</button>
+          </div>
+
+          <div class="qqm-toolbar">
+            <label class="qqm-check"><input type="checkbox" id="qqmAll" title="勾选当前这一页的全部曲目" /> 全选本页</label>
+            <span class="qqm-count" id="qqmCount">已选 0 首</span>
+            <span class="qqm-flex"></span>
+            <button class="qqm-btn" id="qqmDownloadBtn" disabled title="解析音源并下载到 &lt;配置目录&gt;\qqmusic-downloads（含同名歌词 .lrc；下载中再点一次 = 停止）">
+              <svg viewBox="0 0 24 24"><path d="M12 15V3m0 12l-4-4m4 4l4-4"/><path d="M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.94-1.515L22 17"/></svg>
+              <span>下载选中</span>
+            </button>
+            <button class="qqm-btn qqm-btn-primary" id="qqmPlayBtn" disabled>
+              <svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+              <span>在 foobar2000 播放</span>
+            </button>
+          </div>
+
+          <div class="qqm-list" id="qqmList">
+            <div class="qqm-empty">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>输入关键词，搜索 QQ 音乐并直接在 foobar2000 里播放</span>
+            </div>
+          </div>
+
+          <!-- 翻页条 -->
+          <div class="qqm-pager" id="qqmPager">
+            <button class="qqm-btn qqm-btn-sm" id="qqmPrevBtn" title="上一页">‹ 上一页</button>
+            <span class="qqm-page-info">第 <b id="qqmPageNo">1</b> 页</span>
+            <button class="qqm-btn qqm-btn-sm" id="qqmNextBtn" title="下一页">下一页 ›</button>
+            <span class="qqm-flex"></span>
+            <span class="qqm-jump">
+              跳至
+              <input type="text" id="qqmPageInput" inputmode="numeric" autocomplete="off"
+                     spellcheck="false" title="输入页码后回车即可跳转" />
+              页
+              <button class="qqm-btn qqm-btn-sm" id="qqmGoBtn">跳转</button>
+            </span>
           </div>
         </div>
       </div>
@@ -449,16 +576,21 @@
 <script src="sdk/smp-compat.global.js?v=1130"></script>
 <!-- CloudMusic Theme -->
 <script src="js/core.js?v=28"></script>
-<script src="js/lyric-core.js?v=28"></script>
+<script src="js/lyric-core.js?v=29"></script>
 <script src="js/ui.js?v=28"></script>
-<script src="js/ui-lyrics.js?v=28"></script>
-<script src="js/ui-playlist.js?v=28"></script>
+<script src="js/ui-lyrics.js?v=29"></script>
+<script src="js/ui-playlist.js?v=29"></script>
 <script src="js/ui-discover.js?v=28"></script>
 <script src="js/ui-library.js?v=28"></script>
 <script src="js/ui-queue.js?v=28"></script>
 <script src="js/ui-nowplaying.js?v=28"></script>
 <script src="js/ui-tags.js?v=28"></script>
 <script src="js/controls.js?v=28"></script>
+<script src="js/qqmusic-core.js?v=9"></script>
+<script src="js/qq-playlist-export.js?v=2"></script>
+<script src="js/ui-qqmusic.js?v=20"></script>
+<script src="js/lyrics-resolver.js?v=4"></script>
+<script src="js/artwork-resolver.js?v=6"></script>
 <script src="js/app.js?v=28"></script>
 </body>
 </html>

@@ -322,6 +322,9 @@
   CM.showLyricMenu = function(x, y) {
     var path = CM.lyricSourcePath || '';
     var cur = CM.lyricModeFor(path);
+    // 仅本地盘路径可打开：在线播放 / 在线匹配的歌词会回落成 http(s) 直链，
+    // 宿主无法定位这类路径，可点但静默无操作不如置灰
+    var canOpenFolder = /^[a-z]:[\\/]/i.test(path) || path.indexOf('\\\\') === 0;
     // 只有存在"重复时间戳"（同一时刻多行）才可能有对齐问题：单语言、纯文本、
     // 逐字（ESLyric）歌词的 lastVerdict 为 'none'。此时不显示这一项，
     // 但若该文件已被手动指定过方式，仍显示（否则用户无法改回自动）
@@ -340,7 +343,7 @@
     items.push({ divider: true },
       { label: '刷新歌词', action: function() { CM.loadLyrics(); } },
       { label: '复制歌词', disabled: !CM.currentLyrics.length, action: function() { CM.copyLyrics(); } },
-      { label: '打开所在文件夹', disabled: !path, action: function() { CM.api('shell.showInExplorer', { path: path }); } });
+      { label: '打开所在文件夹', disabled: !canOpenFolder, action: function() { CM.api('shell.showInExplorer', { path: path }); } });
     CM.showCtxMenu(x, y, items);
   };
 

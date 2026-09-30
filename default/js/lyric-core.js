@@ -16,13 +16,6 @@
 
   function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 
-  // pairwise 迭代器: [0,1,2] → [0,1], [1,2]
-  function pairwise(arr) {
-    var out = [];
-    for (var i = 0; i < arr.length - 1; i++) out.push([arr[i], arr[i+1]]);
-    return out;
-  }
-
   // 时间解析: "1:23.456" → 83000+456 = 83456 ms；"-00:01.900" → -1900 ms
   function parseTime(s) {
     s = String(s).trim();
@@ -35,16 +28,6 @@
     }
     var ms = Math.round(secs * 1000);
     return neg ? -ms : ms;
-  }
-
-  // 时间格式化: 83456 ms → "01:23.456"
-  function formatTime(ms) {
-    var t = Math.round(ms);
-    var m = Math.floor(t / 60000);
-    var s = Math.floor((t % 60000) / 1000);
-    var x = t % 1000;
-    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s + '.' +
-      (x < 100 ? '0' : '') + (x < 10 ? '0' : '') + x;
   }
 
   /* ============================================
@@ -703,7 +686,14 @@
     return s;
   }
 
-  function groupSameTime(lines) {
+  /* mode：配对模式（'auto' | 'same' 标准双语 | 'offset' 兼容旧版）。
+   * 手动模式是用户对写法的"裁定"，只做机械处理：同刻多行一律 主行+副行 成组，
+   * 不做任何语言分析 —— 只有自动识别才需要判断"同一脚本族的同刻对是主副还是
+   * 两句无关原文"。实测 脑蚀.lrc 首对（原文夹英文、无假名，两句都被分到汉字族、
+   * 字面重合度 0.375 < 0.5）在自动识别下拆成两行独立原文属预期，但此前手动指定
+   * 标准双语后仍被这里拆开 —— 手动模式必须绕过该分析。 */
+  function groupSameTime(lines, mode) {
+    var mechanical = mode === 'same' || mode === 'offset';
     if (lines.length < 2) return lines;
     var groups = [], cur = null;
     for (var i = 0; i < lines.length; i++) {
@@ -769,7 +759,8 @@
       // 若所有行属于同一脚本族，说明"同一时间戳有两句原文"——例如粤语歌的
       // 结尾句和重复副歌标在同一个时间上、或者不同角色同时唱了不同歌词。
       // 这时按主副显示反而误导，不如拆成独立的行各自显示、各自高亮。
-      var allSame = subs.length >= 1;
+      // 同族同刻对的分析只属于自动识别（见函数头注释）；手动模式直接跳过。
+      var allSame = !mechanical && subs.length >= 1;
       if (allSame) {
         var ma = _lineFamily(lineText(main));
         for (var kk = 0; kk < subs.length && allSame; kk++) {
@@ -1183,10 +1174,12 @@
     // 渲染层高亮用二分查找"最后一条 time <= pos"的行，依赖组时间非递减，不重排会出现
     // "后一组的时间早于前一组"（实测本地 11 个文件），高亮与滚动会跳错行。
     // 稳定排序保证同刻时"原文在前、译文在后"的相对次序不变（主行仍是原文）。
-    if (normalizeBilingual(lines, mode || lyric.bilingualMode || 'auto')) {
+    var effMode = mode || lyric.bilingualMode || 'auto';
+    if (normalizeBilingual(lines, effMode)) {
       lines.sort(function(a, b) { return a.time - b.time; });
     }
-    return groupSameTime(lines);
+    // 配对模式要传给归组：手动模式（标准双语/兼容旧版）在归组阶段同样只做机械处理
+    return groupSameTime(lines, effMode);
   };
 
   /* 逐字（卡拉OK）歌词

@@ -325,7 +325,7 @@
       '</div>' +
       '<div class="popover-section">' +
       '<div class="popover-label">关于</div>' +
-      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.5.2</span></button>' +
+      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.5.3</span></button>' +
       '<button class="pop-item" id="popHelp">' + CM.icons.info + '<span>使用帮助</span><span class="pop-item-note">功能指南</span></button>' +
       '</div>';
     // 绑定一次，永久有效
@@ -401,27 +401,125 @@
       window.open('guide.html', '_blank');
     });
   }
+  /* ============================================
+   * 主菜单命令开关的统一实现（桌面歌词 / 置顶 / 锁定）
+   * --------------------------------------------
+   * 这三个开关原本各写一遍「忙锁 + GUID 缓存 + 搜两次 + 翻转状态」，
+   * 逻辑完全相同、只有匹配关键词和提示语不同，所以收成一个工厂，各持一份状态。
+   *   search / fallback  先按前者精确搜，搜不到再按后者宽泛搜一次
+   *   match(hay)         hay = 命令名 + 描述，怎么认定是目标命令
+   *   onLabel/offLabel   翻转后的提示语；failMsg 找不到命令时的提示
+   *   execFailTitle      执行失败时的提示标题
+   * ============================================ */
+  function makeMenuToggle(cfg) {
+    var cmd = null, busy = false, on = false;
+
+    function pick(r) {
+      var list = (r && r.results) || [];
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        if (c.type && c.type !== 'mainmenu') continue;   // 只认主菜单命令
+        if (cfg.match((c.name || '') + (c.description || ''))) {
+          return { guid: c.guid, subGuid: c.subGuid || null };
+        }
+      }
+      return null;
+    }
+
+    function run(c) {
+      busy = true;
+      var params = c.subGuid ? { guid: c.guid, subGuid: c.subGuid } : { guid: c.guid };
+      CM.api('discovery.executeMainMenuCommand', params).then(function(r) {
+        busy = false;
+        if (!r || r.success === false) {
+          cmd = null;        // GUID 可能已失效（插件更新/重装会变），下次重新搜索
+          CM.showToast(cfg.execFailTitle, '命令执行失败，将重新检测组件', 'error');
+          return;
+        }
+        on = !on;
+        CM.showToast(on ? cfg.onLabel : cfg.offLabel, null, on ? 'success' : null);
+        updateMorePopoverState();
+      });
+    }
+
+    return {
+      toggle: function() {
+        if (busy) return;                                 // 连点保护：搜索阶段也要上锁
+        if (cmd) { run(cmd); return; }
+        // 搜索阶段同样要上锁：否则搜索返回前的连点会各发一次搜索、各执行一次命令，
+        // 开关被翻转两次（表现为「点了没反应」）且弹出两个提示
+        busy = true;
+        // includeHidden 避免命令被判为「宿主不显示」而被过滤
+        CM.api('discovery.searchCommands', { query: cfg.search, includeHidden: true }).then(function(r) {
+          var c = pick(r);
+          if (c) { cmd = c; run(c); return; }
+          // 兜底：命令名可能因版本而异，再宽泛搜一次
+          CM.api('discovery.searchCommands', { query: cfg.fallback, includeHidden: true }).then(function(r2) {
+            var c2 = pick(r2);
+            busy = false;
+            if (c2) { cmd = c2; run(c2); return; }
+            cmd = null;
+            CM.showToast('启动失败', cfg.failMsg, 'error');
+          });
+        });
+      },
+      isOn: function() { return on; },
+      setOn: function(v) { on = !!v; }
+    };
+  }
+
+  var dlShow = makeMenuToggle({
+    search: '显示桌面歌词', fallback: '歌词',
+    match: function(hay) {
+      return hay.indexOf('显示桌面歌词') >= 0 || hay.indexOf('桌面歌词') >= 0;
+    },
+    onLabel: '桌面歌词已开启', offLabel: '桌面歌词已关闭',
+    failMsg: '请确认已安装 ESLyric 插件', execFailTitle: '启动失败'
+  });
+  CM.toggleDesktopLyric = function() { dlShow.toggle(); };
+
+  var dlPin = makeMenuToggle({
+    search: '窗口置顶', fallback: '置顶',
+    match: function(hay) {
+      return hay.indexOf('窗口置顶') >= 0 || (hay.indexOf('置顶') >= 0 && hay.indexOf('歌词') >= 0);
+    },
+    onLabel: '桌面歌词置顶已开启', offLabel: '桌面歌词置顶已关闭',
+    failMsg: '未找到置顶命令，请确认 ESLyric 已安装', execFailTitle: '操作失败'
+  });
+  CM.toggleDesktopLyricPin = function() { dlPin.toggle(); };
+
+  var dlLock = makeMenuToggle({
+    search: '锁定桌面歌词', fallback: '锁定',
+    match: function(hay) {
+      return hay.indexOf('锁定') >= 0 && (hay.indexOf('歌词') >= 0 || hay.indexOf('桌面') >= 0);
+    },
+    onLabel: '桌面歌词锁定已开启', offLabel: '桌面歌词锁定已关闭',
+    failMsg: '未找到锁定命令，请确认 ESLyric 已安装', execFailTitle: '操作失败'
+  });
+  CM.toggleDesktopLyricLock = function() { dlLock.toggle(); };
+
   function updateMorePopoverState() {
     // 桌面歌词状态
+    var showOn = dlShow.isOn();
     var dlNote = CM.$('popDesktopLyricNote');
     var dlItem = CM.$('popDesktopLyricShow');
-    if (dlNote) dlNote.textContent = eslyricMode ? '开' : '关';
-    if (dlItem) dlItem.classList.toggle('checked', eslyricMode);
+    if (dlNote) dlNote.textContent = showOn ? '开' : '关';
+    if (dlItem) dlItem.classList.toggle('checked', showOn);
     // 桌面歌词置顶状态（显示关闭时禁用）
     var dlPinNote = CM.$('popDesktopLyricPinNote');
     var dlPinItem = CM.$('popDesktopLyricPin');
-    if (dlPinNote) dlPinNote.textContent = eslyricPinMode ? '开' : '关';
+    if (dlPinNote) dlPinNote.textContent = dlPin.isOn() ? '开' : '关';
     if (dlPinItem) {
-      dlPinItem.classList.toggle('checked', eslyricPinMode);
-      dlPinItem.disabled = !eslyricMode;
+      dlPinItem.classList.toggle('checked', dlPin.isOn());
+      dlPinItem.disabled = !showOn;
     }
     // 桌面歌词锁定状态（显示关闭时禁用）
     var dlLockNote = CM.$('popDesktopLyricLockNote');
     var dlLockItem = CM.$('popDesktopLyricLock');
-    if (dlLockNote) dlLockNote.textContent = eslyricLockMode ? '开' : '关';
+    if (dlLockNote) dlLockNote.textContent = dlLock.isOn() ? '开' : '关';
     if (dlLockItem) {
-      dlLockItem.classList.toggle('checked', eslyricLockMode);
-      dlLockItem.disabled = !eslyricMode;
+      dlLockItem.classList.toggle('checked', dlLock.isOn());
+      dlLockItem.disabled = !showOn;
     }
     // 均衡器状态
     CM.syncEQState();
@@ -462,15 +560,15 @@
           var hay = (c.name || '') + (c.description || '');
           // 桌面歌词：显示
           if (hay.indexOf('显示桌面歌词') >= 0 || (hay.indexOf('桌面歌词') >= 0 && hay.indexOf('显示') >= 0)) {
-            eslyricMode = !!c.checked;
+            dlShow.setOn(c.checked);
           }
           // 桌面歌词：置顶
           if (hay.indexOf('窗口置顶') >= 0) {
-            eslyricPinMode = !!c.checked;
+            dlPin.setOn(c.checked);
           }
           // 桌面歌词：锁定
           if (hay.indexOf('锁定') >= 0 && hay.indexOf('桌面歌词') >= 0) {
-            eslyricLockMode = !!c.checked;
+            dlLock.setOn(c.checked);
           }
         }
       }
@@ -844,168 +942,6 @@
     });
   };
 
-  /* ============================================
-   * 桌面歌词 — 通过主菜单命令调用 ESLyric 原生桌面歌词
-   * 首次搜索后缓存命令，后续直接执行
-   * ============================================ */
-  var eslyricMode = false;
-  var eslyricCmd = null;
-  var _eslyricBusy = false;
-
-  CM.toggleDesktopLyric = function() {
-    if (_eslyricBusy) return; // 防止连点时重复执行（搜索/执行是异步的）
-    var exec = function(cmd) {
-      _eslyricBusy = true;
-      var params = cmd.subGuid ? { guid: cmd.guid, subGuid: cmd.subGuid } : { guid: cmd.guid };
-      CM.api('discovery.executeMainMenuCommand', params).then(function(r) {
-        _eslyricBusy = false;
-        if (!r || r.success === false) {
-          // 执行失败：缓存 GUID 可能已失效（插件更新/重装变更），清掉让下次重新搜索
-          if (r && (r.unaddressable || r.code)) eslyricCmd = null;
-          else eslyricCmd = null; // 保守起见：失败一律重新搜索
-          CM.showToast('启动失败', '命令执行失败，将重新检测组件', 'error');
-          return;
-        }
-        eslyricMode = !eslyricMode;
-        CM.showToast(eslyricMode ? '桌面歌词已开启' : '桌面歌词已关闭',
-          null, eslyricMode ? 'success' : null);
-        updateMorePopoverState(); // 同步 popover 中「桌面歌词」的 开/关 状态
-      });
-    };
-    var findCmd = function(r) {
-      if (!r || !r.results) return null;
-      for (var i = 0; i < r.results.length; i++) {
-        var c = r.results[i];
-        if (c.type && c.type !== 'mainmenu') continue; // 只认主菜单命令
-        var hay = (c.name || '') + (c.description || '');
-        if (hay.indexOf('显示桌面歌词') >= 0 || hay.indexOf('桌面歌词') >= 0) {
-          return { guid: c.guid, subGuid: c.subGuid || null };
-        }
-      }
-      return null;
-    };
-    if (eslyricCmd) { exec(eslyricCmd); return; }
-    // 搜索阶段同样要上锁：否则搜索返回前的连点会各自发起一次搜索并各执行一次命令，
-    // 开关被翻转两次（表现为"点了没反应"）且弹出两个提示
-    _eslyricBusy = true;
-    // includeHidden 避免命令被判为“宿主不显示”而被过滤；type 过滤只取主菜单命令
-    CM.api('discovery.searchCommands', { query: '显示桌面歌词', includeHidden: true }).then(function(r) {
-      var cmd = findCmd(r);
-      if (cmd) { eslyricCmd = cmd; exec(cmd); return; }
-      // 兜底：第一次搜不到时再按“歌词”宽泛搜一次（命令名可能因版本而异）
-      CM.api('discovery.searchCommands', { query: '歌词', includeHidden: true }).then(function(r2) {
-        var cmd2 = findCmd(r2);
-        if (cmd2) { eslyricCmd = cmd2; exec(cmd2); return; }
-        eslyricCmd = null;
-        _eslyricBusy = false;
-        CM.showToast('启动失败', '请确认已安装 ESLyric 插件', 'error');
-      });
-    });
-  };
-
-  /* ============================================
-   * 桌面歌词置顶 — 通过主菜单命令调用 ESLyric "窗口置顶"
-   * ============================================ */
-  var eslyricPinMode = false;
-  var eslyricPinCmd = null;
-  var _eslyricPinBusy = false;
-
-  CM.toggleDesktopLyricPin = function() {
-    if (_eslyricPinBusy) return;
-    var exec = function(cmd) {
-      _eslyricPinBusy = true;
-      var params = cmd.subGuid ? { guid: cmd.guid, subGuid: cmd.subGuid } : { guid: cmd.guid };
-      CM.api('discovery.executeMainMenuCommand', params).then(function(r) {
-        _eslyricPinBusy = false;
-        if (!r || r.success === false) {
-          eslyricPinCmd = null;
-          CM.showToast('操作失败', '命令执行失败，将重新检测组件', 'error');
-          return;
-        }
-        eslyricPinMode = !eslyricPinMode;
-        CM.showToast(eslyricPinMode ? '桌面歌词置顶已开启' : '桌面歌词置顶已关闭',
-          null, eslyricPinMode ? 'success' : null);
-        updateMorePopoverState();
-      });
-    };
-    var findPinCmd = function(r) {
-      if (!r || !r.results) return null;
-      for (var i = 0; i < r.results.length; i++) {
-        var c = r.results[i];
-        if (c.type && c.type !== 'mainmenu') continue;
-        var hay = (c.name || '') + (c.description || '');
-        if (hay.indexOf('窗口置顶') >= 0 || (hay.indexOf('置顶') >= 0 && hay.indexOf('歌词') >= 0)) {
-          return { guid: c.guid, subGuid: c.subGuid || null };
-        }
-      }
-      return null;
-    };
-    if (eslyricPinCmd) { exec(eslyricPinCmd); return; }
-    _eslyricPinBusy = true; // 同桌面歌词：搜索阶段也要上锁，避免连点并发执行两次
-    CM.api('discovery.searchCommands', { query: '窗口置顶', includeHidden: true }).then(function(r) {
-      var cmd = findPinCmd(r);
-      if (cmd) { eslyricPinCmd = cmd; exec(cmd); return; }
-      CM.api('discovery.searchCommands', { query: '置顶', includeHidden: true }).then(function(r2) {
-        var cmd2 = findPinCmd(r2);
-        if (cmd2) { eslyricPinCmd = cmd2; exec(cmd2); return; }
-        eslyricPinCmd = null;
-        _eslyricPinBusy = false;
-        CM.showToast('启动失败', '未找到置顶命令，请确认 ESLyric 已安装', 'error');
-      });
-    });
-  };
-
-  /* ============================================
-   * 桌面歌词锁定 — 通过主菜单命令调用 ESLyric "锁定"
-   * ============================================ */
-  var eslyricLockMode = false;
-  var eslyricLockCmd = null;
-  var _eslyricLockBusy = false;
-
-  CM.toggleDesktopLyricLock = function() {
-    if (_eslyricLockBusy) return;
-    var exec = function(cmd) {
-      _eslyricLockBusy = true;
-      var params = cmd.subGuid ? { guid: cmd.guid, subGuid: cmd.subGuid } : { guid: cmd.guid };
-      CM.api('discovery.executeMainMenuCommand', params).then(function(r) {
-        _eslyricLockBusy = false;
-        if (!r || r.success === false) {
-          eslyricLockCmd = null;
-          CM.showToast('操作失败', '命令执行失败，将重新检测组件', 'error');
-          return;
-        }
-        eslyricLockMode = !eslyricLockMode;
-        CM.showToast(eslyricLockMode ? '桌面歌词锁定已开启' : '桌面歌词锁定已关闭',
-          null, eslyricLockMode ? 'success' : null);
-        updateMorePopoverState();
-      });
-    };
-    var findLockCmd = function(r) {
-      if (!r || !r.results) return null;
-      for (var i = 0; i < r.results.length; i++) {
-        var c = r.results[i];
-        if (c.type && c.type !== 'mainmenu') continue;
-        var hay = (c.name || '') + (c.description || '');
-        if (hay.indexOf('锁定') >= 0 && (hay.indexOf('歌词') >= 0 || hay.indexOf('桌面') >= 0)) {
-          return { guid: c.guid, subGuid: c.subGuid || null };
-        }
-      }
-      return null;
-    };
-    if (eslyricLockCmd) { exec(eslyricLockCmd); return; }
-    _eslyricLockBusy = true; // 同桌面歌词：搜索阶段也要上锁，避免连点并发执行两次
-    CM.api('discovery.searchCommands', { query: '锁定桌面歌词', includeHidden: true }).then(function(r) {
-      var cmd = findLockCmd(r);
-      if (cmd) { eslyricLockCmd = cmd; exec(cmd); return; }
-      CM.api('discovery.searchCommands', { query: '锁定', includeHidden: true }).then(function(r2) {
-        var cmd2 = findLockCmd(r2);
-        if (cmd2) { eslyricLockCmd = cmd2; exec(cmd2); return; }
-        eslyricLockCmd = null;
-        _eslyricLockBusy = false;
-        CM.showToast('启动失败', '未找到锁定命令，请确认 ESLyric 已安装', 'error');
-      });
-    });
-  };
 
   /* ============================================
    * ESLyric 通用命令执行辅助
@@ -1035,52 +971,30 @@
     });
   }
 
-  // 桌面歌词：重置位置
-  CM.execDesktopLyricReset = function() {
-    eslyricExecOne('重置位置',
-      function(c) {
-        var hay = (c.name || '') + (c.description || '');
-        return hay.indexOf('重置位置') >= 0;
-      },
-      function() {
-        CM.showToast('桌面歌词位置已重置', null, 'success');
-      },
-      function(err) {
-        CM.showToast('启动失败', err === '未找到命令' ? '未找到重置位置命令' : err, 'error');
-      });
-  };
-
   /* ============================================
-   * ESLyric 工具 — 搜索歌词 / 重载歌词 / 脚本测试
+   * ESLyric 工具命令（共用 eslyricExecOne）
+   * --------------------------------------------
+   * 四条命令只有「关键词 + 提示语」不同：匹配与提示逻辑收在 execEslyricCmd 里，
+   * 入口仍逐个显式声明 —— 这样按名字就能搜到定义，不必靠猜。
    * ============================================ */
+  function execEslyricCmd(key, okMsg, notFoundMsg) {
+    eslyricExecOne(key,
+      function(c) { return ((c.name || '') + (c.description || '')).indexOf(key) >= 0; },
+      function() { CM.showToast(okMsg, null, 'success'); },
+      function(err) { CM.showToast('启动失败', err === '未找到命令' ? notFoundMsg : err, 'error'); });
+  }
+
+  CM.execDesktopLyricReset = function() {
+    execEslyricCmd('重置位置', '桌面歌词位置已重置', '未找到重置位置命令');
+  };
   CM.execEslyricSearch = function() {
-    eslyricExecOne('搜索歌词',
-      function(c) {
-        var hay = (c.name || '') + (c.description || '');
-        return hay.indexOf('搜索歌词') >= 0;
-      },
-      function() { CM.showToast('搜索歌词已触发', null, 'success'); },
-      function(err) { CM.showToast('启动失败', err === '未找到命令' ? '未找到搜索歌词命令' : err, 'error'); });
+    execEslyricCmd('搜索歌词', '搜索歌词已触发', '未找到搜索歌词命令');
   };
-
   CM.execEslyricReload = function() {
-    eslyricExecOne('重载歌词',
-      function(c) {
-        var hay = (c.name || '') + (c.description || '');
-        return hay.indexOf('重载歌词') >= 0;
-      },
-      function() { CM.showToast('重载歌词已触发', null, 'success'); },
-      function(err) { CM.showToast('启动失败', err === '未找到命令' ? '未找到重载歌词命令' : err, 'error'); });
+    execEslyricCmd('重载歌词', '重载歌词已触发', '未找到重载歌词命令');
   };
-
   CM.execEslyricScript = function() {
-    eslyricExecOne('脚本测试',
-      function(c) {
-        var hay = (c.name || '') + (c.description || '');
-        return hay.indexOf('脚本测试') >= 0;
-      },
-      function() { CM.showToast('脚本测试已触发', null, 'success'); },
-      function(err) { CM.showToast('启动失败', err === '未找到命令' ? '未找到脚本测试命令' : err, 'error'); });
+    execEslyricCmd('脚本测试', '脚本测试已触发', '未找到脚本测试命令');
   };
 
   /* ============================================
@@ -1187,7 +1101,7 @@
 
       var items = [
         { label: 'CloudMusic 主题', isLabel: true },
-        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.5.2</span>' },
+        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.5.3</span>' },
         { html: '<span class="ctx-info-label">作者</span><span class="ctx-info-value">灵芝含</span>' },
         { html: '<span class="ctx-info-label">foobar2000</span><span class="ctx-info-value">' + CM.escHtml(ver.foobar2000 || '--') + '</span>' },
         { html: '<span class="ctx-info-label">WebView2 组件</span><span class="ctx-info-value">v' + CM.escHtml(pluginVer || '--') + '</span>' },

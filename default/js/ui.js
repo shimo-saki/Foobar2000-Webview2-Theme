@@ -329,7 +329,7 @@
   /* ============================================
    * Tab 切换
    * ============================================ */
-  var TAB_IDS = { discover: 'tabDiscover', playlist: 'tabPlaylist', library: 'tabLibrary', search: 'tabSearch' };
+  var TAB_IDS = { discover: 'tabDiscover', playlist: 'tabPlaylist', library: 'tabLibrary', search: 'tabSearch', qqmusic: 'tabQqmusic' };
   // 缓存 Tab 相关 DOM（静态元素，无需每次 switchTab 都查询）
   var _tabNavItems, _tabMainTabs, _tabContents;
   CM.switchTab = function(tab) {

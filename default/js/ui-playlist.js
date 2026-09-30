@@ -231,7 +231,10 @@
       var t = tracks[i];
       if (!t.artist && !t.album && !t.albumArtist) {
         var p = CM.trackPath(t);
-        if (p) missing.push({ idx: i, path: p });
+        // 跳过在线直链：expired vkey URL 的 metadata.read 会触发
+        // foobar 内部 HTTP 请求 → CDN 超时 → 几十秒阻塞主线程
+        if (!p || /^https?:\/\//i.test(p)) continue;
+        missing.push({ idx: i, path: p });
       }
     }
     if (!missing.length) return;
@@ -638,10 +641,15 @@
       } });
     }
     items.push({ divider: true });
-    items.push({ label: '在资源管理器中显示', icon: CM.icons.folder, action: function() {
+    // 在线曲目（QQ 音乐直链）没有本地文件：这两项点了必然失败（或静默无操作），
+    // 直接置灰并写明原因，别让用户对着"没反应 / 写入失败"猜
+    var online = CM.isUrlPath ? CM.isUrlPath(path) : /^https?:\/\//i.test(String(path || ''));
+    items.push({ label: '在资源管理器中显示', icon: CM.icons.folder, disabled: online,
+                 desc: online ? '在线曲目没有本地文件' : '', action: function() {
       CM.api('shell.showInExplorer', { path: path });
     } });
-    items.push({ label: '编辑标签', icon: CM.icons.tag, action: function() {
+    items.push({ label: '编辑标签', icon: CM.icons.tag, disabled: online,
+                 desc: online ? '在线曲目没有可写的文件' : '', action: function() {
       CM.showTagEditor(track);
     } });
     items.push({ label: '在线获取标签', icon: CM.icons.download, action: function() {
