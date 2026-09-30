@@ -1,6 +1,7 @@
-const CM = window.CloudMusic,
-  els = CM.els;
-const { LyricPlayer, BackgroundRender, MeshGradientRenderer } = window.AMLL;
+import { BackgroundRender, LyricPlayer, MeshGradientRenderer } from '@applemusic-like-lyrics/core';
+import { CM } from 'core';
+import { fb } from 'foo-webview-sdk';
+const { els } = CM;
 
 const player = CM.player = new LyricPlayer();
 els.lyricsScroll.replaceChildren(player.getElement());
@@ -19,9 +20,9 @@ function loop(timestamp) {
 }
 requestAnimationFrame(loop);
 
-player.addEventListener("line-click", async event => {
+player.addEventListener("line-click", event => {
   const time = event.line.getLine().startTime;
-  await fb.player.seek(time / 1000);
+  fb.player.seek(time / 1000);
   player.setCurrentTime(time, true);
 });
 

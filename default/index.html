@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CloudMusic</title>
-<link rel="stylesheet" href="@applemusic-like-lyrics/style.css"/>
+<link rel="stylesheet" href="node_modules/@applemusic-like-lyrics/style.css"/>
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/components.css">
@@ -64,12 +64,6 @@
 
   <!-- ============ Main Content ============ -->
   <div class="main-content" id="mainContent">
-    <div class="main-tabs" id="mainTabs">
-      <div class="main-tab active" data-tab="discover">推荐</div>
-      <div class="main-tab" data-tab="playlist">播放列表</div>
-      <div class="main-tab" data-tab="library">媒体库</div>
-      <div class="main-tab" data-tab="search">搜索</div>
-    </div>
     <div class="main-body" id="mainBody">
 
       <!-- Discover -->
@@ -154,7 +148,14 @@
       <!-- Library -->
       <div class="tab-content" id="tabLibrary">
         <div class="library-view">
-          <div class="library-tree" id="libraryTree"></div>
+          <div class="library-tree" id="libraryTree">
+            <div class="tree-node active" data-view="stats"><span class="icon"></span><span>概览</span></div>
+            <div class="tree-node" data-view="tracks"><span class="icon"></span><span>歌曲</span></div>
+            <div class="tree-node" data-view="artists"><span class="icon"></span><span>艺术家</span></div>
+            <div class="tree-node" data-view="albums"><span class="icon"></span><span>专辑</span></div>
+            <div class="tree-node" data-view="genres"><span class="icon"></span><span>流派</span></div>
+            <div class="tree-node" data-view="folders"><span class="icon"></span><span>文件夹</span></div>
+          </div>
           <div class="library-detail" id="libraryDetail"></div>
         </div>
       </div>
@@ -384,26 +385,17 @@
   </div>
 </dialog>
 
-<!-- foo_ui_webview2 SDK -->
-<script src="sdk/bridge.global.js"></script>
-<script src="sdk/components.global.js"></script>
-<script src="sdk/smp-compat.global.js"></script>
-<!-- applemusic-like-lyrics -->
-<script src="@applemusic-like-lyrics/amll-core.js"></script>
-<script src="@applemusic-like-lyrics/amll-lyric.js"></script>
+<script type="importmap">
+  {
+    "imports": {
+      "core": "./js/core.js",
+      "foo-webview-sdk": "./node_modules/foo-webview-sdk/bridge.js",
+      "@applemusic-like-lyrics/core": "./node_modules/@applemusic-like-lyrics/amll-core.js",
+      "@applemusic-like-lyrics/lyric": "./node_modules/@applemusic-like-lyrics/amll-lyric.js"
+    }
+  }
+</script>
 <!-- CloudMusic Theme -->
-<script src="js/core.js"></script>
-<script src="js/lyric-core.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/ui-lyrics.js"></script>
-<script src="js/ui-playlist.js"></script>
-<script src="js/ui-discover.js"></script>
-<script src="js/ui-library.js"></script>
-<script src="js/ui-queue.js"></script>
-<script src="js/ui-nowplaying.js"></script>
-<script src="js/ui-tags.js"></script>
-<script src="js/controls.js"></script>
-<script src="js/amll.js"></script>
-<script src="js/app.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

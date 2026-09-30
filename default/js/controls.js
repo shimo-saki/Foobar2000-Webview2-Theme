@@ -3,805 +3,762 @@
  * 播放控制 / 进度音量 / 频谱 / 队列 / 更多菜单
  * 拖放 / 键盘快捷键 / 任务栏
  * ============================================ */
-(function () {
-  'use strict';
-  const CM = window.CloudMusic,
-    els = CM.els, state = CM.state;
+import { $, $$, CM } from 'core';
+import { fb } from 'foo-webview-sdk';
+const { els, icons, settings, state, esc } = CM;
 
-  /* ============================================
-   * 导航 / Tab
-   * ============================================ */
-  $$('.nav-item[data-tab]').forEach(el => {
-    el.addEventListener('click', () => CM.switchTab(el.dataset.tab));
-    el.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') CM.switchTab(el.dataset.tab);
-    });
+/* ============================================
+ * 导航 / Tab
+ * ============================================ */
+$$('.nav-item[data-tab]').forEach(el => {
+  el.addEventListener('click', () => CM.switchTab(el.dataset.tab));
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') CM.switchTab(el.dataset.tab);
   });
-  $$('.main-tab[data-tab]').forEach(el =>
-    el.addEventListener('click', () => CM.switchTab(el.dataset.tab))
-  );
+});
 
-  // 侧栏搜索 → 跳到搜索页
-  els.sidebarSearch.addEventListener('input', () =>
-    els.sidebarSearchWrap.classList.toggle('has-text', !!els.sidebarSearch.value)
-  );
-  els.sidebarSearch.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && els.sidebarSearch.value.trim()) {
-      CM.switchTab('search');
-      els.searchInput.value = els.sidebarSearch.value;
-      CM.doSearch(els.searchInput.value);
-    }
-  });
-  els.sidebarSearchClear.addEventListener('click', () => {
-    els.sidebarSearch.value = '';
-    els.sidebarSearchWrap.classList.remove('has-text');
-    els.sidebarSearch.focus();
-  });
-
-  // 搜索页输入（防抖）
-  els.searchInput.addEventListener('input', CM.debounce(() => CM.doSearch(els.searchInput.value), 350));
-
-  // 新建歌单
-  els.addPlaylistBtn.addEventListener('click', () => {
-    CM.showModal({ title: '新建歌单', input: '', okText: '创建' }).then(name => {
-      if (!name) return;
-      fb.playlist.create(name).then(r => {
-        if (r?.success !== false) CM.showToast('已创建歌单', name, 'success');
-      });
-    });
-  });
-  els.addPlaylistBtn.addEventListener('contextmenu', e => {
-    const items = [
-      { label: '预设歌单', isLabel: true },
-      {
-        label: '媒体库', icon: CM.icons.note,
-        action: () => fb.playlist.createAutoplaylist('媒体库', 'ALL', '%artist% | %album% | %tracknumber%', true)
-      },
-      {
-        label: '历史记录', icon: CM.icons.history,
-        action: () => fb.playlist.createAutoplaylist('历史记录', '%last_played% DURING LAST 1 WEEK SORT DESCENDING BY %last_played%', '%artist% | %album% | %tracknumber%', true)
-      },
-      {
-        label: '最近添加', icon: CM.icons.recently_added,
-        action: () => fb.playlist.createAutoplaylist('最近添加', '%added% DURING LAST 4 WEEKS SORT DESCENDING BY %added%', '%artist% | %album% | %tracknumber%', true)
-      }
-    ];
-    CM.showCtxMenu(e.clientX, e.clientY, items);
-  });
-
-  /* ============================================
-   * 发现页按钮
-   * ============================================ */
-  els.btnPlayDaily.addEventListener('click', CM.playDaily);
-  els.btnRefreshDiscover.addEventListener('click', CM.renderDiscover);
-  els.refreshRandom.addEventListener('click', CM.renderDiscoverRandom);
-  els.moreAlbums.addEventListener('click', () => CM.openLibraryDetail('albums', null));
-  els.moreRecent.addEventListener('click', () => CM.openLibraryDetail('stats', null));
-
-  /* ============================================
-   * 播放列表页按钮 / 表头排序
-   * ============================================ */
-  els.btnPlayAll.addEventListener('click', () => {
-    if (state.currentPlaylistIndex < 0) return;
-    fb.playlist.playTrack(state.currentPlaylistIndex, 0);
-  });
-  els.btnPlaylistMore.addEventListener('click', e => {
-    e.stopPropagation();
-    const rect = els.btnPlaylistMore.getBoundingClientRect();
-    const idx = state.currentPlaylistIndex;
-    if (idx < 0) return;
-    // 自动歌单/锁定歌单不接受手动编辑：隐藏 添加/排序/撤销 等操作
-    const pl = CM.playlists?.find(p => p.index === idx) ?? {};
-    const disabled = pl.isAutoplaylist || pl.isLocked;
-    const items = [
-      { label: '添加到歌单', isLabel: true },
-      {
-        label: '添加本地文件', icon: CM.icons.file, disabled,
-        action: () => CM.addFilesToPlaylist(idx),
-      },
-      {
-        label: '添加文件夹', icon: CM.icons.addfolder, disabled,
-        action: () => CM.addFolderToPlaylist(idx),
-      },
-      {
-        label: '添加网络地址', icon: CM.icons.plus, disabled,
-        action: () => CM.addUrlToPlaylist(idx),
-      },
-      { divider: true },
-      {
-        label: '随机排列', icon: CM.icons.random, disabled,
-        action: () => fb.playlist.shuffle(idx),
-      },
-      {
-        label: '按标题排序', icon: CM.icons.title, disabled,
-        action: () => fb.playlist.sort(idx, '%title%'),
-      },
-      {
-        label: '按艺术家排序', icon: CM.icons.artist, disabled,
-        action: () => fb.playlist.sort(idx, '%artist% | %album% | %tracknumber%'),
-      },
-      {
-        label: '反转列表', icon: CM.icons.reverse, disabled,
-        action: () => fb.playlist.reverse(idx)
-          .then(r => { if (r?.success !== false) CM.showToast('已反转列表顺序', null, 'success'); }),
-      },
-      { divider: true },
-      {
-        label: '撤销上一步', icon: CM.icons.undo, disabled,
-        action: () => fb.playlist.undo(idx),
-      },
-      {
-        label: '恢复上一步', icon: CM.icons.redo, disabled,
-        action: () => fb.playlist.redo(idx),
-      },
-    ];
-    CM.showCtxMenu(rect.left, rect.bottom + 6, items);
-  });
-  // 表头点击排序（客户端视图排序）
-  els.trackTable.$$('thead th[data-sort]').forEach(th => {
-    th.addEventListener('click', () => {
-      const key = th.dataset.sort;
-      if (state.sortKey !== key) {
-        state.sortKey = key;
-        state.sortAsc = true;
-      } else if (state.sortAsc) {
-        state.sortAsc = false;
-      } else {
-        state.sortKey = null;
-        state.sortAsc = true; // 第三次点击取消排序
-      }
-      CM.renderTrackTable();
-    });
-  });
-
-  CM.els.position.addEventListener('click', () =>
-    els.trackTbody.$(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  );
-
-  /* ============================================
-   * 通用 seekbar 绑定（主进度条 + 沉浸式进度条共用）
-   * ============================================ */
-  CM.bindSeekBar = function (bar, timeLabel, cssVar, seekingKey, updateFn) {
-    bar.addEventListener('input', () => {
-      state[seekingKey] = true;
-      bar.style.setProperty(cssVar, `${(+bar.value).toFixed(2)}%`);
-      timeLabel.textContent = CM.formatTime(bar.value / 100 * state.duration);
-    });
-    bar.addEventListener('change', () => {
-      // 不在此处更新 state.position，交给 playback:seeked / timeHighRes 事件统一处理，
-      // 避免因 API 返回 undefined/null 时误把旧位置覆盖掉 seeked 事件已写入的正确位置。
-      fb.player.seek(bar.value / 100 * state.duration).then(() => {
-        state[seekingKey] = false;
-        updateFn();
-      });
-    });
-  };
-
-  /* ============================================
-   * 底栏播放控制
-   * ============================================ */
-  els.btnPlayPause.addEventListener('click', fb.player.playPause);
-  els.btnPrev.addEventListener('click', fb.player.prev);
-  els.btnNext.addEventListener('click', fb.player.next);
-
-  // 播放顺序：单按钮循环 顺序→列表循环→单曲循环→随机
-  els.btnOrder.addEventListener('click', () => {
-    const next = CM.ORDERS[(CM.orderIndexOf(state.order) + 1) % CM.ORDERS.length];
-    fb.player.setOrder(next.id).then(r => {
-      if (!r) return CM.showToast('切换失败', null, 'error');
-      state.order = next.id;
-      CM.updateOrderIcon();
-      CM.showToast('播放顺序', next.name, 'success');
-    });
-  });
-
-  // 停止播放
-  els.btnStop.addEventListener('click', () => {
-    fb.player.stop();
-    CM.showToast('已停止播放', null, 'success');
-  });
-
-  // 播完当前停止
-  els.btnStop.addEventListener('contextmenu', () => {
-    fb.player.toggleStopAfterCurrent().then(r => {
-      state.stopAfterCurrent = r.enabled;
-      CM.updateStopIcon();
-      CM.showToast(state.stopAfterCurrent ? '将在当前曲目播完后停止' : '已取消单曲停止', null);
-    });
-  });
-
-  // 进度条
-  CM.bindSeekBar(els.seekBar, els.seekCurrent, '--seek-pct', 'seeking', CM.updateSeekUI);
-
-  // 音量
-  els.volSlider.addEventListener('input', () => {
-    const volume = parseInt(els.volSlider.value, 10);
-    state.volume = volume;
-    state.muted = false;
-    els.volSlider.style.setProperty('--vol-pct', `${volume}%`);
-    fb.player.setVolume(volume);
-    CM.updateVolumeIcon();
-  });
-  els.volBtn.addEventListener('click', fb.player.toggleMute);
-  // 音量滚轮微调
-  els.volBtn.parentElement.addEventListener('wheel', e => {
-    e.preventDefault();
-    const volume = Math.max(0, Math.min(100, state.volume + (e.deltaY < 0 ? 5 : -5)));
-    state.volume = volume;
-    state.muted = false;
-    fb.player.setVolume(volume);
-    CM.updateVolumeIcon();
-  }, { passive: false });
-
-  // 队列抽屉
-  els.btnQueue.addEventListener('click', CM.toggleQueue);
-  els.queueClose.addEventListener('click', () => CM.toggleQueue(false));
-  els.queueClear.addEventListener('click', () =>
-    fb.queue.clear().then(() => {
-      CM.renderQueue();
-      CM.refreshQueueBadge();
-      CM.showToast('已清空播放队列', null);
-    })
-  );
-
-  // 歌词面板开关
-  els.btnLyricsToggle.addEventListener('click', () => CM.setLyricsVisible(!state.lyricsVisible));
-  // 底栏封面：单击展开歌词面板，双击进入沉浸式模式
-  els.bottomArtWrap.addEventListener('click', () => {
-    if (this._clickTimer) {
-      clearTimeout(this._clickTimer);
-      this._clickTimer = null;
-      CM.toggleNpOverlay(true);
-    } else {
-      this._clickTimer = setTimeout(() => {
-        this._clickTimer = null;
-        CM.setLyricsVisible(true);
-      }, 250);
-    }
-  });
-
-  // 频谱开关
-  els.btnVisualizer.addEventListener('click', () => CM.setVisualizerActive(!state.visualizerActive));
-
-  // 更多菜单
-  els.btnMore.addEventListener('click', e => showMoreMenu(e.clientX, e.clientY));
-
-  /* ============================================
-   * 更多菜单（Popover）
-   * ============================================ */
-  function showMoreMenu(x, y) {
-    const items = [
-      { label: '歌词', isLabel: true, hidden: !CM.checkComponent('foo_uie_eslyric') },
-      {
-        label: '桌面歌词', icon: CM.icons.desktopLyric, hidden: !CM.checkComponent('foo_uie_eslyric'),
-        submenu: [
-          {
-            label: '显示', icon: CM.icons.desktopLyric, checked: ESLYRIC_STATE.show,
-            action: CM.toggleDesktopLyric
-          },
-          {
-            label: '置顶', icon: CM.icons.pin, checked: ESLYRIC_STATE.pin,
-            action: CM.toggleDesktopLyricPin
-          },
-          {
-            label: '锁定', icon: CM.icons.lock, checked: ESLYRIC_STATE.lock,
-            action: CM.toggleDesktopLyricLock
-          },
-          {
-            label: '重置位置', icon: CM.icons.refresh,
-            action: CM.execDesktopLyricReset
-          }
-        ]
-      },
-      { divider: true, hidden: !CM.checkComponent('foo_uie_eslyric') },
-      { label: '窗口', isLabel: true },
-      {
-        label: '刷新界面', icon: CM.icons.refresh,
-        action: fb.ui.reload
-      },
-      { divider: true },
-      { label: '音频', isLabel: true },
-      {
-        label: '均衡器', icon: CM.icons.eq, checked: eqMode,
-        action: CM.toggleEQ
-      },
-      {
-        label: '输出设备', icon: CM.icons.output,
-        submenu: outputDevice.map(d => ({
-          label: d.name, checked: d.isCurrent,
-          action: () => fb.config.setOutputDevice(d.outputId, d.deviceId)
-            .then(() => { CM.showToast('已切换', d.name, 'success'); syncOutputDevice(); })
-            .catch(() => CM.showToast('切换失败', null, 'error'))
-        }))
-      },
-      { label: '播放增益', icon: CM.icons.eq, submenu: replaygain },
-      { divider: true },
-      { label: 'Foobar 2000', isLabel: true },
-      {
-        label: '打开控制台', icon: CM.icons.console,
-        action: fb.misc.showConsole
-      },
-      {
-        label: '首选项', icon: CM.icons.preferences,
-        action: fb.misc.showPreferences
-      },
-      {
-        label: '刷新媒体库缓存', icon: CM.icons.folder,
-        action: () => fb.library.refresh().then(() => {
-          CM.showToast('媒体库缓存已刷新', null, 'success');
-          if (state.currentTab === 'discover') CM.renderDiscover();
-        })
-      },
-      { divider: true },
-      { label: '关于', isLabel: true },
-      {
-        label: '更新', icon: CM.icons.refresh,
-        submenu: [
-          {
-            label: '检查更新', icon: CM.icons.refresh,
-            action: () => CM.checkUpdate(true)
-          },
-          {
-            label: '启动时检查更新', checked: CM.settings.autoUpdate,
-            action: () => CM.setSettings('autoUpdate', !CM.settings.autoUpdate)
-          },
-        ]
-      },
-      {
-        label: 'CloudMusic 主题', icon: CM.icons.info,
-        action: CM.showAbout
-      },
-      {
-        label: '使用帮助', icon: CM.icons.info,
-        action: () => window.open('guide.html', '_blank')
-      },
-    ];
-    CM.showCtxMenu(x, y, items);
+// 侧栏搜索 → 跳到搜索页
+els.sidebarSearch.addEventListener('input', () =>
+  els.sidebarSearchWrap.classList.toggle('has-text', !!els.sidebarSearch.value)
+);
+els.sidebarSearch.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && els.sidebarSearch.value.trim()) {
+    CM.switchTab('search');
+    els.searchInput.value = els.sidebarSearch.value;
+    CM.doSearch(els.searchInput.value);
   }
+});
+els.sidebarSearchClear.addEventListener('click', () => {
+  els.sidebarSearch.value = '';
+  els.sidebarSearchWrap.classList.remove('has-text');
+  els.sidebarSearch.focus();
+});
 
-  /* ============================================
-   * 播放增益（ReplayGain）面板
-   * ============================================ */
-  let replaygain = [];
-  function syncReplaygain() {
-    const item = (label, field, value, current) => ({
-      label, checked: current === value,
-      action: () => {
-        fb.invoke('replaygain.setMode', { [field]: value });
-        syncReplaygain();
-      }
+// 搜索页输入（防抖）
+els.searchInput.addEventListener('input', CM.debounce(() => CM.doSearch(els.searchInput.value), 350));
+
+// 新建歌单
+els.addPlaylistBtn.addEventListener('click', () => {
+  CM.showModal({ title: '新建歌单', input: '', okText: '创建' }).then(name => {
+    if (!name) return;
+    fb.playlist.create(name).then(r => {
+      if (r.success) CM.showToast('已创建歌单', name, 'success');
     });
+  });
+});
+els.addPlaylistBtn.addEventListener('contextmenu', e => {
+  const items = [
+    { label: '预设歌单', isLabel: true },
+    {
+      label: '媒体库', icon: icons.note,
+      action: () => fb.playlist.createAutoplaylist('媒体库', 'ALL', '%artist% | %album% | %tracknumber%', true)
+    },
+    {
+      label: '历史记录', icon: icons.history,
+      action: () => fb.playlist.createAutoplaylist('历史记录', '%last_played% DURING LAST 1 WEEK SORT DESCENDING BY %last_played%', '%artist% | %album% | %tracknumber%', true)
+    },
+    {
+      label: '最近添加', icon: icons.recently_added,
+      action: () => fb.playlist.createAutoplaylist('最近添加', '%added% DURING LAST 4 WEEKS SORT DESCENDING BY %added%', '%artist% | %album% | %tracknumber%', true)
+    }
+  ];
+  CM.showCtxMenu(e.clientX, e.clientY, items);
+});
 
-    fb.replaygain.getSettings().then(res => {
-      replaygain = [
+/* ============================================
+ * 发现页按钮
+ * ============================================ */
+els.btnPlayDaily.addEventListener('click', () => CM.playDaily());
+els.btnRefreshDiscover.addEventListener('click', () => CM.renderDiscover());
+els.refreshRandom.addEventListener('click', () => CM.renderDiscoverRandom());
+els.moreAlbums.addEventListener('click', () => CM.openLibraryDetail('albums'));
+els.moreRecent.addEventListener('click', () => CM.openLibraryDetail('stats'));
+
+/* ============================================
+ * 播放列表页按钮 / 表头排序
+ * ============================================ */
+els.btnPlayAll.addEventListener('click', () => {
+  if (state.currentPlaylistIndex < 0) return;
+  fb.playlist.playTrack(state.currentPlaylistIndex, 0);
+});
+els.btnPlaylistMore.addEventListener('click', e => {
+  e.stopPropagation();
+  const rect = els.btnPlaylistMore.getBoundingClientRect();
+  const idx = state.currentPlaylistIndex;
+  if (idx < 0) return;
+  // 自动歌单/锁定歌单不接受手动编辑：隐藏 添加/排序/撤销 等操作
+  const pl = CM.playlists?.find(p => p.index === idx) ?? {};
+  const disabled = pl.isAutoplaylist || pl.isLocked;
+  const items = [
+    { label: '添加到歌单', isLabel: true },
+    {
+      label: '添加本地文件', icon: icons.file, disabled,
+      action: () => CM.addFilesToPlaylist(idx),
+    },
+    {
+      label: '添加文件夹', icon: icons.addfolder, disabled,
+      action: () => CM.addFolderToPlaylist(idx),
+    },
+    {
+      label: '添加网络地址', icon: icons.plus, disabled,
+      action: () => CM.addUrlToPlaylist(idx),
+    },
+    { divider: true },
+    {
+      label: '随机排列', icon: icons.random, disabled,
+      action: () => fb.playlist.shuffle(idx),
+    },
+    {
+      label: '按标题排序', icon: icons.title, disabled,
+      action: () => fb.playlist.sort(idx, '%title%'),
+    },
+    {
+      label: '按艺术家排序', icon: icons.artist, disabled,
+      action: () => fb.playlist.sort(idx, '%artist% | %album% | %tracknumber%'),
+    },
+    {
+      label: '反转列表', icon: icons.reverse, disabled,
+      action: () => fb.playlist.reverse(idx)
+        .then(r => { if (r.success) CM.showToast('已反转列表顺序', null, 'success'); }),
+    },
+    { divider: true },
+    {
+      label: '撤销上一步', icon: icons.undo, disabled,
+      action: () => fb.playlist.undo(idx),
+    },
+    {
+      label: '恢复上一步', icon: icons.redo, disabled,
+      action: () => fb.playlist.redo(idx),
+    },
+  ];
+  CM.showCtxMenu(rect.left, rect.bottom + 6, items);
+});
+// 表头点击排序（客户端视图排序）
+els.trackTable.$$('thead th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (state.sortKey !== key) {
+      state.sortKey = key;
+      state.sortAsc = true;
+    } else if (state.sortAsc) {
+      state.sortAsc = false;
+    } else {
+      state.sortKey = null;
+      state.sortAsc = true; // 第三次点击取消排序
+    }
+    CM.renderTrackTable();
+  });
+});
+
+els.position.addEventListener('click', () =>
+  els.trackTbody.$(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+);
+
+/* ============================================
+ * 通用 seekbar 绑定（主进度条 + 沉浸式进度条共用）
+ * ============================================ */
+CM.bindSeekBar = function (bar, timeLabel, cssVar, seekingKey, updateFn) {
+  bar.addEventListener('input', () => {
+    state[seekingKey] = true;
+    bar.style.setProperty(cssVar, `${(+bar.value).toFixed(2)}%`);
+    timeLabel.textContent = CM.formatTime(bar.value / 100 * state.duration);
+  });
+  bar.addEventListener('change', () => {
+    // 不在此处更新 state.position，交给 playback:seeked / timeHighRes 事件统一处理，
+    // 避免因 API 返回 undefined/null 时误把旧位置覆盖掉 seeked 事件已写入的正确位置。
+    fb.player.seek(bar.value / 100 * state.duration).then(() => {
+      state[seekingKey] = false;
+      updateFn();
+    });
+  });
+};
+
+/* ============================================
+ * 底栏播放控制
+ * ============================================ */
+els.btnPlayPause.addEventListener('click', fb.player.playPause);
+els.btnPrev.addEventListener('click', fb.player.prev);
+els.btnNext.addEventListener('click', fb.player.next);
+
+// 播放顺序：单按钮循环 顺序→列表循环→单曲循环→随机
+els.btnOrder.addEventListener('click', () => {
+  const next = CM.ORDERS[(CM.orderIndexOf(state.order) + 1) % CM.ORDERS.length];
+  fb.player.setOrder(next.id).then(r => {
+    if (!r) return CM.showToast('切换失败', null, 'error');
+    state.order = next.id;
+    CM.updateOrderIcon();
+    CM.showToast('播放顺序', next.name, 'success');
+  });
+});
+
+// 停止播放
+els.btnStop.addEventListener('click', () => {
+  fb.player.stop();
+  CM.showToast('已停止播放', null, 'success');
+});
+
+// 播完当前停止
+els.btnStop.addEventListener('contextmenu', () => {
+  fb.player.toggleStopAfterCurrent().then(r => {
+    state.stopAfterCurrent = r.enabled;
+    CM.updateStopIcon();
+    CM.showToast(state.stopAfterCurrent ? '将在当前曲目播完后停止' : '已取消单曲停止', null);
+  });
+});
+
+// 进度条
+CM.bindSeekBar(els.seekBar, els.seekCurrent, '--seek-pct', 'seeking', CM.updateSeekUI);
+
+// 音量
+els.volSlider.addEventListener('input', () => {
+  const volume = parseInt(els.volSlider.value, 10);
+  state.volume = volume;
+  state.muted = false;
+  els.volSlider.style.setProperty('--vol-pct', `${volume}%`);
+  fb.player.setVolume(volume);
+  CM.updateVolumeIcon();
+});
+els.volBtn.addEventListener('click', fb.player.toggleMute);
+// 音量滚轮微调
+els.volBtn.parentElement.addEventListener('wheel', e => {
+  e.preventDefault();
+  const volume = Math.max(0, Math.min(100, state.volume + (e.deltaY < 0 ? 5 : -5)));
+  state.volume = volume;
+  state.muted = false;
+  fb.player.setVolume(volume);
+  CM.updateVolumeIcon();
+}, { passive: false });
+
+// 队列抽屉
+els.btnQueue.addEventListener('click', () => CM.toggleQueue());
+els.queueClose.addEventListener('click', () => CM.toggleQueue(false));
+els.queueClear.addEventListener('click', () =>
+  fb.queue.clear().then(() => {
+    CM.renderQueue();
+    CM.refreshQueueBadge();
+    CM.showToast('已清空播放队列', null);
+  })
+);
+
+// 歌词面板开关
+els.btnLyricsToggle.addEventListener('click', () => CM.setLyricsVisible(!state.lyricsVisible));
+// 底栏封面：单击展开歌词面板，双击进入沉浸式模式
+els.bottomArtWrap.addEventListener('click', () => {
+  if (this._clickTimer) {
+    clearTimeout(this._clickTimer);
+    this._clickTimer = null;
+    CM.toggleNpOverlay(true);
+  } else {
+    this._clickTimer = setTimeout(() => {
+      this._clickTimer = null;
+      CM.setLyricsVisible(true);
+    }, 250);
+  }
+});
+
+// 频谱开关
+els.btnVisualizer.addEventListener('click', () => CM.setVisualizerActive(!state.visualizerActive));
+
+// 更多菜单
+els.btnMore.addEventListener('click', e => showMoreMenu(e.clientX, e.clientY));
+
+/* ============================================
+ * 更多菜单（Popover）
+ * ============================================ */
+function showMoreMenu(x, y) {
+  const items = [
+    { label: '歌词', isLabel: true, hidden: !CM.checkComponent('foo_uie_eslyric') },
+    {
+      label: '桌面歌词', icon: icons.desktopLyric, hidden: !CM.checkComponent('foo_uie_eslyric'),
+      submenu: [
         {
-          label: '增益来源',
-          submenu: [
-            item('无', 'sourceMode', 'none', res.sourceMode),
-            item('音轨', 'sourceMode', 'track', res.sourceMode),
-            item('专辑', 'sourceMode', 'album', res.sourceMode)
-          ]
+          label: '显示', icon: icons.desktopLyric, checked: ESLYRIC_STATE.show,
+          action: toggleDesktopLyric
         },
         {
-          label: '处理方式',
-          submenu: [
-            item('关闭', 'processingMode', 'none', res.processingMode),
-            item('增益', 'processingMode', 'gain', res.processingMode),
-            item('增益 + 峰值', 'processingMode', 'gain_and_peak', res.processingMode),
-            item('峰值', 'processingMode', 'peak', res.processingMode)
-          ]
+          label: '置顶', icon: icons.pin, checked: ESLYRIC_STATE.pin,
+          action: toggleDesktopLyricPin
+        },
+        {
+          label: '锁定', icon: icons.lock, checked: ESLYRIC_STATE.lock,
+          action: toggleDesktopLyricLock
+        },
+        {
+          label: '重置位置', icon: icons.refresh,
+          action: execDesktopLyricReset
         }
-      ];
-    });
-  }
-  syncReplaygain();
-
-  /* ============================================
-   * 迷你频谱
-   * ============================================ */
-  // 通用频谱条生成器（迷你频谱 + 沉浸式频谱共用）
-  CM.createSpectrumBars = function (container, count, barClass) {
-    container.innerHTML = `<div class="${barClass}"></div>`.repeat(count);
-    return [...container.children];
-  };
-
-  const SPEC_BARS = 16, NP_SPEC_BARS = 32;
-  const specBarEls = CM.createSpectrumBars(els.miniSpectrum, SPEC_BARS, 'mini-spec-bar');
-  const npSpecBarEls = CM.createSpectrumBars(els.npSpectrum, NP_SPEC_BARS, 'np-spec-bar');
-  let spectrumUnsub = null;
-
-  CM.setVisualizerActive = function (active) {
-    state.visualizerActive = active;
-    CM.setSettings('visualizer', active);
-    els.btnVisualizer.classList.toggle('active', active);
-    els.miniSpectrum.style.display = active ? '' : 'none';
-    if (active) CM.startSpectrum();
-    else CM.stopSpectrum();
-  };
-
-  CM.startSpectrum = function () {
-    if (spectrumUnsub || !fb.isAvailable()) return;
-    spectrumUnsub = fb.audio.subscribeSpectrum(data => {
-      CM.updateSpectrumBars(specBarEls, data?.spectrum, SPEC_BARS, 18, 20);
-      // 同步更新沉浸式频谱
-      if (state.npOpen) CM.updateSpectrumBars(npSpecBarEls, data?.spectrum, NP_SPEC_BARS, 36, 28);
-    }, { fftSize: 8192, fps: 30, bands: 64 });
-  };
-
-  CM.stopSpectrum = function () {
-    spectrumUnsub?.();
-    spectrumUnsub = null;
-    specBarEls.forEach(el => el.style.transform = 'scaleY(0.1)');
-  };
-
-  /* ============================================
-   * 拖放（宿主 dnd API，回退 HTML5 提示）
-   * ============================================ */
-  const AUDIO_EXT = /\.(mp3|flac|wav|aac|m4a|mp4|opus|ogg|oga|wma|ape|wv|alac|aiff|aif|dsf|dff|tak|tta|mpc|mka|m4b|m4r)$/i;
-  // 把拖入的路径展开成可播放的音频文件
-  CM.expandPaths = async function (raw) {
-    return (await Promise.all(
-      raw.filter(Boolean).map(async path => {
-        const info = await fb.file.getInfo(path);
-        if (info.isFile) return [path];
-        if (info.isDirectory) return (await fb.file.list(path, { pattern: '*.*', recursive: true })).files ?? [];
+      ]
+    },
+    { divider: true, hidden: !CM.checkComponent('foo_uie_eslyric') },
+    { label: '窗口', isLabel: true },
+    {
+      label: '刷新界面', icon: icons.refresh,
+      action: fb.ui.reload
+    },
+    { divider: true },
+    { label: '音频', isLabel: true },
+    {
+      label: '均衡器', icon: icons.eq, checked: eqMode,
+      action: toggleEQ
+    },
+    {
+      label: '输出设备', icon: icons.output,
+      submenu: outputDevice.map(d => ({
+        label: d.name, checked: d.isCurrent,
+        action: () => fb.config.setOutputDevice(d.outputId, d.deviceId)
+          .then(() => { CM.showToast('已切换', d.name, 'success'); syncOutputDevice(); })
+          .catch(() => CM.showToast('切换失败', null, 'error'))
+      }))
+    },
+    { label: '播放增益', icon: icons.eq, submenu: replaygain },
+    { divider: true },
+    { label: 'Foobar 2000', isLabel: true },
+    {
+      label: '打开控制台', icon: icons.console,
+      action: fb.misc.showConsole
+    },
+    {
+      label: '首选项', icon: icons.preferences,
+      action: fb.misc.showPreferences
+    },
+    {
+      label: '刷新媒体库缓存', icon: icons.folder,
+      action: () => fb.library.refresh().then(() => {
+        CM.showToast('媒体库缓存已刷新', null, 'success');
+        if (state.currentTab === 'discover') CM.renderDiscover();
       })
-    )).flat().filter(f => AUDIO_EXT.test(f));
-  };
+    },
+    { divider: true },
+    { label: '关于', isLabel: true },
+    {
+      label: '更新', icon: icons.refresh,
+      submenu: [
+        {
+          label: '检查更新', icon: icons.refresh,
+          action: () => CM.checkUpdate(true)
+        },
+        {
+          label: '启动时检查更新', checked: settings.autoUpdate,
+          action: () => CM.setSettings('autoUpdate', !settings.autoUpdate)
+        },
+      ]
+    },
+    {
+      label: 'CloudMusic 主题', icon: icons.info,
+      action: showAbout
+    },
+    {
+      label: '使用帮助', icon: icons.info,
+      action: () => window.open('guide.html', '_blank')
+    },
+  ];
+  CM.showCtxMenu(x, y, items);
+}
 
-  // 统一入口：把拖进来的（文件/文件夹）路径加到当前歌单
-  CM.addDroppedPaths = function (raw) {
-    CM.expandPaths(raw).then(paths => {
+/* ============================================
+ * 播放增益（ReplayGain）面板
+ * ============================================ */
+let replaygain = [];
+function syncReplaygain() {
+  const item = (label, field, value, current) => ({
+    label, checked: current === value,
+    action: () => {
+      fb.invoke('replaygain.setMode', { [field]: value });
+      syncReplaygain();
+    }
+  });
+
+  fb.replaygain.getSettings().then(res => {
+    replaygain = [
+      {
+        label: '增益来源',
+        submenu: [
+          item('无', 'sourceMode', 'none', res.sourceMode),
+          item('音轨', 'sourceMode', 'track', res.sourceMode),
+          item('专辑', 'sourceMode', 'album', res.sourceMode)
+        ]
+      },
+      {
+        label: '处理方式',
+        submenu: [
+          item('关闭', 'processingMode', 'none', res.processingMode),
+          item('增益', 'processingMode', 'gain', res.processingMode),
+          item('增益 + 峰值', 'processingMode', 'gain_and_peak', res.processingMode),
+          item('峰值', 'processingMode', 'peak', res.processingMode)
+        ]
+      }
+    ];
+  });
+}
+syncReplaygain();
+
+/* ============================================
+ * 迷你频谱
+ * ============================================ */
+// 通用频谱条生成器（迷你频谱 + 沉浸式频谱共用）
+CM.createSpectrumBars = function (container, count, barClass) {
+  container.innerHTML = `<div class="${barClass}"></div>`.repeat(count);
+  return [...container.children];
+};
+
+const SPEC_BARS = 16, NP_SPEC_BARS = 32;
+const specBarEls = CM.createSpectrumBars(els.miniSpectrum, SPEC_BARS, 'mini-spec-bar');
+const npSpecBarEls = CM.createSpectrumBars(els.npSpectrum, NP_SPEC_BARS, 'np-spec-bar');
+let spectrumUnsub = null;
+
+CM.setVisualizerActive = function (active) {
+  state.visualizerActive = active;
+  CM.setSettings('visualizer', active);
+  els.btnVisualizer.classList.toggle('active', active);
+  els.miniSpectrum.style.display = active ? '' : 'none';
+  if (active) CM.startSpectrum();
+  else CM.stopSpectrum();
+};
+
+CM.startSpectrum = function () {
+  if (spectrumUnsub || !fb.isAvailable()) return;
+  spectrumUnsub = fb.audio.subscribeSpectrum(data => {
+    CM.updateSpectrumBars(specBarEls, data?.spectrum, SPEC_BARS, 18, 20);
+    // 同步更新沉浸式频谱
+    if (state.npOpen) CM.updateSpectrumBars(npSpecBarEls, data?.spectrum, NP_SPEC_BARS, 36, 28);
+  }, { fftSize: 8192, fps: 30, bands: 64 });
+};
+
+CM.stopSpectrum = function () {
+  spectrumUnsub?.();
+  spectrumUnsub = null;
+  specBarEls.forEach(el => el.style.transform = 'scaleY(0.1)');
+};
+
+/* ============================================
+ * 拖放（宿主 dnd API，回退 HTML5 提示）
+ * ============================================ */
+const AUDIO_EXT = /\.(mp3|flac|wav|aac|m4a|mp4|opus|ogg|oga|wma|ape|wv|alac|aiff|aif|dsf|dff|tak|tta|mpc|mka|m4b|m4r)$/i;
+// 把拖入的路径展开成可播放的音频文件
+CM.expandPaths = async function (raw) {
+  return (await Promise.all(
+    raw.filter(Boolean).map(async path => {
+      const info = await fb.file.getInfo(path);
+      if (info.isFile) return [path];
+      if (info.isDirectory) return (await fb.file.list(path, { pattern: '*.*', recursive: true })).files ?? [];
+    })
+  )).flat().filter(f => AUDIO_EXT.test(f));
+};
+
+// v1.12.0 起 dnd 改为主机原生观察，不再注册 drop zone；
+// 读路径统一走 dnd.getPathsAsync（await 安全、不依赖消息顺序）。
+fb.on('dnd:enter', () => els.drop.showModal());
+fb.on('dnd:leave', () => els.drop.close());
+fb.on('dnd:drop', data => {
+  els.drop.close();
+  if (!CM.playlists.length) return CM.showToast('请先添加歌单', null, 'error');
+  if (CM.playlists?.find(p => p.index === CM.state.currentPlaylistIndex)?.isLocked)
+    return CM.showToast('当前歌单已锁定，无法添加项目', null, 'error');
+
+  fb.dnd.getPathsAsync(data?.sessionId).then(r => {
+    const paths = r.paths?.length ? r.paths : data?.paths;
+    CM.expandPaths(paths).then(paths => {
       if (!paths.length) return;
 
-      fb.playlist.addAsync(state.currentPlaylistIndex >= 0 ? state.currentPlaylistIndex : null, paths).then(res => {
-        if (res?.success !== false) CM.showToast(`正在添加 ${paths.length} 个项目`, null, 'success');
-      });
-    });
-  };
-
-  // v1.12.0 起 dnd 改为主机原生观察，不再注册 drop zone；
-  // 读路径统一走 dnd.getPathsAsync（await 安全、不依赖消息顺序）。
-  fb.on('dnd:enter', () => els.drop.showModal());
-  fb.on('dnd:leave', () => els.drop.close());
-  fb.on('dnd:drop', data => {
-    els.drop.close();
-    if (!CM.playlists.length) return CM.showToast('请先添加歌单', null, 'error');
-    if (CM.playlists?.find(p => p.index === CM.state.currentPlaylistIndex)?.isLocked)
-      return CM.showToast('当前歌单已锁定，无法添加项目', null, 'error');
-
-    fb.dnd.getPathsAsync(data?.sessionId).then(r => {
-      const paths = r.paths?.length ? r.paths : data?.paths;
-      CM.addDroppedPaths(paths);
+      CM._addPaths(state.currentPlaylistIndex, paths, `正在添加 ${paths.length} 个项目`);
     });
   });
+});
 
-  window.addEventListener('dragover', e => e.preventDefault());
-  window.addEventListener('drop', e => e.preventDefault());
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
 
-  /* ============================================
-   * 键盘快捷键
-   * ============================================ */
-  document.addEventListener('keydown', e => {
-    const tag = (e.target.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea') return;
+/* ============================================
+ * 键盘快捷键
+ * ============================================ */
+document.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
 
-    switch (e.key) {
-      case ' ':
-        e.preventDefault();
-        fb.player.playPause();
-        break;
-      case 'arrowleft':
-        if (e.ctrlKey) fb.player.prev();
-        else fb.player.seek(Math.max(0, state.position - 5));
-        break;
-      case 'arrowright':
-        if (e.ctrlKey) fb.player.next();
-        else fb.player.seek(Math.min(state.duration, state.position + 5));
-        break;
-      case 'arrowup':
-        e.preventDefault();
-        if (e.altKey) CM.keyboardMoveTracks(-1); // Alt+↑ 上移选中/聚焦曲目
-        else fb.player.volumeUp();
-        break;
-      case 'arrowdown':
-        e.preventDefault();
-        if (e.altKey) CM.keyboardMoveTracks(1);  // Alt+↓ 下移选中/聚焦曲目
-        else fb.player.volumeDown();
-        break;
-      case 'm': case 'M':
-        fb.player.toggleMute();
-        break;
-      case 'l': case 'L':
-        CM.setLyricsVisible(!state.lyricsVisible);
-        break;
-      case 'q': case 'Q':
-        CM.toggleQueue();
-        break;
-      case 'escape':
-        if (state.queueOpen) CM.toggleQueue(false);
-        CM.hideCtxMenu();
-        // 关闭标签编辑器
-        if (CM.tagEditor.open) CM.hideTagEditor();
-        // 清除批量选择
-        if (state.batchSelected.size > 0) CM.clearBatchSelection();
-        break;
+  switch (e.key) {
+    case ' ':
+      e.preventDefault();
+      fb.player.playPause();
+      break;
+    case 'arrowleft':
+      if (e.ctrlKey) fb.player.prev();
+      else fb.player.seek(Math.max(0, state.position - 5));
+      break;
+    case 'arrowright':
+      if (e.ctrlKey) fb.player.next();
+      else fb.player.seek(Math.min(state.duration, state.position + 5));
+      break;
+    case 'arrowup':
+      e.preventDefault();
+      if (e.altKey) CM.keyboardMoveTracks(-1); // Alt+↑ 上移选中/聚焦曲目
+      else fb.player.volumeUp();
+      break;
+    case 'arrowdown':
+      e.preventDefault();
+      if (e.altKey) CM.keyboardMoveTracks(1);  // Alt+↓ 下移选中/聚焦曲目
+      else fb.player.volumeDown();
+      break;
+    case 'm': case 'M':
+      fb.player.toggleMute();
+      break;
+    case 'l': case 'L':
+      CM.setLyricsVisible(!state.lyricsVisible);
+      break;
+    case 'q': case 'Q':
+      CM.toggleQueue();
+      break;
+    case 'Escape':
+      if (state.queueOpen) CM.toggleQueue(false);
+      CM.hideCtxMenu();
+      // 关闭标签编辑器
+      if (els.tagEditor.open) CM.hideTagEditor();
+      // 清除批量选择
+      if (state.batchSelected.size > 0) CM.clearBatchSelection();
+      break;
+  }
+});
+
+/* ============================================
+ * 任务栏进度条
+ * 缩略按钮交给 foobar 原生系统媒体控制（SMTC / 全局媒体键），后台也能用；
+ * 主题自设按钮在窗口最小化时页面 JS 挂起、taskbar:buttonClicked 不可靠，故不再设置，
+ * 仅保留 taskbar.setProgress 进度条（调用即下发、无后台依赖）。
+ * ============================================ */
+// 节流：仅当可见进度 1% 变化时才通过 IPC 更新任务栏，避免 timeHighRes 高频事件（~30次/秒）反复调用宿主 API
+let _lastTaskbarVal = -1, _lastTaskbarState = null;
+CM.updateTaskbarProgress = function () {
+  if (!CM.currentTrack || state.duration <= 0) {
+    if (_lastTaskbarVal !== -2) {
+      _lastTaskbarVal = -2;
+      fb.taskbar.setProgress({ state: 'none' });
     }
-  });
-
-  /* ============================================
-   * 任务栏进度条
-   * 缩略按钮交给 foobar 原生系统媒体控制（SMTC / 全局媒体键），后台也能用；
-   * 主题自设按钮在窗口最小化时页面 JS 挂起、taskbar:buttonClicked 不可靠，故不再设置，
-   * 仅保留 taskbar.setProgress 进度条（调用即下发、无后台依赖）。
-   * ============================================ */
-  // 节流：仅当可见进度 1% 变化时才通过 IPC 更新任务栏，避免 timeHighRes 高频事件（~30次/秒）反复调用宿主 API
-  let _lastTaskbarVal = -1, _lastTaskbarState = null;
-  CM.updateTaskbarProgress = function () {
-    if (!CM.currentTrack || state.duration <= 0) {
-      if (_lastTaskbarVal !== -2) {
-        _lastTaskbarVal = -2;
-        fb.taskbar.setProgress({ state: 'none' });
-      }
-      return;
-    }
-
-    const stateName = fb.state.isPlaying ? 'normal' : 'paused';
-    const value = Math.min(1, Math.max(0, state.position / state.duration));
-    const pct = Math.round(value * 100);
-
-    if (pct === _lastTaskbarVal && stateName === _lastTaskbarState) return;
-
-    _lastTaskbarVal = pct;
-    _lastTaskbarState = stateName;
-    fb.taskbar.setProgress({ state: stateName, value });
-  };
-
-  /* ============================================
-   * 沉浸式 NowPlaying 事件绑定
-   * ============================================ */
-  // 右侧面板进入沉浸式按钮
-  els.rpImmersiveBtn.addEventListener('click', () => CM.toggleNpOverlay(true));
-  // 关闭按钮
-  els.npCloseBtn.addEventListener('click', () => CM.toggleNpOverlay(false));
-
-  // 沉浸式顶部拖拽条：无系统标题栏时仍可移动窗口
-  const npDrag = $('#npDragHandle');
-  npDrag?.addEventListener('mousedown', e => { if (e.button === 0) fb.ui.startDrag(); });
-  npDrag?.addEventListener('dblclick', fb.ui.toggleMaximize);
-
-  // 模式切换
-  els.npModeBtn.addEventListener('click', CM.toggleNpMode);
-
-  // 播放控制（主视图 + 纯歌词模式两套，动作相同）
-  const bindTransport = (play, prev, next) => {
-    play.addEventListener('click', fb.player.playPaus);
-    prev.addEventListener('click', fb.player.prev);
-    next.addEventListener('click', fb.player.next);
-  };
-  bindTransport(els.npBtnPlay, els.npBtnPrev, els.npBtnNext);
-  bindTransport(els.npLcPlay, els.npLcPrev, els.npLcNext);
-
-  // 沉浸式进度条
-  CM.bindSeekBar(els.npSeekBar, els.npTimeCurrent, '--np-seek-pct', 'npSeeking', CM.updateNpSeekUI);
-
-  // ESC 关闭沉浸式
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && state.npOpen) CM.toggleNpOverlay(false);
-  });
-
-  /* ============================================
-  * 桌面歌词 — 通过主菜单命令调用 ESLyric 原生桌面歌词
-  * ============================================ */
-  const ESLYRIC_STATE = { show: false, pin: false, lock: false };
-
-  // ESLyric 插件命令
-  function executeEslyricCommand(desc, onSuccess) {
-    CM.getGuid(desc).then(({ guid, subGuid }) => {
-      if (!guid) return CM.showToast('执行失败', '请确认已安装 ESLyric 插件', 'error');
-      fb.discovery.executeMainMenuCommand(guid, subGuid).then(r => {
-        if (r?.success === false) return CM.showToast('执行失败', '命令执行失败', 'error');
-        onSuccess();
-      });
-    });
+    return;
   }
 
-  // 同步状态
-  function syncEslyricState() {
-    [['显示桌面歌词', 'show'], ['窗口置顶', 'pin'], ['锁定桌面歌词', 'lock']].forEach(([query, key]) =>
-      fb.discovery.searchCommands(query, { includeHidden: true })
-        .then(cmd => ESLYRIC_STATE[key] = cmd?.results?.find(c => c.name.includes(query))?.checked ?? false)
-    );
-  };
-  syncEslyricState();
+  const stateName = fb.state.isPlaying ? 'normal' : 'paused';
+  const value = Math.min(1, Math.max(0, state.position / state.duration));
+  const pct = Math.round(value * 100);
 
-  // 桌面歌词开关
-  CM.toggleDesktopLyric = function () {
-    executeEslyricCommand('显示桌面歌词', () => {
-      ESLYRIC_STATE.show = !ESLYRIC_STATE.show;
-      CM.showToast(ESLYRIC_STATE.show ? '桌面歌词已开启' : '桌面歌词已关闭', null, 'success');
+  if (pct === _lastTaskbarVal && stateName === _lastTaskbarState) return;
+
+  _lastTaskbarVal = pct;
+  _lastTaskbarState = stateName;
+  fb.taskbar.setProgress({ state: stateName, value });
+};
+
+/* ============================================
+ * 沉浸式 NowPlaying 事件绑定
+ * ============================================ */
+// 右侧面板进入沉浸式按钮
+els.rpImmersiveBtn.addEventListener('click', () => CM.toggleNpOverlay(true));
+// 关闭按钮
+els.npCloseBtn.addEventListener('click', () => CM.toggleNpOverlay(false));
+
+// 沉浸式顶部拖拽条：无系统标题栏时仍可移动窗口
+const npDrag = $('#npDragHandle');
+npDrag?.addEventListener('mousedown', e => { if (e.button === 0) fb.ui.startDrag(); });
+npDrag?.addEventListener('dblclick', fb.ui.toggleMaximize);
+
+// 模式切换
+els.npModeBtn.addEventListener('click', () => CM.toggleNpMode());
+
+// 播放控制（主视图 + 纯歌词模式两套，动作相同）
+const bindTransport = (play, prev, next) => {
+  play.addEventListener('click', fb.player.playPaus);
+  prev.addEventListener('click', fb.player.prev);
+  next.addEventListener('click', fb.player.next);
+};
+bindTransport(els.npBtnPlay, els.npBtnPrev, els.npBtnNext);
+bindTransport(els.npLcPlay, els.npLcPrev, els.npLcNext);
+
+// 沉浸式进度条
+CM.bindSeekBar(els.npSeekBar, els.npTimeCurrent, '--np-seek-pct', 'npSeeking', CM.updateNpSeekUI);
+
+// ESC 关闭沉浸式
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && state.npOpen) CM.toggleNpOverlay(false);
+});
+
+/* ============================================
+* 桌面歌词 — 通过主菜单命令调用 ESLyric 原生桌面歌词
+* ============================================ */
+const ESLYRIC_STATE = { show: false, pin: false, lock: false };
+
+// ESLyric 插件命令
+function executeEslyricCommand(desc, onSuccess) {
+  CM.getGuid(desc).then(({ guid, subGuid }) => {
+    if (!guid) return CM.showToast('执行失败', '请确认已安装 ESLyric 插件', 'error');
+    fb.discovery.executeMainMenuCommand(guid, subGuid).then(r => {
+      if (!r.success) return CM.showToast('执行失败', '命令执行失败', 'error');
+      onSuccess();
     });
-  };
-
-  // 桌面歌词置顶
-  CM.toggleDesktopLyricPin = function () {
-    executeEslyricCommand('窗口置顶', () => {
-      ESLYRIC_STATE.pin = !ESLYRIC_STATE.pin;
-      CM.showToast(ESLYRIC_STATE.pin ? '桌面歌词置顶已开启' : '桌面歌词置顶已关闭', null, 'success');
-    });
-  };
-
-  // 桌面歌词锁定
-  CM.toggleDesktopLyricLock = function () {
-    executeEslyricCommand('锁定桌面歌词', () => {
-      ESLYRIC_STATE.lock = !ESLYRIC_STATE.lock;
-      CM.showToast(ESLYRIC_STATE.lock ? '桌面歌词锁定已开启' : '桌面歌词锁定已关闭', null, 'success');
-    });
-  };
-
-  // 重置桌面歌词位置
-  CM.execDesktopLyricReset = function () {
-    executeEslyricCommand('重置位置', () => CM.showToast('桌面歌词位置已重置', null, 'success'));
-  };
-
-  /* ============================================
-   * 均衡器 — 通过 DSP API 切换 EQ
-   * 均衡器 GUID 来自 dsp.getAvailable
-   * ============================================ */
-  const EQ_GUID = '{82AEF845-DCC3-4DA5-9D80-E9A972B2140D}';
-  let eqMode = false;
-
-  // 在 DSP 链中查找 EQ 的索引（-1 表示不存在）
-  const findEQInChain = function (dsps) {
-    return dsps?.findIndex(dsp => dsp.guid === EQ_GUID) ?? -1;
-  };
-
-  function syncEQState() {
-    fb.dsp.getChain().then(r => eqMode = findEQInChain(r?.dsps) >= 0);
-  }
-  syncEQState();
-
-  CM.toggleEQ = function () {
-    fb.dsp.getChain().then(r => {
-      if (!r) return CM.showToast('操作失败', '无法获取 DSP 链', 'error');
-      const eqIndex = findEQInChain(r.dsps);
-      const isActive = eqIndex >= 0;
-      const p = isActive ? fb.dsp.removeDsp(eqIndex) : fb.dsp.addDsp(EQ_GUID);
-      p.then(res => {
-        if (res?.success === false) return CM.showToast('操作失败', null, 'error');
-
-        eqMode = !isActive;
-        CM.showToast(eqMode ? '均衡器已开启' : '均衡器已关闭', null, eqMode ? 'success' : null);
-      });
-    });
-  };
-
-  /* ============================================
-   * 输出设备 — 列出设备并切换
-   * ============================================ */
-  let outputDevice = [];
-  function syncOutputDevice() {
-    fb.config.getOutputDevices().then(devices => {
-      if (!devices.length) return CM.showToast('无法获取输出设备', null, 'error');
-      outputDevice = devices;
-    });
-  }
-  syncOutputDevice();
-
-  /* ============================================
-   * 关于 — 并行查询多 API，展示完整系统信息
-   * ============================================ */
-  CM.showAbout = function () {
-    Promise.all([
-      fb.config.getVersionInfo(),
-      fb.playcount.getStats(),
-      fb.config.getOutputConfig(),
-      fb.audio.getStreamInfo()
-    ]).then(([ver = {}, stats = {}, out = {}, stream = {}]) => {
-      const info = (label, value, disabled) => ({
-        disabled,
-        html: `<span class="ctx-info-label">${label}</span><span class="ctx-info-value">${value}</span>`
-      });
-      const esc = CM.escHtml;
-
-      const items = [
-        { label: 'CloudMusic 主题', isLabel: true },
-        info('版本', CM.version),
-        info('作者', '灵芝含、shimo-saki'),
-        info('foobar2000', esc(ver.version || '--')),
-        info('WebView2 组件', `v${esc(ver.plugin.version || '--')}`),
-        { divider: true },
-        { label: '媒体库', isLabel: true },
-        info('总曲目', stats.totalTracks || 0),
-        info('已播放', stats.playedTracks || 0),
-        info('未播放', stats.unplayedTracks || 0),
-        info('总播放次数', stats.totalPlayCount || 0),
-        info('平均播放', `${(+stats.averagePlayCount || 0).toFixed(1)} 次`),
-        { divider: true },
-        { label: '输出', isLabel: true },
-        info('输出模式', esc(out.outputName || '--')),
-        info('设备', esc(out.deviceName || '--')),
-        info('位深', `${out.bitDepth || '--'} bit`),
-        info('缓冲', `${out.bufferLength || '--'} s`),
-        { divider: true },
-        { label: '当前播放', isLabel: true },
-        info('编码', esc(stream.codec || '--'), !stream.playing),
-        info('采样率', `${stream.sampleRate ? (stream.sampleRate / 1000).toFixed(1) : '--'} kHz`, !stream.playing),
-        info('比特率', `${stream.bitrate || '--'} kbps`, !stream.playing),
-        info('声道', `${stream.channels || '--'} ch`, !stream.playing),
-        { divider: true },
-        info('已安装组件', `${CM.components.length || 0} 个`),
-      ];
-
-      const { left, bottom } = els.btnMore.getBoundingClientRect();
-      CM.showCtxMenu(left, bottom + 6, items);
-    }).catch(() => CM.showToast('获取信息失败', null, 'error'));
-  };
-
-  /* ============================================
-   * 标签编辑器 — 事件绑定
-   * ============================================ */
-  // 关闭/取消
-  els.tagEditorClose.addEventListener('click', CM.hideTagEditor);
-  els.tagEditorCancel.addEventListener('click', CM.hideTagEditor);
-  // 点击遮罩关闭
-  els.tagEditor.addEventListener('mousedown', e => {
-    if (e.target === els.tagEditor) CM.hideTagEditor();
   });
-  // 保存
-  els.tagEditorSave.addEventListener('click', CM._saveTagEditor);
-  // 封面管理（事件委托，因为按钮是动态渲染的）
-  els.tagEditorBody.addEventListener('click', e => {
-    if (e.target.id === 'tagCoverReplace') CM._replaceCover();
-    else if (e.target.id === 'tagCoverRemove') CM._removeCover();
+}
+
+// 同步状态
+function syncEslyricState() {
+  [['显示桌面歌词', 'show'], ['窗口置顶', 'pin'], ['锁定桌面歌词', 'lock']].forEach(([query, key]) =>
+    fb.discovery.searchCommands(query, { includeHidden: true })
+      .then(cmd => ESLYRIC_STATE[key] = cmd?.results?.find(c => c.name.includes(query))?.checked ?? false)
+  );
+}
+syncEslyricState();
+
+// 桌面歌词开关
+function toggleDesktopLyric() {
+  executeEslyricCommand('显示桌面歌词', () => {
+    ESLYRIC_STATE.show = !ESLYRIC_STATE.show;
+    CM.showToast(ESLYRIC_STATE.show ? '桌面歌词已开启' : '桌面歌词已关闭', null, 'success');
   });
-  // 文件选择回调
-  els.tagCoverFile.addEventListener('change', CM._onCoverFileSelected);
+}
 
-  // 批量操作栏
-  els.batchEditTags.addEventListener('click', CM._batchEditFromBar);
-  els.batchDeleteTracks.addEventListener('click', CM._batchDeleteFromBar);
-  els.batchClear.addEventListener('click', CM.clearBatchSelection);
+// 桌面歌词置顶
+function toggleDesktopLyricPin() {
+  executeEslyricCommand('窗口置顶', () => {
+    ESLYRIC_STATE.pin = !ESLYRIC_STATE.pin;
+    CM.showToast(ESLYRIC_STATE.pin ? '桌面歌词置顶已开启' : '桌面歌词置顶已关闭', null, 'success');
+  });
+}
 
-  /* ============================================
-   * 在线标签获取 — 通过 discovery API 调用 foo_freedb2
-   * 首次搜索后缓存命令，后续直接执行
-   * ============================================ */
-  CM.fetchTagsOnline = function () {
-    CM.getGuid('freedb').then(({ guid, subGuid }) =>
-      fb.discovery.executeContextMenuCommand(guid, subGuid).then(r => {
-        if (!r.success) return CM.showToast('获取失败', '命令执行失败，请尝试在 foobar2000 中手动操作', 'error');
-        CM.showToast('已触发在线获取', '请在弹出的窗口中完成操作', null);
-      }));
-  };
+// 桌面歌词锁定
+function toggleDesktopLyricLock() {
+  executeEslyricCommand('锁定桌面歌词', () => {
+    ESLYRIC_STATE.lock = !ESLYRIC_STATE.lock;
+    CM.showToast(ESLYRIC_STATE.lock ? '桌面歌词锁定已开启' : '桌面歌词锁定已关闭', null, 'success');
+  });
+}
 
-  /* ============================================
-   * 播放列表「更多」菜单 — 批量编辑入口
-   * ============================================ */
-  // 在 more 菜单中追加「批量编辑标签」选项（当有多选时显示）
-  // 通过包装 showCtxMenu 实现：拦截 more 按钮的 click 事件
-  // 在原菜单项后追加批量编辑项
-  els.btnPlaylistMore.addEventListener('click', () => {
-    if (state.batchSelected.size < 2) return;
+// 重置桌面歌词位置
+function execDesktopLyricReset() {
+  executeEslyricCommand('重置位置', () => CM.showToast('桌面歌词位置已重置', null, 'success'));
+}
 
-    // 延迟追加，确保在原菜单渲染后执行
-    setTimeout(() => {
-      const menu = els.ctxMenu;
-      if (menu.classList.contains('hidden')) return;
+/* ============================================
+ * 均衡器 — 通过 DSP API 切换 EQ
+ * 均衡器 GUID 来自 dsp.getAvailable
+ * ============================================ */
+const EQ_GUID = '{82AEF845-DCC3-4DA5-9D80-E9A972B2140D}';
+let eqMode = false;
 
-      const divider = document.createElement('div');
-      divider.className = 'ctx-divider';
+// 在 DSP 链中查找 EQ 的索引（-1 表示不存在）
+function findEQInChain(dsps) {
+  return dsps?.findIndex(dsp => dsp.guid === EQ_GUID) ?? -1;
+}
 
-      const item = document.createElement('div');
-      item.className = 'ctx-item';
-      item.dataset.idx = menu.children.length;
-      item.innerHTML = `${CM.icons.tag || ''}<span>批量编辑标签（${state.batchSelected.size}首）</span>`;
-      item.addEventListener('click', () => {
-        CM.hideCtxMenu();
-        CM._batchEditFromBar();
-      });
+function syncEQState() {
+  fb.dsp.getChain().then(r => eqMode = findEQInChain(r?.dsps) >= 0);
+}
+syncEQState();
 
-      menu.append(divider, item);
-    }, 0);
-  }, true); // 捕获阶段，确保在原 handler 之前执行
-})();
+function toggleEQ() {
+  fb.dsp.getChain().then(r => {
+    if (!r) return CM.showToast('操作失败', '无法获取 DSP 链', 'error');
+    const eqIndex = findEQInChain(r.dsps);
+    const isActive = eqIndex >= 0;
+    const p = isActive ? fb.dsp.removeDsp(eqIndex) : fb.dsp.addDsp(EQ_GUID);
+    p.then(res => {
+      if (!res.success) return CM.showToast('操作失败', null, 'error');
+
+      eqMode = !isActive;
+      CM.showToast(eqMode ? '均衡器已开启' : '均衡器已关闭', null, eqMode ? 'success' : null);
+    });
+  });
+}
+
+/* ============================================
+ * 输出设备 — 列出设备并切换
+ * ============================================ */
+let outputDevice = [];
+function syncOutputDevice() {
+  fb.config.getOutputDevices().then(devices => {
+    if (!devices.length) return CM.showToast('无法获取输出设备', null, 'error');
+    outputDevice = devices;
+  });
+}
+syncOutputDevice();
+
+/* ============================================
+ * 关于 — 并行查询多 API，展示完整系统信息
+ * ============================================ */
+function showAbout() {
+  Promise.all([
+    fb.config.getVersionInfo(),
+    fb.playcount.getStats(),
+    fb.config.getOutputConfig(),
+    fb.audio.getStreamInfo()
+  ]).then(([ver = {}, stats = {}, out = {}, stream = {}]) => {
+    const info = (label, value, disabled) => ({
+      disabled,
+      html: `<span class="ctx-info-label">${label}</span><span class="ctx-info-value">${value}</span>`
+    });
+
+    const items = [
+      { label: 'CloudMusic 主题', isLabel: true },
+      info('版本', CM.version),
+      info('作者', '灵芝含、shimo-saki'),
+      info('foobar2000', esc(ver.version || '--')),
+      info('WebView2 组件', `v${esc(ver.plugin.version || '--')}`),
+      { divider: true },
+      { label: '媒体库', isLabel: true },
+      info('总曲目', stats.totalTracks || 0),
+      info('已播放', stats.playedTracks || 0),
+      info('未播放', stats.unplayedTracks || 0),
+      info('总播放次数', stats.totalPlayCount || 0),
+      info('平均播放', `${(+stats.averagePlayCount || 0).toFixed(1)} 次`),
+      { divider: true },
+      { label: '输出', isLabel: true },
+      info('输出模式', esc(out.outputName || '--')),
+      info('设备', esc(out.deviceName || '--')),
+      info('位深', `${out.bitDepth || '--'} bit`),
+      info('缓冲', `${out.bufferLength || '--'} s`),
+      { divider: true },
+      { label: '当前播放', isLabel: true },
+      info('编码', esc(stream.codec || '--'), !stream.playing),
+      info('采样率', `${stream.sampleRate ? (stream.sampleRate / 1000).toFixed(1) : '--'} kHz`, !stream.playing),
+      info('比特率', `${stream.bitrate || '--'} kbps`, !stream.playing),
+      info('声道', `${stream.channels || '--'} ch`, !stream.playing),
+      { divider: true },
+      info('已安装组件', `${CM.components.length || 0} 个`),
+    ];
+
+    const { left, bottom } = els.btnMore.getBoundingClientRect();
+    CM.showCtxMenu(left, bottom + 6, items);
+  }).catch(() => CM.showToast('获取信息失败', null, 'error'));
+}
+
+/* ============================================
+ * 标签编辑器 — 事件绑定
+ * ============================================ */
+// 关闭/取消
+els.tagEditorClose.addEventListener('click', () => CM.hideTagEditor());
+els.tagEditorCancel.addEventListener('click', () => CM.hideTagEditor());
+// 点击遮罩关闭
+els.tagEditor.addEventListener('mousedown', e => {
+  if (e.target === els.tagEditor) CM.hideTagEditor();
+});
+// 保存
+els.tagEditorSave.addEventListener('click', () => CM._saveTagEditor());
+// 封面管理（事件委托，因为按钮是动态渲染的）
+els.tagEditorBody.addEventListener('click', e => {
+  if (e.target.id === 'tagCoverReplace') CM._replaceCover();
+  else if (e.target.id === 'tagCoverRemove') CM._removeCover();
+});
+// 文件选择回调
+els.tagCoverFile.addEventListener('change', () => CM._onCoverFileSelected());
+
+// 批量操作栏
+els.batchEditTags.addEventListener('click', () => CM._batchEditFromBar());
+els.batchDeleteTracks.addEventListener('click', () => CM._batchDeleteFromBar());
+els.batchClear.addEventListener('click', () => CM.clearBatchSelection());
+
+/* ============================================
+ * 在线标签获取 — 通过 discovery API 调用 foo_freedb2
+ * 首次搜索后缓存命令，后续直接执行
+ * ============================================ */
+CM.fetchTagsOnline = function () {
+  CM.getGuid('freedb').then(({ guid, subGuid }) =>
+    fb.discovery.executeContextMenuCommand(guid, subGuid).then(r => {
+      if (!r.success) return CM.showToast('获取失败', '命令执行失败，请尝试在 foobar2000 中手动操作', 'error');
+      CM.showToast('已触发在线获取', '请在弹出的窗口中完成操作', null);
+    }));
+};
