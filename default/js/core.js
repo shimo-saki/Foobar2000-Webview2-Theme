@@ -9,7 +9,7 @@ export const $$ = document.querySelectorAll.bind(document);
 import { fb } from 'foo-webview-sdk';
 Element.prototype.$ = Element.prototype.querySelector;
 Element.prototype.$$ = Element.prototype.querySelectorAll;
-CM.version = 'V2.5.2.1-modify';
+CM.version = 'V2.5.3-modify';
 
 CM.els = {
   app: $('#app'),

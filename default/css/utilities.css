@@ -7,6 +7,7 @@
   position:fixed;right:16px;bottom:calc(var(--bottom-h, 84px) + 14px);z-index:1000;
   display:flex;flex-direction:column;gap:10px;pointer-events:none;
 }
+.app.floating  ~ .toast-container{--bottom-h:0px}
 .toast{
   display:flex;align-items:center;gap:12px;padding:11px 16px 11px 12px;
   background:var(--bg-hover);border:1px solid var(--border-strong);

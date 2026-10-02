@@ -270,15 +270,15 @@ function showMoreMenu(x, y) {
           action: toggleDesktopLyric
         },
         {
-          label: '置顶', icon: icons.pin, checked: ESLYRIC_STATE.pin,
+          label: '置顶', icon: icons.pin, checked: ESLYRIC_STATE.pin, disabled: !ESLYRIC_STATE.show,
           action: toggleDesktopLyricPin
         },
         {
-          label: '锁定', icon: icons.lock, checked: ESLYRIC_STATE.lock,
+          label: '锁定', icon: icons.lock, checked: ESLYRIC_STATE.lock, disabled: !ESLYRIC_STATE.show,
           action: toggleDesktopLyricLock
         },
         {
-          label: '重置位置', icon: icons.refresh,
+          label: '重置位置', icon: icons.refresh, disabled: !ESLYRIC_STATE.show,
           action: execDesktopLyricReset
         }
       ]

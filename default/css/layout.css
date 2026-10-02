@@ -256,8 +256,8 @@
 }
 
 .sidebar, .main-content, .right-panel {padding-bottom:var(--bottom-h, 84px);transition:padding-bottom .42s var(--ease);}
-.app.floating :is(.sidebar, .main-content, .right-panel) {padding-bottom:0;}
-.app.floating #position{bottom:calc(var(--bottom-h, 84px) + 26px)}
+.app.floating :is(.sidebar, .main-content, .right-panel) {--bottom-h:0px}
+.app.floating #position{bottom:110px}
 
 .bottom-left{display:flex;align-items:center;gap:12px;width:300px;min-width:0;flex-shrink:0}
 .bottom-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;max-width:640px;margin:0 auto;min-width:0}
