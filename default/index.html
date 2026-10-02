@@ -1,401 +1,427 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CloudMusic</title>
-<link rel="stylesheet" href="node_modules/@applemusic-like-lyrics/style.css"/>
-<link rel="stylesheet" href="css/variables.css">
-<link rel="stylesheet" href="css/layout.css">
-<link rel="stylesheet" href="css/components.css">
-<link rel="stylesheet" href="css/utilities.css">
-<link rel="stylesheet" href="css/amll.css"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudMusic</title>
+  <link rel="stylesheet" href="node_modules/@applemusic-like-lyrics/style.css" />
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/utilities.css">
+  <link rel="stylesheet" href="css/amll.css" />
 </head>
+
 <body>
-<div class="app lyrics-hidden" id="app">
-
-  <!-- ============ Titlebar ============ -->
-  <div class="titlebar" id="titlebar">
-    <div class="titlebar-left">
-      <div class="titlebar-logo">
-        <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+  <div class="app lyrics-hidden" id="app">
+    <!-- ============ Titlebar ============ -->
+    <header class="titlebar" id="titlebar">
+      <div class="titlebar-left">
+        <div class="titlebar-logo">
+          <svg viewBox="0 0 24 24">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+        </div>
+        <span class="titlebar-title">CloudMusic</span>
       </div>
-      <span class="titlebar-title">CloudMusic</span>
-    </div>
-    <div class="titlebar-drag" id="titlebarDrag"></div>
-    <div class="titlebar-controls" id="titlebarControls">
-      <button class="caption-btn" id="capRestart" title="重启"><span class="icon"></span></button>
-      <button class="caption-btn" id="capMin" title="最小化"><span class="icon"></icon></button>
-      <button class="caption-btn" id="capMax" title="最大化 / 还原">
-        <span class="icon icon-max"></span>
-        <span class="icon icon-restore"></span>
+      <div class="titlebar-drag" id="titlebarDrag"></div>
+      <div class="titlebar-controls" id="titlebarControls">
+        <button class="caption-btn" id="capRestart" title="重启"><span class="icon"></span></button>
+        <button class="caption-btn" id="capMin" title="最小化"><span class="icon"></span></button>
+        <button class="caption-btn" id="capMax" title="最大化 / 还原">
+          <span class="icon icon-max"></span>
+          <span class="icon icon-restore"></span>
+        </button>
+        <button class="caption-btn close" id="capClose" title="关闭"><span class="icon"></span></button>
+      </div>
+    </header>
+
+    <!-- ============ Sidebar ============ -->
+    <aside class="sidebar" id="sidebar">
+      <form class="sidebar-search" id="sidebarSearchWrap">
+        <span class="icon"></span>
+        <input type="text" id="sidebarSearch" placeholder="搜索音乐…" spellcheck="false" />
+        <button class="clear-btn" id="sidebarSearchClear" title="清空"><span class="icon font-size-10"></span></button>
+      </form>
+      <nav class="sidebar-nav" id="sidebarNav">
+        <button class="nav-item active" data-tab="discover" tabindex="0">
+          <span class="icon font-size-16"></span><span>发现音乐</span>
+        </button>
+        <button class="nav-item" data-tab="playlist" tabindex="0">
+          <span class="icon font-size-16"></span><span>播放列表</span>
+        </button>
+        <button class="nav-item" data-tab="library" tabindex="0">
+          <span class="icon font-size-16"></span><span>媒体库</span>
+        </button>
+        <button class="nav-item" data-tab="search" tabindex="0">
+          <span class="icon font-size-16"></span><span>搜索</span>
+        </button>
+      </nav>
+      <div class="sidebar-section-title">
+        <span>我的歌单</span>
+        <button class="add-btn" id="addPlaylistBtn" title="新建歌单 / 预设歌单"><span
+            class="icon font-size-16"></span></button>
+      </div>
+      <div class="sidebar-playlists" id="playlistList"></div>
+      <button class="sidebar-close" id="sidebarClose">
+        <span class="icon open"></span>
+        <span class="icon close"></span>
+        <span>收起</span></button>
+    </aside>
+
+    <!-- ============ Main Content ============ -->
+    <main class="main-content" id="mainContent">
+      <div class="main-body" id="mainBody">
+
+        <!-- Discover -->
+        <div class="tab-content active" id="tabDiscover">
+          <div class="discover-wrap">
+            <div class="dc-hero">
+              <div class="hero-wave-bg"><img src="static/img/hero-wave.svg"
+                  style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1;opacity:0.6;pointer-events:none;" />
+              </div>
+              <div class="dc-hero-date" id="heroDate"></div>
+              <h1 class="dc-hero-title" id="heroTitle">每日推荐</h1>
+              <h2 class="dc-hero-sub" id="heroSub">根据你的媒体库，为你随机挑选 30 首歌曲</h2>
+              <div class="dc-hero-actions">
+                <button class="dc-btn dc-btn-primary" id="btnPlayDaily">
+                  <span class="icon font-size-16"></span>
+                  <span>播放全部</span>
+                </button>
+                <button class="dc-btn dc-btn-ghost" id="btnRefreshDiscover"><span
+                    class="icon font-size-16"></span><span>换一批</span></button>
+              </div>
+            </div>
+
+            <div class="dc-section">
+              <div class="dc-section-title">推荐专辑</div>
+              <button class="dc-section-more" id="moreAlbums">更多<span class="icon font-size-10"></span></button>
+            </div>
+            <div class="album-grid" id="discoverAlbums"></div>
+
+            <div class="dc-section">
+              <div class="dc-section-title">随机推荐</div>
+              <button class="dc-section-more" id="refreshRandom">换一批<span class="icon font-size-10"></span></button>
+            </div>
+            <div class="dc-tracklist" id="discoverRandom"></div>
+
+            <div class="dc-section">
+              <div class="dc-section-title">最近添加</div>
+              <button class="dc-section-more" id="moreRecent">更多<span class="icon font-size-10"></span></button>
+            </div>
+            <div class="dc-tracklist" id="discoverRecent"></div>
+          </div>
+        </div>
+
+        <!-- Playlist -->
+        <div class="tab-content" id="tabPlaylist">
+          <div class="playlist-view">
+            <div class="playlist-header" id="playlistHeader">
+              <div class="pl-cover ph" id="plCoverWrap">
+                <img class="pl-cover" id="plCover" style="position:absolute;inset:0" />
+              </div>
+              <div class="pl-header-info">
+                <div class="pl-header-tag" id="playlistHeaderTag">PLAYLIST</div>
+                <h1 class="pl-header-name" id="playlistHeaderName">播放列表</h1>
+                <div class="pl-header-meta" id="playlistHeaderMeta"></div>
+              </div>
+              <div class="pl-header-actions">
+                <button class="pl-btn pl-btn-primary" id="btnPlayAll">
+                  <span class="icon font-size-16"></span>
+                  <span>播放全部</span>
+                </button>
+                <button class="pl-btn pl-btn-ghost" id="btnPlaylistMore" title="更多操作"><span
+                    class="icon font-size-16"></span></button>
+              </div>
+            </div>
+            <div class="track-table-wrap" id="trackTableWrap">
+              <table class="track-table" id="trackTable">
+                <colgroup>
+                  <col class="c-num">
+                  <col>
+                  <col>
+                  <col>
+                  <col class="c-dur">
+                  <col class="c-bit">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th data-sort="title">标题<span class="sort-arrow"></span></th>
+                    <th data-sort="artist">艺术家<span class="sort-arrow"></span></th>
+                    <th data-sort="album">专辑<span class="sort-arrow"></span></th>
+                    <th data-sort="duration">时长<span class="sort-arrow"></span></th>
+                    <th data-sort="bitrate">比特率<span class="sort-arrow"></span></th>
+                  </tr>
+                </thead>
+                <tbody id="trackTbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <span class="icon" id="position" title="定位到当前播放"></span>
+        </div>
+
+        <!-- Library -->
+        <div class="tab-content" id="tabLibrary">
+          <div class="library-view">
+            <div class="library-tree" id="libraryTree">
+              <button class="tree-node active" data-view="stats"><span class="icon"></span><span>概览</span></button>
+              <button class="tree-node" data-view="tracks"><span class="icon"></span><span>歌曲</span></button>
+              <button class="tree-node" data-view="artists"><span class="icon"></span><span>艺术家</span></button>
+              <button class="tree-node" data-view="albums"><span class="icon"></span><span>专辑</span></button>
+              <button class="tree-node" data-view="genres"><span class="icon"></span><span>流派</span></button>
+              <button class="tree-node" data-view="folders"><span class="icon"></span><span>文件夹</span></button>
+            </div>
+            <div class="library-detail" id="libraryDetail"></div>
+          </div>
+        </div>
+
+        <!-- Search -->
+        <div class="tab-content" id="tabSearch">
+          <div class="search-view">
+            <div class="search-bar">
+              <div class="search-bar-inner">
+                <span class="icon" style="color:var(--text-2);"></span>
+                <input type="text" id="searchInput" placeholder="搜索歌曲、艺术家、专辑…" spellcheck="false" />
+              </div>
+            </div>
+            <div class="search-results" id="searchResults">
+              <div class="empty-illustration">
+                <span class="icon" style="font-size:48px;color:var(--text-3);"></span>
+                <span>输入关键词搜索媒体库</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue Drawer -->
+      <aside class="queue-drawer" id="queueDrawer">
+        <div class="queue-header">
+          <div>
+            <span class="queue-title">播放队列</span><span class="queue-count num" id="queueCount"></span>
+          </div>
+          <div class="queue-actions">
+            <button class="queue-clear-btn" id="queueClear">清空</button>
+            <button class="icon-btn" id="queueClose" title="关闭"><span class="icon font-size-16"></span></button>
+          </div>
+        </div>
+        <div class="queue-now hidden" id="queueNow"></div>
+        <div class="queue-list" id="queueList"></div>
+      </aside>
+    </main>
+
+    <!-- ============ Right Panel (Lyrics) ============ -->
+    <aside class="right-panel" id="rightPanel">
+      <button class="rp-immersive-btn" id="rpImmersiveBtn" title="进入沉浸模式">
+        <span class="icon" font-size-16"></span>
       </button>
-      <button class="caption-btn close" id="capClose" title="关闭"><span class="icon"></span></button>
-    </div>
-  </div>
-
-  <!-- ============ Sidebar ============ -->
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-search" id="sidebarSearchWrap">
-      <span class="icon"></span>
-      <input type="text" id="sidebarSearch" placeholder="搜索音乐…" spellcheck="false"/>
-      <button class="clear-btn" id="sidebarSearchClear" title="清空"><span class="icon font-size-10"></span></button>
-    </div>
-    <div class="sidebar-nav" id="sidebarNav">
-      <div class="nav-item active" data-tab="discover" tabindex="0">
-        <span class="icon font-size-16"></span><span>发现音乐</span>
+      <div class="lyrics-blur-bg" id="lyricsBlurBg"></div>
+      <div class="rp-art-wrap"><img class="rp-art" id="lyricsArt" /></div>
+      <div class="rp-track-info">
+        <h2 class="rp-track-title" id="lyricsTrackTitle">未在播放</h2>
+        <p class="rp-track-artist" id="lyricsTrackArtist">--</p>
       </div>
-      <div class="nav-item" data-tab="playlist" tabindex="0">
-        <span class="icon font-size-16"></span><span>播放列表</span>
-      </div>
-      <div class="nav-item" data-tab="library" tabindex="0">
-        <span class="icon font-size-16"></span><span>媒体库</span>
-      </div>
-      <div class="nav-item" data-tab="search" tabindex="0">
-        <span class="icon font-size-16"></span><span>搜索</span>
-      </div>
-    </div>
-    <div class="sidebar-section-title">
-      <span>我的歌单</span>
-      <button class="add-btn" id="addPlaylistBtn" title="新建歌单 / 预设歌单"><span class="icon font-size-16"></span></button>
-    </div>
-    <div class="sidebar-playlists" id="playlistList"></div>
-  </div>
+      <div class="rp-divider"></div>
+      <div class="lyrics-scroll" id="lyricsScroll"></div>
+    </aside>
 
-  <!-- ============ Main Content ============ -->
-  <div class="main-content" id="mainContent">
-    <div class="main-body" id="mainBody">
-
-      <!-- Discover -->
-      <div class="tab-content active" id="tabDiscover">
-        <div class="discover-wrap">
-          <div class="dc-hero">
-          <div class="hero-wave-bg"><img src="static/img/hero-wave.svg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1;opacity:0.6;pointer-events:none;"/></div>
-            <div class="dc-hero-date" id="heroDate"></div>
-            <div class="dc-hero-title" id="heroTitle">每日推荐</div>
-            <div class="dc-hero-sub" id="heroSub">根据你的媒体库，为你随机挑选 30 首歌曲</div>
-            <div class="dc-hero-actions">
-              <button class="dc-btn dc-btn-primary" id="btnPlayDaily">
-                <span class="icon font-size-16"></span>
-                <span>播放全部</span>
-              </button>
-              <button class="dc-btn dc-btn-ghost" id="btnRefreshDiscover"><span class="icon font-size-16"></span><span>换一批</span></button>
-            </div>
-          </div>
-
-          <div class="dc-section">
-            <div class="dc-section-title">推荐专辑</div>
-            <div class="dc-section-more" id="moreAlbums">更多<span class="icon font-size-10"></span></div>
-          </div>
-          <div class="album-grid" id="discoverAlbums"></div>
-
-          <div class="dc-section">
-            <div class="dc-section-title">随机推荐</div>
-            <div class="dc-section-more" id="refreshRandom">换一批<span class="icon font-size-10"></span></div>
-          </div>
-          <div class="dc-tracklist" id="discoverRandom"></div>
-
-          <div class="dc-section">
-            <div class="dc-section-title">最近添加</div>
-            <div class="dc-section-more" id="moreRecent">更多<span class="icon font-size-10"></span></div>
-          </div>
-          <div class="dc-tracklist" id="discoverRecent"></div>
-        </div>
-      </div>
-
-      <!-- Playlist -->
-      <div class="tab-content" id="tabPlaylist">
-        <div class="playlist-view">
-          <div class="playlist-header" id="playlistHeader">
-            <div class="pl-cover ph" id="plCoverWrap">
-              <img class="pl-cover" id="plCover" src="" alt="" style="position:absolute;inset:0"/>
-            </div>
-            <div class="pl-header-info">
-              <div class="pl-header-tag" id="playlistHeaderTag">PLAYLIST</div>
-              <div class="pl-header-name" id="playlistHeaderName">播放列表</div>
-              <div class="pl-header-meta" id="playlistHeaderMeta"></div>
-            </div>
-            <div class="pl-header-actions">
-              <button class="pl-btn pl-btn-primary" id="btnPlayAll">
-                <span class="icon font-size-16"></span>
-                <span>播放全部</span>
-              </button>
-              <button class="pl-btn pl-btn-ghost" id="btnPlaylistMore" title="更多操作"><span class="icon font-size-16"></span></button>
-            </div>
-          </div>
-          <div class="track-table-wrap" id="trackTableWrap">
-            <table class="track-table" id="trackTable">
-              <colgroup>
-                <col class="c-num"><col><col><col><col class="c-dur"><col class="c-bit">
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th data-sort="title">标题<span class="sort-arrow"></span></th>
-                  <th data-sort="artist">艺术家<span class="sort-arrow"></span></th>
-                  <th data-sort="album">专辑<span class="sort-arrow"></span></th>
-                  <th data-sort="duration">时长<span class="sort-arrow"></span></th>
-                  <th data-sort="bitrate">比特率<span class="sort-arrow"></span></th>
-                </tr>
-              </thead>
-              <tbody id="trackTbody"></tbody>
-            </table>
-          </div>
-        </div>
-        <span class="icon" id="position" title="定位到当前播放"></span>
-      </div>
-
-      <!-- Library -->
-      <div class="tab-content" id="tabLibrary">
-        <div class="library-view">
-          <div class="library-tree" id="libraryTree">
-            <div class="tree-node active" data-view="stats"><span class="icon"></span><span>概览</span></div>
-            <div class="tree-node" data-view="tracks"><span class="icon"></span><span>歌曲</span></div>
-            <div class="tree-node" data-view="artists"><span class="icon"></span><span>艺术家</span></div>
-            <div class="tree-node" data-view="albums"><span class="icon"></span><span>专辑</span></div>
-            <div class="tree-node" data-view="genres"><span class="icon"></span><span>流派</span></div>
-            <div class="tree-node" data-view="folders"><span class="icon"></span><span>文件夹</span></div>
-          </div>
-          <div class="library-detail" id="libraryDetail"></div>
-        </div>
-      </div>
-
-      <!-- Search -->
-      <div class="tab-content" id="tabSearch">
-        <div class="search-view">
-          <div class="search-bar">
-            <div class="search-bar-inner">
-              <span class="icon" style="color:var(--text-2);"></span>
-              <input type="text" id="searchInput" placeholder="搜索歌曲、艺术家、专辑…" spellcheck="false"/>
-            </div>
-          </div>
-          <div class="search-results" id="searchResults">
-            <div class="empty-illustration">
-              <span class="icon" style="font-size:48px;color:var(--text-3);"></span>
-              <span>输入关键词搜索媒体库</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Queue Drawer -->
-    <div class="queue-drawer" id="queueDrawer">
-      <div class="queue-header">
-        <div>
-          <span class="queue-title">播放队列</span><span class="queue-count num" id="queueCount"></span>
-        </div>
-        <div class="queue-actions">
-          <button class="queue-clear-btn" id="queueClear">清空</button>
-          <button class="icon-btn" id="queueClose" title="关闭"><span class="icon font-size-16"></span></button>
-        </div>
-      </div>
-      <div class="queue-now hidden" id="queueNow"></div>
-      <div class="queue-list" id="queueList"></div>
-    </div>
-  </div>
-
-  <!-- ============ Right Panel (Lyrics) ============ -->
-<div class="right-panel" id="rightPanel">
-  <button class="rp-immersive-btn" id="rpImmersiveBtn" title="进入沉浸模式"><span class="icon font-size-16"></span></button>
-  <div class="lyrics-blur-bg" id="lyricsBlurBg"></div>
-    <div class="rp-art-wrap"><img class="rp-art" id="lyricsArt" src="" alt=""/></div>
-    <div class="rp-track-info">
-      <div class="rp-track-title" id="lyricsTrackTitle">未在播放</div>
-      <div class="rp-track-artist" id="lyricsTrackArtist">--</div>
-    </div>
-    <div class="rp-divider"></div>
-    <div class="lyrics-scroll" id="lyricsScroll"></div>
-  </div>
-
-  <!-- ============ Bottom Bar ============ -->
-  <div class="bottom-bar" id="bottomBar">
-    <div class="bottom-left">
-      <div class="bottom-art-wrap" id="bottomArtWrap" title="展开歌词面板">
-        <img class="bottom-art" id="bottomArt" src="" alt=""/>
-        <div class="bottom-art-expand"><span class="icon font-size-16"></span></div>
-      </div>
-      <div class="bottom-track-info">
-        <div class="bottom-track-title" id="bottomTitle">未在播放</div>
-        <div class="bottom-track-artist" id="bottomArtist">--</div>
-      </div>
-    </div>
-
-    <div class="bottom-center">
-      <div class="bottom-controls">
-        <button class="ctrl-btn" id="btnOrder" title="播放顺序">
-          <span class="icon font-size-16 active" data-order="Default"></span>
-          <span class="icon font-size-16" data-order="Repeat-playlist"></span>
-          <span class="icon font-size-16" data-order="Repeat-track"></span>
-          <span class="icon font-size-16" data-order="Shuffle-tracks"></span>
-          <span class="icon font-size-16" data-order="Shuffle-folders"></span>
+    <!-- ============ Bottom Bar ============ -->
+    <section class="bottom-bar" id="bottomBar">
+      <div class="bottom-left">
+        <button class="bottom-art-wrap" id="bottomArtWrap" title="展开歌词面板">
+          <img class="bottom-art" id="bottomArt" />
+          <div class="bottom-art-expand"><span class="icon font-size-16"></span></div>
         </button>
-        <button class="ctrl-btn" id="btnPrev" title="上一首"><span class="icon"></span></button>
-        <button class="ctrl-btn play-btn" id="btnPlayPause" title="播放 / 暂停">
-          <span class="icon font-size-16" id="iconPlay"></span>
-          <span class="icon font-size-16" id="iconPause"></span>
-        </button>
-        <button class="ctrl-btn" id="btnNext" title="下一首"><span class="icon font-size-16"></span></button>
-        <button class="ctrl-btn" id="btnStop" title="停止 / 播完当前曲目后停止"><span class="icon font-size-16"></span></button>
+        <div class="bottom-track-info">
+          <p class="bottom-track-title" id="bottomTitle">未在播放</p>
+          <p class="bottom-track-artist" id="bottomArtist">--</p>
+        </div>
       </div>
-      <div class="seek-bar-wrap">
-        <span class="seek-time num" id="seekCurrent">0:00</span>
-        <div class="seek-rail"><input type="range" class="seek-bar" id="seekBar" min="0" max="100" step="any" value="0"/></div>
-        <span class="seek-time num" id="seekTotal">0:00</span>
-      </div>
-    </div>
 
-    <div class="bottom-right">
-      <div class="mini-spectrum" id="miniSpectrum"></div>
-      <button class="icon-btn" id="btnVisualizer" title="迷你频谱"><span class="icon"></span></button>
-      <div class="vol-wrap">
-        <button class="icon-btn" id="volBtn" title="音量 / 静音">
-          <span class="icon font-size-16" data-vol="0"></span>
-          <span class="icon font-size-16" data-vol="33"></span>
-          <span class="icon font-size-16" data-vol="66"></span>
-          <span class="icon font-size-16 active" data-vol="Infinity"></span>
-        </button>
-        <div class="vol-slider-wrap"><input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="100"/></div>
+      <div class="bottom-center">
+        <div class="bottom-controls">
+          <button class="ctrl-btn" id="btnOrder" title="播放顺序">
+            <span class="icon font-size-16 active" data-order="Default"></span>
+            <span class="icon font-size-16" data-order="Repeat-playlist"></span>
+            <span class="icon font-size-16" data-order="Repeat-track"></span>
+            <span class="icon font-size-16" data-order="Shuffle-tracks"></span>
+            <span class="icon font-size-16" data-order="Shuffle-folders"></span>
+          </button>
+          <button class="ctrl-btn" id="btnPrev" title="上一首"><span class="icon"></span></button>
+          <button class="ctrl-btn play-btn" id="btnPlayPause" title="播放 / 暂停">
+            <span class="icon font-size-16" id="iconPlay"></span>
+            <span class="icon font-size-16" id="iconPause"></span>
+          </button>
+          <button class="ctrl-btn" id="btnNext" title="下一首"><span class="icon font-size-16"></span></button>
+          <button class="ctrl-btn" id="btnStop" title="停止 / 播完当前曲目后停止"><span class="icon font-size-16"></span></button>
+        </div>
+        <div class="seek-bar-wrap">
+          <span class="seek-time num" id="seekCurrent">0:00</span>
+          <div class="seek-rail"><input type="range" class="seek-bar" id="seekBar" min="0" max="100" step="any"
+              value="0" /></div>
+          <span class="seek-time num" id="seekTotal">0:00</span>
+        </div>
       </div>
-      <button class="icon-btn" id="btnQueue" title="播放队列">
-        <span class="icon font-size-16"></span>
-        <span class="count-badge hidden" id="queueBadge">0</span>
-      </button>
-      <button class="icon-btn active" id="btnLyricsToggle" title="歌词面板"><span class="icon font-size-16"></span></button>
-      <button class="icon-btn" id="btnMore" title="更多"><span class="icon font-size-16"></span></button>
-    </div>
-  </div>
 
-<!-- ============ Immersive NowPlaying Overlay ============ -->
-<div class="np-overlay" id="npOverlay">
-  <div class="np-drag-handle" id="npDragHandle" title="拖动窗口"></div>
-  <div class="np-bg-layer">
-    <div class="np-bg-blur" id="npBgBlur"></div>
-    <div class="np-bg-mask"></div>
-  </div>
-  <div class="np-close-btn" id="npCloseBtn" title="退出沉浸模式"><span class="icon font-size-16"></span></div>
-  <div class="np-mode-btn" id="npModeBtn" title="切换显示模式">
-    <span class="icon np-mode-vinyl"></span>
-    <span class="icon np-mode-lyrics"></span>
-  </div>
-  <div class="np-container" id="npContainer">
-    <!-- Vinyl / Artwork Side -->
-    <div class="np-vinyl-side" id="npVinylSide">
-      <div class="np-vinyl-wrap">
-        <div class="np-vinyl-disc" id="npVinylDisc">
-          <div class="np-vinyl-art">
-            <img id="npArtwork" src="" alt=""/>
+      <div class="bottom-right">
+        <div class="mini-spectrum" id="miniSpectrum"></div>
+        <button class="icon-btn" id="btnVisualizer" title="迷你频谱"><span class="icon"></span></button>
+        <div class="vol-wrap">
+          <button class="icon-btn" id="volBtn" title="音量 / 静音">
+            <span class="icon font-size-16" data-vol="0"></span>
+            <span class="icon font-size-16" data-vol="33"></span>
+            <span class="icon font-size-16" data-vol="66"></span>
+            <span class="icon font-size-16 active" data-vol="Infinity"></span>
+          </button>
+          <div class="vol-slider-wrap"><input type="range" class="vol-slider" id="volSlider" min="0" max="100"
+              value="100" /></div>
+        </div>
+        <button class="icon-btn" id="btnQueue" title="播放队列">
+          <span class="icon font-size-16"></span>
+          <span class="count-badge hidden" id="queueBadge">0</span>
+        </button>
+        <button class="icon-btn active" id="btnLyricsToggle" title="歌词面板"><span
+            class="icon font-size-16"></span></button>
+        <button class="icon-btn" id="btnMore" title="更多"><span class="icon font-size-16"></span></button>
+      </div>
+    </section>
+
+    <!-- ============ Immersive NowPlaying Overlay ============ -->
+    <dialog class="np-overlay" id="npOverlay">
+      <div class="np-drag-handle" id="npDragHandle" title="拖动窗口"></div>
+      <div class="np-bg-layer">
+        <div class="np-bg-blur" id="npBgBlur"></div>
+        <div class="np-bg-mask"></div>
+      </div>
+      <button class="np-close-btn" id="npCloseBtn" title="退出沉浸模式"><span class="icon font-size-16"></span></button>
+      <div class="np-mode-btn" id="npModeBtn" title="切换显示模式">
+        <span class="icon np-mode-vinyl"></span>
+        <span class="icon np-mode-lyrics"></span>
+      </div>
+      <div class="np-container" id="npContainer">
+        <!-- Vinyl / Artwork Side -->
+        <div class="np-vinyl-side" id="npVinylSide">
+          <div class="np-vinyl-wrap">
+            <div class="np-vinyl-disc" id="npVinylDisc">
+              <div class="np-vinyl-art">
+                <img id="npArtwork" />
+              </div>
+              <div class="np-vinyl-grooves"></div>
+              <div class="np-vinyl-hole"></div>
+            </div>
+            <div class="np-tonearm" id="npTonearm">
+              <div class="np-tonearm-base"></div>
+              <div class="np-tonearm-arm"></div>
+              <div class="np-tonearm-head"></div>
+            </div>
           </div>
-          <div class="np-vinyl-grooves"></div>
-          <div class="np-vinyl-hole"></div>
+          <div class="np-track-info">
+            <h2 class="np-track-title" id="npTrackTitle">未在播放</h2>
+            <p class="np-track-artist" id="npTrackArtist">--</p>
+            <p class="np-track-format" id="npTrackFormat"></p>
+          </div>
+          <div class="np-controls">
+            <button class="np-ctrl-btn" id="npBtnPrev" title="上一首"><span class="icon font-size-16"></span></button>
+            <button class="np-ctrl-btn np-ctrl-play" id="npBtnPlay" title="播放 / 暂停">
+              <span class="icon np-icon-play"></span>
+              <span class="icon np-icon-pause"></span>
+            </button>
+            <button class="np-ctrl-btn" id="npBtnNext" title="下一首"><span class="icon font-size-16"></span></button>
+          </div>
+          <div class="np-spectrum" id="npSpectrum"></div>
         </div>
-        <div class="np-tonearm" id="npTonearm">
-          <div class="np-tonearm-base"></div>
-          <div class="np-tonearm-arm"></div>
-          <div class="np-tonearm-head"></div>
+        <!-- Lyrics Side -->
+        <div class="np-lyrics-side" id="npLyricsSide">
+          <div class="np-lyrics-controls" id="npLyricsControls">
+            <button class="np-ctrl-btn" id="npLcPrev" title="上一首"><span class="icon font-size-16"></span></button>
+            <button class="np-ctrl-btn np-ctrl-play" id="npLcPlay" title="播放 / 暂停">
+              <span class="icon np-icon-play"></span>
+              <span class="icon np-icon-pause"></span>
+            </button>
+            <button class="np-ctrl-btn" id="npLcNext" title="下一首"><span class="icon font-size-16"></span></button>
+          </div>
+          <div class="np-lyrics" id="npLyrics"></div>
         </div>
       </div>
-      <div class="np-track-info">
-        <div class="np-track-title" id="npTrackTitle">未在播放</div>
-        <div class="np-track-artist" id="npTrackArtist">--</div>
-        <div class="np-track-format" id="npTrackFormat"></div>
+      <!-- Progress Bar -->
+      <div class="np-progress" id="npProgress">
+        <span class="np-time" id="npTimeCurrent">0:00</span>
+        <div class="np-seek-rail">
+          <div class="np-waveform hide" id="npWaveform"></div>
+          <input type="range" class="np-seek-bar" id="npSeekBar" min="0" max="100" step="any" value="0" />
+        </div>
+        <span class="np-time" id="npTimeTotal">0:00</span>
       </div>
-      <div class="np-controls">
-        <button class="np-ctrl-btn" id="npBtnPrev" title="上一首"><span class="icon font-size-16"></span></button>
-        <button class="np-ctrl-btn np-ctrl-play" id="npBtnPlay" title="播放 / 暂停">
-          <span class="icon np-icon-play"></span>
-          <span class="icon np-icon-pause"></span>
-        </button>
-        <button class="np-ctrl-btn" id="npBtnNext" title="下一首"><span class="icon font-size-16"></span></button>
-      </div>
-      <div class="np-spectrum" id="npSpectrum"></div>
-    </div>
-    <!-- Lyrics Side -->
-    <div class="np-lyrics-side" id="npLyricsSide">
-      <div class="np-lyrics-controls" id="npLyricsControls">
-        <button class="np-ctrl-btn" id="npLcPrev" title="上一首"><span class="icon font-size-16"></span></button>
-        <button class="np-ctrl-btn np-ctrl-play" id="npLcPlay" title="播放 / 暂停">
-          <span class="icon np-icon-play"></span>
-          <span class="icon np-icon-pause"></span>
-        </button>
-        <button class="np-ctrl-btn" id="npLcNext" title="下一首"><span class="icon font-size-16"></span></button>
-      </div>
-      <div class="np-lyrics" id="npLyrics"></div>
-    </div>
+    </dialog>
   </div>
-  <!-- Progress Bar -->
-  <div class="np-progress" id="npProgress">
-    <span class="np-time" id="npTimeCurrent">0:00</span>
-    <div class="np-seek-rail">
-      <div class="np-waveform hide" id="npWaveform"></div>
-      <input type="range" class="np-seek-bar" id="npSeekBar" min="0" max="100" step="any" value="0"/>
-    </div>
-    <span class="np-time" id="npTimeTotal">0:00</span>
-  </div>
-</div>
 
-<!-- Modal -->
-<dialog id="modal">
-  <div class="modal">
-    <div class="modal-title" id="modalTitle">标题</div>
-    <div class="modal-desc" id="modalDesc"></div>
-    <input type="text" class="modal-input" id="modalInput" spellcheck="false"/>
-    <div class="modal-actions">
-      <button class="modal-btn ghost" id="modalCancel">取消</button>
-      <button class="modal-btn primary" id="modalOk">确定</button>
-    </div>
-  </div>
-</dialog>
-
-<!-- Tag Editor -->
-<dialog id="tagEditor">
-  <div class="tag-editor">
-    <div class="tag-editor-header">
-      <div class="tag-editor-title" id="tagEditorTitle">编辑标签</div>
-      <button class="tag-editor-close" id="tagEditorClose"><span class="icon font-size-10"></span></button>
-    </div>
-    <div class="tag-editor-track" id="tagEditorTrack"></div>
-    <div class="tag-editor-body" id="tagEditorBody"></div>
-    <div class="tag-editor-footer">
-      <span class="tag-editor-hint" id="tagEditorHint"></span>
-      <div class="tag-editor-btns">
-        <button class="modal-btn ghost" id="tagEditorCancel">取消</button>
-        <button class="modal-btn primary" id="tagEditorSave">保存</button>
+  <!-- Modal -->
+  <dialog id="modal">
+    <div class="modal">
+      <h2 class="modal-title" id="modalTitle">标题</h2>
+      <div class="modal-desc" id="modalDesc"></div>
+      <input type="text" class="modal-input" id="modalInput" spellcheck="false" />
+      <div class="modal-actions">
+        <button class="modal-btn ghost" id="modalCancel">取消</button>
+        <button class="modal-btn primary" id="modalOk">确定</button>
       </div>
     </div>
+  </dialog>
+
+  <!-- Tag Editor -->
+  <dialog id="tagEditor">
+    <div class="tag-editor">
+      <div class="tag-editor-header">
+        <h2 class="tag-editor-title" id="tagEditorTitle">编辑标签</h2>
+        <button class="tag-editor-close" id="tagEditorClose"><span class="icon font-size-10"></span></button>
+      </div>
+      <div class="tag-editor-track" id="tagEditorTrack"></div>
+      <div class="tag-editor-body" id="tagEditorBody"></div>
+      <div class="tag-editor-footer">
+        <span class="tag-editor-hint" id="tagEditorHint"></span>
+        <div class="tag-editor-btns">
+          <button class="modal-btn ghost" id="tagEditorCancel">取消</button>
+          <button class="modal-btn primary" id="tagEditorSave">保存</button>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="tagCoverFile" accept="image/*" style="display:none">
+  </dialog>
+
+  <!-- Batch Action Bar -->
+  <div class="batch-bar hidden" id="batchBar">
+    <span class="batch-bar-text"><b id="batchBarCount">0</b> 首已选</span>
+    <button class="batch-btn primary" id="batchEditTags">批量编辑标签</button>
+    <button class="batch-btn danger" id="batchDeleteTracks">从歌单删除</button>
+    <button class="batch-btn" id="batchClear">取消选择</button>
   </div>
-  <input type="file" id="tagCoverFile" accept="image/*" style="display:none">
-</dialog>
 
-<!-- Batch Action Bar -->
-<div class="batch-bar hidden" id="batchBar">
-  <span class="batch-bar-text"><b id="batchBarCount">0</b> 首已选</span>
-  <button class="batch-btn primary" id="batchEditTags">批量编辑标签</button>
-  <button class="batch-btn danger" id="batchDeleteTracks">从歌单删除</button>
-  <button class="batch-btn" id="batchClear">取消选择</button>
-</div>
+  <!-- Toast / ContextMenu / DropOverlay -->
+  <div class="toast-container" id="toastContainer"></div>
+  <div class="ctx-menu hidden" id="ctxMenu" popover="manual"></div>
+  <dialog id="drop">
+    <div class="drop-overlay-inner">
+      <span class="icon" style="font-size: 48px"></span>
+      <div class="drop-overlay-sub">支持音频文件与文件夹</div>
+    </div>
+  </dialog>
 
-<!-- Toast / ContextMenu / DropOverlay -->
-<div class="toast-container" id="toastContainer"></div>
-<div class="ctx-menu hidden" id="ctxMenu"></div>
-<dialog id="drop">
-  <div class="drop-overlay-inner">
-    <span class="icon" style="font-size: 48px"></span>
-    <div class="drop-overlay-sub">支持音频文件与文件夹</div>
-  </div>
-</dialog>
-
-<script type="importmap">
-  {
-    "imports": {
-      "core": "./js/core.js",
-      "foo-webview-sdk": "./node_modules/foo-webview-sdk/bridge.js",
-      "@applemusic-like-lyrics/core": "./node_modules/@applemusic-like-lyrics/amll-core.js",
-      "@applemusic-like-lyrics/lyric": "./node_modules/@applemusic-like-lyrics/amll-lyric.js"
+  <script type="importmap">
+    {
+      "imports": {
+        "core": "./js/core.js",
+        "foo-webview-sdk": "./node_modules/foo-webview-sdk/bridge.js",
+        "@applemusic-like-lyrics/core": "./node_modules/@applemusic-like-lyrics/amll-core.js",
+        "@applemusic-like-lyrics/lyric": "./node_modules/@applemusic-like-lyrics/amll-lyric.js"
+      }
     }
-  }
-</script>
-<!-- CloudMusic Theme -->
-<script type="module" src="js/app.js"></script>
+  </script>
+  <!-- CloudMusic Theme -->
+  <script type="module" src="js/app.js"></script>
 </body>
+
 </html>

@@ -9,7 +9,7 @@
 }
 .toast{
   display:flex;align-items:center;gap:12px;padding:11px 16px 11px 12px;
-  background:var(--bg-2);border:1px solid var(--border-strong);
+  background:var(--bg-hover);border:1px solid var(--border-strong);
   border-radius:var(--r-l);box-shadow:var(--shadow-pop);
   min-width:250px;max-width:340px;pointer-events:auto;
   animation:toast-in 0.38s var(--ease);
@@ -21,8 +21,8 @@
   display:flex;align-items:center;justify-content:center;
   background:var(--accent-soft);color:var(--accent);
 }
-.toast-icon.success{background:rgba(82,196,110,0.14);color:#52c46e}
-.toast-icon.error{background:rgba(255,107,107,0.13);color:#ff6b6b}
+.toast-icon.success{background:#52c46e24;color:#52c46e}
+.toast-icon.error{background:#ff6b6b21;color:#ff6b6b}
 .toast-icon img{width:100%;height:100%;object-fit:cover;border-radius:var(--r-m)}
 .toast-info{flex:1;min-width:0}
 .toast-title{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -32,18 +32,18 @@
 
 /* ============ Context Menu ============ */
 .ctx-menu, .ctx-submenu{
-  position:fixed;z-index:2000;min-width:180px;max-width:280px;
-  background:var(--bg-2);border:1px solid var(--border-strong);
+  position:fixed;min-width:180px;max-width:280px;
+  background:var(--bg-color);border:1px solid var(--border-strong);
   border-radius:var(--r-m);box-shadow:var(--shadow-pop);padding:5px;
   animation:ctx-in 0.16s var(--ease);
   /* 菜单过长时允许滚轮滚动，避免底部项（如“在线获取标签”）超出视口被挡住 */
   max-height:min(52vh, 460px, calc(100vh - 20px));
   overflow-x:clip;overflow-y:auto;overscroll-behavior:contain;
-  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.22) transparent;
+  scrollbar-width:thin;scrollbar-color:#ffffff38 transparent;
 }
 .ctx-menu::-webkit-scrollbar, .ctx-submenu::-webkit-scrollbar{width:8px}
-.ctx-menu::-webkit-scrollbar-thumb, .ctx-submenu::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.22);border-radius:4px}
-.ctx-menu::-webkit-scrollbar-thumb:hover, .ctx-submenu::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35)}
+.ctx-menu::-webkit-scrollbar-thumb, .ctx-submenu::-webkit-scrollbar-thumb{background:#ffffff38;border-radius:4px}
+.ctx-menu::-webkit-scrollbar-thumb:hover, .ctx-submenu::-webkit-scrollbar-thumb:hover{background:#ffffff59}
 .ctx-menu.removing, .ctx-submenu.removing{animation:ctx-out 0.12s ease forwards}
 .ctx-item, .ctx-menu-item{
   display:flex;align-items:center;gap:9px;padding:7px 12px;
@@ -51,9 +51,9 @@
   border-radius:var(--r-s);transition:background var(--t-fast),color var(--t-fast);
   white-space:nowrap;overflow:hidden;
 }
-.ctx-item:hover, .ctx-menu-item:hover{background:var(--bg-3);color:var(--text)}
+.ctx-item:hover, .ctx-menu-item:hover{background:var(--bg-hover);color:var(--text)}
 .ctx-item.danger, .ctx-menu-item.danger{color:#ff6b6b}
-.ctx-item.danger:hover .ctx-menu-item.danger:hover{background:rgba(255,107,107,0.12)}
+.ctx-item.danger:hover .ctx-menu-item.danger:hover{background:#ff6b6b1f}
 .ctx-item.checked{color:var(--accent)}
 .ctx-item.disabled, .ctx-menu-item.disabled{opacity:0.35;pointer-events:none}
 .ctx-item .ctx-check{width:14px;flex-shrink:0;font-size:11px;color:var(--accent);text-align:center}
@@ -82,14 +82,14 @@ dialog[open], dialog[open]::backdrop{opacity:1}
   dialog[open], dialog[open]::backdrop{opacity:0}
 }
 .modal{
-  width:380px;max-width:88vw;background:var(--bg-2);
+  width:380px;max-width:88vw;background:var(--bg-color);
   border:1px solid var(--border-strong);border-radius:var(--r-xl);
   box-shadow:var(--shadow-pop);padding:24px;
 }
 .modal-title{font-size:16px;font-weight:700;margin-bottom:6px}
 .modal-desc{font-size:12px;color:var(--text-3);margin-bottom:16px}
 .modal-input{
-  width:100%;height:38px;background:var(--bg-1);
+  width:100%;height:38px;
   border:1px solid var(--border-strong);border-radius:var(--r-m);
   padding:0 14px;font-size:13px;color:var(--text);
   transition:border-color var(--t-fast);
@@ -103,10 +103,10 @@ dialog[open], dialog[open]::backdrop{opacity:1}
 .modal-btn:active{transform:scale(0.96)}
 .modal-btn.primary{background:var(--accent);color:var(--on-accent)}
 .modal-btn.primary:hover{background:hsla(var(--accent-h),var(--accent-s),calc(var(--accent-l) + 6%),1)}
-.modal-btn.ghost{background:var(--bg-3);color:var(--text-2)}
-.modal-btn.ghost:hover{background:var(--bg-4);color:var(--text)}
-.modal-btn.danger{background:rgba(255,107,107,0.14);color:#ff6b6b}
-.modal-btn.danger:hover{background:rgba(255,107,107,0.22)}
+.modal-btn.ghost{background:var(--bg-hover);color:var(--text-2)}
+.modal-btn.ghost:hover{background:var(--bg-active);color:var(--text)}
+.modal-btn.danger{background:#ff6b6b24;color:#ff6b6b}
+.modal-btn.danger:hover{background:#ff6b6b38}
 
 /* ============ Drop Overlay ============ */
 #drop::backdrop{
@@ -138,19 +138,19 @@ dialog[open], dialog[open]::backdrop{opacity:1}
   padding:44px;gap:12px;color:var(--text-3);font-size:12.5px;text-align:center;min-height:130px;
 }
 .retry-btn{
-  padding:7px 22px;background:var(--bg-2);border:1px solid var(--border-strong);
+  padding:7px 22px;background:var(--bg-hover);border:1px solid var(--border-strong);
   border-radius:18px;color:var(--text-2);font-size:12px;font-weight:600;
   transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);
 }
-.retry-btn:hover{background:var(--bg-3);color:var(--text);border-color:var(--accent-glow)}
+.retry-btn:hover{background:var(--bg-hover);color:var(--text);border-color:var(--accent-glow)}
 
 /* 加载更多按钮（媒体库歌曲分页） */
 .lib-load-more{
-  display:block;margin:16px auto;padding:8px 28px;background:var(--bg-2);
+  display:block;margin:16px auto;padding:8px 28px;background:var(--bg-hover);
   border:1px solid var(--border);border-radius:20px;color:var(--text-2);
   font-size:12.5px;font-weight:600;cursor:pointer;transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);
 }
-.lib-load-more:hover:not(:disabled){background:var(--bg-3);color:var(--text);border-color:var(--accent-glow)}
+.lib-load-more:hover:not(:disabled){background:var(--bg-hover);color:var(--text);border-color:var(--accent-glow)}
 .lib-load-more:disabled{opacity:0.6;cursor:default}
 
 /* ============ 通用徽标 ============ */
@@ -158,7 +158,7 @@ dialog[open], dialog[open]::backdrop{opacity:1}
   position:absolute;top:-2px;right:-4px;min-width:15px;height:15px;
   padding:0 4px;border-radius:8px;background:var(--accent);color:var(--on-accent);
   font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;
-  font-variant-numeric:tabular-nums;box-shadow:0 0 0 2px var(--bg-1);
+  font-variant-numeric:tabular-nums;box-shadow:0 0 0 2px var(--bg-color);
   pointer-events:none;
 }
 
@@ -177,11 +177,11 @@ dialog[open], dialog[open]::backdrop{opacity:1}
   position:sticky;top:8px;z-index:6;
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   padding:9px 12px 9px 14px;margin:0 0 14px;
-  background:color-mix(in srgb, var(--bg-1) 74%, transparent);
+  background:color-mix(in srgb, var(--bg-color) 74%, transparent);
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   border:1px solid var(--border);
   border-radius:var(--r-l);
-  box-shadow:0 8px 24px rgba(0,0,0,0.22);
+  box-shadow:0 8px 24px #00000038;
 }
 .lib-page-title{
   display:flex;align-items:center;gap:8px;
@@ -203,7 +203,7 @@ dialog[open], dialog[open]::backdrop{opacity:1}
 }
 .lib-pager-label{font-size:12px;color:var(--text-3);white-space:nowrap}
 .lib-page-size{
-  background:var(--bg-3);color:var(--text-2);border:1px solid var(--border);
+  background:var(--bg-hover);color:var(--text-2);border:1px solid var(--border);
   border-radius:8px;padding:5px 8px;font-size:12px;outline:none;cursor:pointer;
   transition:border-color var(--t-fast),color var(--t-fast),background var(--t-fast);
 }
@@ -216,7 +216,7 @@ dialog[open], dialog[open]::backdrop{opacity:1}
 }
 .lib-page-nav{
   display:inline-flex;align-items:center;height:28px;padding:0 4px;
-  background:var(--bg-3);border:1px solid var(--border);border-radius:14px;
+  background:var(--bg-hover);border:1px solid var(--border);border-radius:14px;
 }
 .lib-page-btn{
   display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;

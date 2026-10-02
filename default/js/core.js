@@ -15,7 +15,7 @@ CM.els = {
   app: $('#app'),
   titlebar: $('#titlebar'), titlebarDrag: $('#titlebarDrag'), titlebarControls: $('#titlebarControls'),
   sidebarSearchWrap: $('#sidebarSearchWrap'), sidebarSearch: $('#sidebarSearch'), sidebarSearchClear: $('#sidebarSearchClear'),
-  sidebarNav: $('#sidebarNav'), playlistList: $('#playlistList'), addPlaylistBtn: $('#addPlaylistBtn'),
+  sidebarNav: $('#sidebarNav'), playlistList: $('#playlistList'), addPlaylistBtn: $('#addPlaylistBtn'), sidebarClose: $('#sidebarClose'),
   mainTabs: $('#mainTabs'), mainBody: $('#mainBody'), mainContent: $('#mainContent'),
   // Discover
   heroDate: $('#heroDate'), heroTitle: $('#heroTitle'), heroSub: $('#heroSub'),

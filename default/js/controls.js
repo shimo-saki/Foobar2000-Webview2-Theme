@@ -33,6 +33,7 @@ els.sidebarSearchClear.addEventListener('click', () => {
   els.sidebarSearchWrap.classList.remove('has-text');
   els.sidebarSearch.focus();
 });
+els.sidebarClose.addEventListener('click', () => $('.sidebar').classList.toggle('close'));
 
 // 搜索页输入（防抖）
 els.searchInput.addEventListener('input', CM.debounce(() => CM.doSearch(els.searchInput.value), 350));
@@ -242,19 +243,9 @@ els.queueClear.addEventListener('click', () =>
 
 // 歌词面板开关
 els.btnLyricsToggle.addEventListener('click', () => CM.setLyricsVisible(!state.lyricsVisible));
-// 底栏封面：单击展开歌词面板，双击进入沉浸式模式
-els.bottomArtWrap.addEventListener('click', () => {
-  if (this._clickTimer) {
-    clearTimeout(this._clickTimer);
-    this._clickTimer = null;
-    CM.toggleNpOverlay(true);
-  } else {
-    this._clickTimer = setTimeout(() => {
-      this._clickTimer = null;
-      CM.setLyricsVisible(true);
-    }, 250);
-  }
-});
+
+// 底栏封面 点击展开沉浸式歌词面板
+els.bottomArtWrap.addEventListener('click', () => CM.toggleNpOverlay(true));
 
 // 频谱开关
 els.btnVisualizer.addEventListener('click', () => CM.setVisualizerActive(!state.visualizerActive));
@@ -564,7 +555,7 @@ els.npModeBtn.addEventListener('click', () => CM.toggleNpMode());
 
 // 播放控制（主视图 + 纯歌词模式两套，动作相同）
 const bindTransport = (play, prev, next) => {
-  play.addEventListener('click', fb.player.playPaus);
+  play.addEventListener('click', fb.player.playPause);
   prev.addEventListener('click', fb.player.prev);
   next.addEventListener('click', fb.player.next);
 };

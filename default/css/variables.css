@@ -6,7 +6,7 @@
 
 :root{
   /* 动态强调色（由封面提取，JS 写入） */
-  --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+  --accent:hsl(var(--accent-h), var(--accent-s), var(--accent-l));
   --accent-h:0;
   --accent-s:81%;
   --accent-l:59%;
@@ -16,22 +16,20 @@
   --on-accent:#fff;
 
   /* 层级背景 */
-  --bg-0:#101013;   /* 最深：标题栏/侧栏 */
-  --bg-1:#16161b;   /* 主区域 */
-  --bg-2:#1e1e25;   /* 卡片/输入框 */
-  --bg-3:#26262f;   /* 悬停 */
-  --bg-4:#2f2f3a;   /* 激活 */
-  --glass:rgba(22,22,27,0.92);
+  --bg:linear-gradient(to bottom in oklch, #2d293a, #14121b);
+  --bg-hover:#ffffff14;
+  --bg-color:#292533;
+  --bg-active:#2f2f3a;
 
   /* 文字 */
   --text:#f4f4f6;
-  --text-2:rgba(244,244,246,0.64);
-  --text-3:rgba(244,244,246,0.38);
-  --text-4:rgba(244,244,246,0.22);
+  --text-2:#f4f4f6a3;
+  --text-3:#f4f4f661;
+  --text-4:#f4f4f638;
 
   /* 线条 */
-  --border:rgba(255,255,255,0.065);
-  --border-strong:rgba(255,255,255,0.12);
+  --border:#ffffff11;
+  --border-strong:#ffffff1f;
 
   /* 圆角 */
   --r-s:6px;
@@ -40,9 +38,9 @@
   --r-xl:20px;
 
   /* 阴影 */
-  --shadow-1:0 1px 2px rgba(0,0,0,0.3),0 2px 8px rgba(0,0,0,0.22);
-  --shadow-2:0 6px 16px rgba(0,0,0,0.32),0 16px 40px rgba(0,0,0,0.4);
-  --shadow-pop:0 4px 14px rgba(0,0,0,0.36),0 12px 44px rgba(0,0,0,0.5);
+  --shadow-1:0 1px 2px #0000004d,0 2px 8px #00000038;
+  --shadow-2:0 6px 16px #00000052,0 16px 40px #00000066;
+  --shadow-pop:0 4px 14px #0000005c,0 12px 44px #00000080;
 
   /* 动效 */
   --ease:cubic-bezier(0.22,1,0.36,1);
@@ -64,7 +62,7 @@
 html,body{
   width:100%;height:100%;overflow:hidden;
   font-family:'方正FW筑紫A圆 简繁','Segoe UI Variable Text','Segoe UI','Microsoft YaHei UI','Microsoft YaHei','PingFang SC',sans-serif;
-  background:var(--bg-0);color:var(--text);font-size:13px;line-height:1.45;
+  background:var(--bg);color:var(--text);font-size:13px;line-height:1.45;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
 }
 body{user-select:none}
@@ -72,8 +70,8 @@ body{user-select:none}
 /* Scrollbar */
 ::-webkit-scrollbar{width:var(--scrollbar-w);height:var(--scrollbar-w)}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:4px;border:2px solid transparent;background-clip:padding-box}
-::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.24);border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb{background:#ffffff1f;border-radius:4px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:#ffffff3d;border:2px solid transparent;background-clip:padding-box}
 ::-webkit-scrollbar-corner{background:transparent}
 
 /* Base elements */
@@ -98,7 +96,7 @@ a{color:var(--accent);text-decoration:none}
   border-radius:var(--r-s);color:var(--text-2);flex-shrink:0;
   transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
 }
-.icon-btn:hover{background:var(--bg-3);color:var(--text)}
+.icon-btn:hover{background:var(--bg-hover);color:var(--text)}
 .icon-btn:active{transform:scale(0.92)}
 .icon-btn.active{color:var(--accent)}
 .icon-btn.active:hover{background:var(--accent-soft)}

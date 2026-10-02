@@ -166,7 +166,8 @@ els.modalInput.addEventListener('keydown', e => {
  * ============================================ */
 function _showElement(el) {
   el.removeEventListener('animationend', el._hideListener);
-  el.classList.remove('hidden', 'removing');
+  if (el.hasAttribute('popover')) el.showPopover();
+  else el.classList.remove('hidden', 'removing');
 }
 
 function _hideElement(el) {
@@ -178,6 +179,7 @@ function _hideElement(el) {
       el.classList.add('hidden');
       el.classList.remove('removing');
       el.removeEventListener('animationend', listener);
+      if (el.hasAttribute('popover')) el.hidePopover();
     }
   };
   el.addEventListener('animationend', listener);
@@ -232,8 +234,8 @@ CM.showCtxMenu = function (x, y, items) {
   state.menuItems = items;
   menu.innerHTML = createMenu(items);
   // 定位
-  _setPosition(menu, x, y, 8);
   _showElement(menu);
+  _setPosition(menu, x, y, 8);
 };
 
 CM.hideCtxMenu = function () {
@@ -278,8 +280,8 @@ els.ctxMenu.addEventListener('mouseover', e => {
   }
 
   const { right, top } = item.getBoundingClientRect();
-  _setPosition(sub, right + 5, top, -8);
   _showElement(sub);
+  _setPosition(sub, right + 5, top, -8);
 });
 
 els.ctxMenu.addEventListener('mouseout', e => {

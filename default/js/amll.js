@@ -36,6 +36,6 @@ CM.showDynamicBackground = function (show, dom = els.rightPanel) {
     CM.background = null;
   }
 
-  dom.classList.toggle('dynamic', show);
+  document.body.classList.toggle('dynamic', show);
   CM.setSettings('background', show);
 };

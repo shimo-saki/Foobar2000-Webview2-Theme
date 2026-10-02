@@ -14,16 +14,15 @@ CM.toggleNpOverlay = function (open) {
   state.npOpen = open ?? !state.npOpen;
   if (state.npOpen) {
     CM.renderNpOverlay();
-    els.npOverlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    els.npOverlay.showModal();
     els.npLyrics.replaceChildren(CM.player.getElement());
     CM.showDynamicBackground(settings.background, els.npOverlay);
   } else {
-    els.npOverlay.classList.remove('open');
-    document.body.style.overflow = '';
+    els.npOverlay.close();
     els.lyricsScroll.replaceChildren(CM.player.getElement());
     CM.showDynamicBackground(settings.background);
   }
+  els.npOverlay.classList.toggle('open', state.npOpen);
 };
 
 CM.renderNpOverlay = function () {
