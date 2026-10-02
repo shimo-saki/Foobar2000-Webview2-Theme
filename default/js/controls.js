@@ -241,14 +241,17 @@ els.queueClear.addEventListener('click', () =>
   })
 );
 
-// 歌词面板开关
-els.btnLyricsToggle.addEventListener('click', () => CM.setLyricsVisible(!state.lyricsVisible));
-
 // 底栏封面 点击展开沉浸式歌词面板
 els.bottomArtWrap.addEventListener('click', () => CM.toggleNpOverlay(true));
 
 // 频谱开关
 els.btnVisualizer.addEventListener('click', () => CM.setVisualizerActive(!state.visualizerActive));
+
+// 歌词面板开关
+els.btnLyricsToggle.addEventListener('click', () => CM.setLyricsVisible(!state.lyricsVisible));
+
+// 胶囊模式
+els.btnCapsule.addEventListener('click', () => CM.toggleCapsuleMode());
 
 // 更多菜单
 els.btnMore.addEventListener('click', e => showMoreMenu(e.clientX, e.clientY));
@@ -344,6 +347,16 @@ function showMoreMenu(x, y) {
     },
   ];
   CM.showCtxMenu(x, y, items);
+}
+
+/* ============================================
+ * 底栏胶囊模式
+ * ============================================ */
+CM.toggleCapsuleMode = function (state) {
+  state ??= !settings.capsuleMode;
+  CM.setSettings('capsuleMode', state);
+  els.app.classList.toggle('floating', state);
+  els.btnCapsule.classList.toggle('active', state);
 }
 
 /* ============================================

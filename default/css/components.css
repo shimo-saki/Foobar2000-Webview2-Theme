@@ -154,7 +154,7 @@
 .track-table tbody tr.playing{background:var(--accent-soft)}
 .track-table tbody tr.playing td{color:var(--accent)}
 .track-table tbody tr.playing .track-title{color:var(--accent)}
-.track-table col.c-num, .track-table col.c-dur, .track-table col.c-bit{width:5rem}
+.track-table :is(col.c-num, col.c-dur, col.c-bit) {width: 5rem}
 .track-num{text-align:center;color:var(--text-3);font-variant-numeric:tabular-nums;font-size:11.5px}
 .track-title{color:var(--text);font-weight:500}
 .track-artist-cell{color:var(--text-3)}
@@ -169,8 +169,8 @@
 .eq-bars i:nth-child(3){height:60%;animation-delay:0.45s}
 /* 暂停状态由 body.is-playing 控制，避免 JS 逐个切换 .paused 类 */
 body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
-body.is-playing #iconPlay, body:not(.is-playing) #iconPause,
-body.is-playing .np-icon-play, body:not(.is-playing) .np-icon-pause{display:none}
+body.is-playing :is(#iconPlay, .np-icon-play),
+body:not(.is-playing) :is(#iconPause, .np-icon-pause) {display:none}
 @keyframes eq{0%,100%{transform:scaleY(0.4)}50%{transform:scaleY(1)}}
 .table-empty,.table-error{padding:56px 40px;text-align:center;font-size:13px}
 .table-empty{color:var(--text-3)}
@@ -288,8 +288,8 @@ body.is-playing .np-icon-play, body:not(.is-playing) .np-icon-pause{display:none
   content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
   width:4px;height:4px;border-radius:50%;background:var(--accent);
 }
-#btnOrder .icon, #volBtn .icon{display:none}
-#btnOrder .icon.active, #volBtn .icon.active{display:inline-block}
+:is(#btnOrder, #volBtn) .icon{display:none}
+:is(#btnOrder, #volBtn) .icon.active{display:inline-block}
 .ctrl-btn.play-btn{
   width:40px;height:40px;background:var(--text);color:#000;mix-blend-mode:difference;margin:0 4px;
   transition:transform var(--t-fast),box-shadow var(--t-fast),background var(--t-fast);

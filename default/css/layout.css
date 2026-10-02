@@ -1,12 +1,13 @@
 /* ==========================================
    CloudMusic Theme · Layout
-   ========================================== */
+========================================== */
 
 /* App Grid */
 .app{
   display:grid;
-  grid-template:var(--titlebar-h) minmax(0, 1fr) var(--bottom-h, 84px) / var(--sidebar-w) minmax(0, 1fr) var(--right-w);
+  grid-template:var(--titlebar-h) minmax(0, 1fr) / var(--sidebar-w) minmax(0, 1fr) var(--right-w);
   height:100vh;width:100vw;overflow:hidden;
+  position:relative;
   transition:grid-template-columns 0.26s var(--ease);
   will-change:grid-template-columns;
 }
@@ -141,12 +142,13 @@
   & .sidebar-section-title{padding:10px 8px;justify-content:center;}
   & .sidebar-section-title > button{width:32px;height:32px;}
 
-  & .nav-item, & .pl-item{gap:0;padding:8px;}
+  :is(.nav-item, .pl-item) {gap:0;padding:8px;}
 
-  & .nav-item > span:not(.icon),
-  & .pl-item > span:not(.icon),
-  & .sidebar-section-title > span,
-  & .sidebar-close > span:not(.icon){opacity:0;transition:opacity .12s ease;}
+  :is(.nav-item, .pl-item) > span:not(.icon),
+  .sidebar-section-title > span,
+  .sidebar-close > span:not(.icon) {
+    opacity:0;transition:opacity .12s ease;
+  }
 }
 
 .pl-item{
@@ -184,11 +186,10 @@
 @keyframes tab-in{from{opacity:0}to{opacity:1}}
 #tabDiscover.active{display:block;overflow-y:auto;overscroll-behavior:contain}
 #position{
-  display:inline-flex;align-items:center;justify-content:center;
   position:absolute;right:12px;bottom:12px;overflow:hidden;
   width:40px;height:40px;border-radius:50%;
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  transform:translateX(200%);transition:transform 0.26s var(--ease);
+  transform:translateX(200%);transition:transform 0.26s var(--ease), bottom 0.42s var(--ease);
 }
 .tab-content.active:has(.playing) > #position{transform:translateX(0)}
 
@@ -232,10 +233,32 @@
 
 /* ============ Bottom Bar ============ */
 .bottom-bar{
-  grid-area: 3 / 1 / 4 / -1;display:flex;align-items:center;
-  padding:0 16px;gap:16px;position:relative;
-  border-top:1px solid var(--border);
+  position:absolute;left:50%;bottom:0;
+  transform:translateX(-50%);
+  width:100%;height:var(--bottom-h, 84px);
+  display:flex;align-items:center;
+  padding:0 16px;gap:16px;border:1px solid transparent;
+  border-radius:0;overflow:hidden;
+  backdrop-filter:blur(12px) saturate(1.6);
+  -webkit-backdrop-filter:blur(12px) saturate(1.6);
+  box-shadow:0 0 0 transparent;
+  transition-property:bottom, width, border-radius, border-color, background-color, box-shadow;
+  transition-duration:.42s;transition-timing-function:var(--ease);
 }
+
+.app.floating .bottom-bar{
+  bottom:14px;
+  width:min(1080px, calc(100% - 32px));
+  border-radius:calc(var(--bottom-h, 84px) / 2);
+  border-color:var(--border);
+  background-color:#00000033;
+  box-shadow:0 8px 32px #00000047;
+}
+
+.sidebar, .main-content, .right-panel {padding-bottom:var(--bottom-h, 84px);transition:padding-bottom .42s var(--ease);}
+.app.floating :is(.sidebar, .main-content, .right-panel) {padding-bottom:0;}
+.app.floating #position{bottom:calc(var(--bottom-h, 84px) + 26px)}
+
 .bottom-left{display:flex;align-items:center;gap:12px;width:300px;min-width:0;flex-shrink:0}
 .bottom-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;max-width:640px;margin:0 auto;min-width:0}
 .bottom-right{display:flex;align-items:center;gap:2px;width:300px;justify-content:flex-end;flex-shrink:0}

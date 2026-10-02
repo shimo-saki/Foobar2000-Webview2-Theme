@@ -41,21 +41,23 @@
   overflow-x:clip;overflow-y:auto;overscroll-behavior:contain;
   scrollbar-width:thin;scrollbar-color:#ffffff38 transparent;
 }
-.ctx-menu::-webkit-scrollbar, .ctx-submenu::-webkit-scrollbar{width:8px}
-.ctx-menu::-webkit-scrollbar-thumb, .ctx-submenu::-webkit-scrollbar-thumb{background:#ffffff38;border-radius:4px}
-.ctx-menu::-webkit-scrollbar-thumb:hover, .ctx-submenu::-webkit-scrollbar-thumb:hover{background:#ffffff59}
-.ctx-menu.removing, .ctx-submenu.removing{animation:ctx-out 0.12s ease forwards}
+:is(.ctx-menu, .ctx-submenu)::-webkit-scrollbar{width:8px}
+:is(.ctx-menu, .ctx-submenu)::-webkit-scrollbar-thumb{
+  background: #ffffff38;border-radius: 4px;
+  &:hover {background:#ffffff59}
+}
+:is(.ctx-menu, .ctx-submenu).removing{animation:ctx-out .12s ease forwards}
 .ctx-item, .ctx-menu-item{
   display:flex;align-items:center;gap:9px;padding:7px 12px;
   cursor:pointer;font-size:12.5px;color:var(--text-2);
   border-radius:var(--r-s);transition:background var(--t-fast),color var(--t-fast);
   white-space:nowrap;overflow:hidden;
 }
-.ctx-item:hover, .ctx-menu-item:hover{background:var(--bg-hover);color:var(--text)}
-.ctx-item.danger, .ctx-menu-item.danger{color:#ff6b6b}
-.ctx-item.danger:hover .ctx-menu-item.danger:hover{background:#ff6b6b1f}
+:is(.ctx-item, .ctx-menu-item):hover{background:var(--bg-hover);color:var(--text)}
+:is(.ctx-item, .ctx-menu-item).danger{color:#ff6b6b}
+:is(.ctx-item, .ctx-menu-item).danger:hover{background:#ff6b6b1f}
 .ctx-item.checked{color:var(--accent)}
-.ctx-item.disabled, .ctx-menu-item.disabled{opacity:0.35;pointer-events:none}
+:is(.ctx-item, .ctx-menu-item).disabled{opacity:0.35;pointer-events:none}
 .ctx-item .ctx-check{width:14px;flex-shrink:0;font-size:11px;color:var(--accent);text-align:center}
 .ctx-item .ctx-stars{color:var(--accent);letter-spacing:1px;font-size:11px}
 .ctx-divider{height:1px;background:var(--border);margin:5px 8px}

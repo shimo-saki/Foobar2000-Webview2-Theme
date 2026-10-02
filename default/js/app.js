@@ -189,10 +189,12 @@ fb.on('metadata:writeComplete', r => {
  * ============================================ */
 function boot() {
   state.lyricsVisible = settings.lyricsVisible ?? true;
+  state.capsuleMode = settings.capsuleMode ?? false;
   state.visualizerActive = settings.visualizer ?? true;
 
   CM.setLyricsVisible(state.lyricsVisible);
   CM.setVisualizerActive(state.visualizerActive);
+  CM.toggleCapsuleMode(state.capsuleMode);
   CM.updateOrderIcon();
   CM.updateVolumeIcon();
   CM.updateStopIcon();

@@ -316,7 +316,8 @@ async function reorderQueue(newOrder) {
 }
 
 CM.toggleQueue = function (open) {
-  state.queueOpen = open !== undefined ? open : !state.queueOpen;
+  state.queueOpen = open ?? !state.queueOpen;
   els.queueDrawer.classList.toggle('open', state.queueOpen);
+  els.btnQueue.classList.toggle('active', state.queueOpen);
   if (state.queueOpen) CM.renderQueue();
 };

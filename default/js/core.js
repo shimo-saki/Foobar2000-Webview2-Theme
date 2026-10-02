@@ -46,7 +46,7 @@ CM.els = {
   miniSpectrum: $('#miniSpectrum'), btnVisualizer: $('#btnVisualizer'),
   volBtn: $('#volBtn'), volIcon: $('#volIcon'), volSlider: $('#volSlider'),
   btnQueue: $('#btnQueue'), queueBadge: $('#queueBadge'),
-  btnLyricsToggle: $('#btnLyricsToggle'), btnMore: $('#btnMore'),
+  btnLyricsToggle: $('#btnLyricsToggle'), btnCapsule: $('#btnCapsule'), btnMore: $('#btnMore'),
   // Queue drawer
   queueDrawer: $('#queueDrawer'), queueCount: $('#queueCount'), queueList: $('#queueList'), queueNow: $('#queueNow'),
   queueClear: $('#queueClear'), queueClose: $('#queueClose'),
@@ -128,7 +128,10 @@ CM.currentLyrics = [];
 /* ============================================
  * 设置持久化
  * ============================================ */
-CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: 50, autoUpdate: true, background: true };
+CM.settings = {
+  lyricsVisible: true, visualizer: true, tab: 'discover', volume: 50,
+  autoUpdate: true, background: true, capsuleMode: false
+};
 CM.loadSettings = async function () {
   const { success, items } = await fb.config.getAll();
   if (!success) return CM.showToast('获取配置失败', null, 'error');
