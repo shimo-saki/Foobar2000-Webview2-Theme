@@ -10,7 +10,20 @@
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/utilities.css">
-  <link rel="stylesheet" href="css/amll.css" />
+  <link rel="stylesheet" href="css/amll.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "core": "./js/core.js",
+        "foo-webview-sdk": "./node_modules/foo-webview-sdk/bridge.js",
+        "@applemusic-like-lyrics/core": "./node_modules/@applemusic-like-lyrics/amll-core.js",
+        "@applemusic-like-lyrics/lyric": "./node_modules/@applemusic-like-lyrics/amll-lyric.js"
+      }
+    }
+  </script>
+  <link rel="modulepreload" href="node_modules/foo-webview-sdk/bridge.js">
+  <link rel="modulepreload" href="node_modules/@applemusic-like-lyrics/amll-core.js">
+  <link rel="modulepreload" href="node_modules/@applemusic-like-lyrics/amll-lyric.js">
 </head>
 
 <body>
@@ -438,16 +451,6 @@
     </div>
   </dialog>
 
-  <script type="importmap">
-    {
-      "imports": {
-        "core": "./js/core.js",
-        "foo-webview-sdk": "./node_modules/foo-webview-sdk/bridge.js",
-        "@applemusic-like-lyrics/core": "./node_modules/@applemusic-like-lyrics/amll-core.js",
-        "@applemusic-like-lyrics/lyric": "./node_modules/@applemusic-like-lyrics/amll-lyric.js"
-      }
-    }
-  </script>
   <!-- CloudMusic Theme -->
   <script type="module" src="js/app.js"></script>
 </body>
