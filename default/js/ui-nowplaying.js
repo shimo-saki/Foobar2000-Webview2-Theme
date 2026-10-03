@@ -123,17 +123,10 @@ CM.loadNpWaveform = function (path) {
 };
 
 function updateNpModeIcon() {
-  const vinylIcon = els.npModeBtn.$('.np-mode-vinyl');
-  const lyricsIcon = els.npModeBtn.$('.np-mode-lyrics');
-  if (state.npMode === 'lyrics') {
-    vinylIcon.style.display = 'none';
-    lyricsIcon.style.display = 'inline';
-    els.npModeBtn.title = '显示唱片';
-  } else {
-    vinylIcon.style.display = 'inline';
-    lyricsIcon.style.display = 'none';
-    els.npModeBtn.title = '纯歌词模式';
-  }
+  const isLyrics = state.npMode === 'lyrics';
+  els.npModeBtn.$('.np-mode-vinyl').hidden = isLyrics;
+  els.npModeBtn.$('.np-mode-lyrics').hidden = !isLyrics;
+  els.npModeBtn.setAttribute('tooltip', isLyrics ? '显示唱片' : '纯歌词模式');
 }
 
 CM.toggleNpMode = function () {

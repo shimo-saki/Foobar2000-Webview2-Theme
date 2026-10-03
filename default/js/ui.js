@@ -348,7 +348,7 @@ CM.updateOrderIcon = function () {
   els.btnOrder.$$('.icon').forEach(el =>
     el.classList.toggle('active', el.dataset.order === order.label)
   );
-  els.btnOrder.title = `播放顺序： ${order.name}`;
+  els.btnOrder.setAttribute('tooltip', `播放顺序： ${order.name}`);
 };
 
 CM.updateVolumeIcon = function () {
@@ -358,14 +358,15 @@ CM.updateVolumeIcon = function () {
   icons.forEach(el => el.classList.toggle('active', el === target));
   els.volSlider.value = value;
   els.volSlider.style.setProperty('--vol-pct', `${value}%`);
+  $(".vol-wrap").setAttribute('tooltip', value === 0 ? '已静音' : `音量 ${value}%`);
 };
 
 // 通用进度条更新（主进度条 + 沉浸式进度条共用）
 CM._updateSeekBar = function (bar, curLabel, totalLabel, cssVar, seekingFlag) {
   if (state[seekingFlag]) return;
-  const pct = (state.duration > 0 ? state.position / state.duration : 0) * 100;
-  bar.value = pct.toFixed(2);
-  bar.style.setProperty(cssVar, `${pct.toFixed(2)}%`);
+  const pct = ((state.duration > 0 ? state.position / state.duration : 0) * 100).toFixed(2);
+  bar.value = pct;
+  bar.style.setProperty(cssVar, `${pct}%`);
   curLabel.textContent = CM.formatTimeCached(state.position);
   totalLabel.textContent = CM.formatTimeCached(state.duration);
 };
@@ -402,12 +403,12 @@ CM.updateTrackInfo = function (track) {
   const name = track ? CM.trackName(track) : '未在播放';
   const artist = track ? CM.trackArtist(track) : '--';
 
-  els.bottomTitle.textContent = els.bottomTitle.title = els.lyricsTrackTitle.textContent = name;
+  els.bottomTitle.textContent = els.lyricsTrackTitle.textContent = name;
   els.bottomArtist.textContent = els.lyricsTrackArtist.textContent = artist;
 
   // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
   const dur = track?.duration || track?.length;
-  if (dur != null) state.duration = dur;
+  if (!dur) state.duration = dur;
 
   document.title = track ? `${name} - ${artist}` : 'CloudMusic';
 };

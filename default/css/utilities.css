@@ -212,6 +212,7 @@ dialog[open], dialog[open]::backdrop{opacity:1}
 }
 .lib-page-size:hover{border-color:var(--accent-glow);color:var(--text)}
 .lib-page-size:focus{border-color:var(--accent)}
+option{background:var(--bg-color);color:var(--text)}
 .lib-page-info{
   font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;
   min-width:46px;text-align:center;letter-spacing:0.02em;
@@ -230,3 +231,32 @@ dialog[open], dialog[open]::backdrop{opacity:1}
 .lib-page-btn:hover:not(:disabled){background:var(--accent);color:var(--on-accent)}
 .lib-page-btn:active:not(:disabled){transform:scale(0.92)}
 .lib-page-btn:disabled{color:var(--text-4);cursor:not-allowed}
+
+/* ============ 提示 ============ */
+:where([tooltip]){position:relative;}
+[tooltip]:is(:hover, :focus-visible)::after{
+  content:attr(tooltip);
+  position:absolute;z-index:2;padding:6px 10px;
+  color:var(--accent-light);font-size:13px;white-space:nowrap;
+  pointer-events:none;background:transparent;
+}
+
+[tooltip]:is(:not([tooltip-pos]), [tooltip-pos="top"]):is(:hover, :focus-visible)::after{
+  bottom:100%;left:50%;transform:translateX(-50%);border-bottom:6px solid transparent;border-radius:6px / 6px 6px 12px 12px;
+  background:conic-gradient(from 315deg at 50% 100%, var(--tip-bg) 0 90deg, transparent 90deg) 50% 100% / 12px 6px no-repeat border-box, var(--tip-bg) padding-box;
+}
+
+[tooltip][tooltip-pos="bottom"]:is(:hover, :focus-visible)::after{
+  top:100%;left:50%;transform:translateX(-50%);border-top:6px solid transparent;border-radius:6px / 12px 12px 6px 6px;
+  background:conic-gradient(from 135deg at 50% 0, var(--tip-bg) 0 90deg, transparent 90deg) 50% 0 / 12px 6px no-repeat border-box, var(--tip-bg) padding-box;
+}
+
+[tooltip][tooltip-pos="left"]:is(:hover, :focus-visible)::after{
+  right:100%;top:50%;transform:translateY(-50%);border-right:6px solid transparent;border-radius:6px 12px 12px 6px / 6px;
+  background:conic-gradient(from 225deg at 100% 50%, var(--tip-bg) 0 90deg, transparent 90deg) 100% 50% / 6px 12px no-repeat border-box,var(--tip-bg) padding-box;
+}
+
+[tooltip][tooltip-pos="right"]:is(:hover, :focus-visible)::after{
+  left:100%;top:50%;transform:translateY(-50%);border-left:6px solid transparent;border-radius:12px 6px 6px 12px / 6px;
+  background:conic-gradient(from 45deg at 0 50%, var(--tip-bg) 0 90deg, transparent 90deg) 0 50% / 6px 12px no-repeat border-box, var(--tip-bg) padding-box;
+}

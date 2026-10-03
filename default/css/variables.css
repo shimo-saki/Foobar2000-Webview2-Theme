@@ -10,6 +10,7 @@
   --accent-h:0;
   --accent-s:81%;
   --accent-l:59%;
+  --accent-light:hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) + 15%));
   --accent-soft:hsla(var(--accent-h),var(--accent-s),var(--accent-l),0.14);
   --accent-soft-2:hsla(var(--accent-h),var(--accent-s),var(--accent-l),0.24);
   --accent-glow:hsla(var(--accent-h),var(--accent-s),var(--accent-l),0.45);
@@ -20,6 +21,7 @@
   --bg-hover:#ffffff14;
   --bg-color:#292533;
   --bg-active:#2f2f3a;
+  --tip-bg: color-mix(in oklch, var(--bg-color) 80%, transparent);
 
   /* 文字 */
   --text:#f4f4f6;

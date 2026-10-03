@@ -1,6 +1,6 @@
 :root {
   --amll-lp-font-size: 1.5rem;
-  --amll-lp-color: var(--accent);
+  --amll-lp-color: var(--accent-light);;
 }
 
 canvas{position:absolute;width:100%;height:100%;filter:brightness(35%);}
@@ -18,8 +18,7 @@ body.dynamic #npBgBlur{
   padding: 0.8em 0.4em;
 }
 
-.FmKaba_lyricLineWrapper:has(.FmKaba_lyricSubLine:not(:empty)),
-.FmKaba_lyricLineWrapper:has(.FmKaba_lyricMainLine > br) {
+.FmKaba_lyricLineWrapper:has(.FmKaba_lyricSubLine:not(:empty), .FmKaba_lyricMainLine > br) {
   padding: 1em 0.4em;
 }
 

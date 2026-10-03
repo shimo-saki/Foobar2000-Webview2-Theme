@@ -38,12 +38,12 @@ CM.loadPlaylists = function () {
       const count = pl.trackCount ?? pl.itemCount ?? '';
       const badge = pl.isAutoplaylist ? '<span class="pl-auto-badge">AUTO</span>' : '';
 
-      return `<div class="${cls}" data-index="${idx}">
+      return `<button class="${cls}" data-index="${idx}" tooltip="${esc(pl.name)}" tooltip-pos="right">
           ${icons.note}
           <span class="pl-item-name">${esc(pl.name)}</span>
           ${badge}
           <span class="pl-item-count">${count}</span>
-        </div>`;
+        </button>`;
     });
 
     els.playlistList.innerHTML = parts.length

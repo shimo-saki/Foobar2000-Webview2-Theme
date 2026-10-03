@@ -284,7 +284,7 @@ body:not(.is-playing) :is(#iconPause, .np-icon-pause) {display:none}
 .ctrl-btn:hover{background:var(--bg-hover);color:var(--text)}
 .ctrl-btn:active{transform:scale(0.9)}
 .ctrl-btn.active{color:var(--accent)}
-.ctrl-btn.active::after{
+.ctrl-btn.active::before{
   content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
   width:4px;height:4px;border-radius:50%;background:var(--accent);
 }
