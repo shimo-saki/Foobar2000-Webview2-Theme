@@ -576,9 +576,10 @@ function renderLibraryDrill(title, subtitle, tracks, opts) {
   $('#libAddToPlBtn').addEventListener('click', e => CM.addToPlaylistMenu(tracks, e.clientX, e.clientY));
 
   if (paged) {
-    _bindPager('libDrill', tracks.length, opts.pageKey || 'drill', (start, size) => {
-      CM.renderTrackRows($('#libDrillRows'), tracks.slice(start, start + size), '未找到曲目', start);
-    });
+    _bindPager(
+      'libDrill', tracks.length, opts.pageKey || 'drill',
+      (start, size) => CM.renderTrackRows($('#libDrillRows'), tracks.slice(start, start + size), '未找到曲目', start)
+    );
   } else {
     CM.renderTrackRows($('#libDrillRows'), tracks, '未找到曲目');
   }

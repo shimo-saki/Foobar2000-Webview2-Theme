@@ -8,7 +8,7 @@
   grid-template:var(--titlebar-h) minmax(0, 1fr) / var(--sidebar-w) minmax(0, 1fr) var(--right-w);
   height:100vh;width:100vw;overflow:hidden;
   position:relative;
-  transition:grid-template-columns 0.26s var(--ease);
+  transition:grid-template-columns 0.42s var(--ease);
   will-change:grid-template-columns;
 }
 .app.lyrics-hidden{grid-template-columns:var(--sidebar-w) minmax(0, 1fr) 0}
@@ -187,39 +187,33 @@
   position:absolute;right:12px;bottom:12px;
   width:40px;height:40px;border-radius:50%;
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  transform:translateX(200%);transition:transform 0.26s var(--ease), bottom 0.42s var(--ease);
+  transition:bottom 0.42s var(--ease);
 }
-.tab-content.active:has(.playing) > #position{transform:translateX(0)}
 
 /* ============ Right Panel (Lyrics) ============ */
 .right-panel{
   grid-area:2 / 3;position:relative;
   border-left:1px solid var(--border);min-width:var(--right-w);
-  display:flex;flex-direction:column;overflow:hidden;
-  /* 固定 320px：列轨道做 0↔320 动画时面板只被"移动"不被"缩放"，
-     内容零重排、模糊背景零重绘；轨道为 0 时面板整体溢到屏外被 .app 裁剪 */
-  transform:translateX(0);transition:transform 0.26s var(--ease);
-  will-change:transform;
+  display:flex;flex-direction:column;overflow:hidden;isolation:isolate;
 }
-.app.lyrics-hidden .right-panel {transform:translateX(100%);border-left:none;pointer-events:none;}
 .lyrics-blur-bg{
   position:absolute;inset:0;background-size:cover;background-position:center;
   filter:blur(20px) brightness(0.35) saturate(1.6);opacity:0.9;
   pointer-events:none;
 }
 .lyrics-blur-bg::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#10101340,#101013b8)}
-.rp-art-wrap{position:relative;padding:22px 24px 0;flex-shrink:0;z-index:1}
+.rp-art-wrap{position:relative;padding:22px 24px 0;flex-shrink:0}
 .rp-art{
   width:100%;aspect-ratio:1;border-radius:var(--r-l);object-fit:cover;display:block;
   background:var(--bg-hover);box-shadow:var(--shadow-2);
 }
 .rp-art[src=""],.rp-art:not([src]){opacity:0}
-.rp-track-info{padding:14px 24px 4px;text-align:center;flex-shrink:0;z-index:1;position:relative}
+.rp-track-info{padding:14px 24px 4px;text-align:center;flex-shrink:0;position:relative}
 .rp-track-title{font-size:15px;font-weight:700;letter-spacing:-0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rp-track-artist{font-size:12px;color:var(--text-2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rp-divider{height:1px;background:var(--border);margin:12px 24px 0;flex-shrink:0;z-index:1;position:relative}
+.rp-divider{height:1px;background:var(--border);margin:12px 24px 0;flex-shrink:0;position:relative}
 .lyrics-scroll{
-  flex:1;overflow:hidden auto;padding:18px 24px 26px;z-index:1;position:relative;
+  flex:1;overflow:hidden auto;padding:18px 24px 26px;position:relative;
   scroll-behavior:auto;overscroll-behavior:contain;
 }
 .lyrics-scroll::-webkit-scrollbar{width:0}
@@ -244,7 +238,7 @@
   transition-duration:.42s;transition-timing-function:var(--ease);
 }
 
-.app.floating .bottom-bar{
+.bottom-bar.floating{
   bottom:14px;
   width:min(1080px, calc(100% - 32px));
   border-radius:calc(var(--bottom-h, 84px) / 2);
@@ -253,9 +247,9 @@
   box-shadow:0 8px 32px #00000047;
 }
 
-.sidebar, .main-content, .right-panel {padding-bottom:var(--bottom-h, 84px);transition:padding-bottom .42s var(--ease);}
-.app.floating :is(.sidebar, .main-content, .right-panel) {--bottom-h:0px}
-.app.floating #position{bottom:110px}
+.sidebar, .main-content, .right-panel {padding-bottom:var(--bottom-h, 84px);transition:padding-bottom 0.42s var(--ease);}
+.app:has(#bottomBar.floating) :is(.sidebar, .main-content, .right-panel) {--bottom-h:0px}
+#mainContent:has(~ #bottomBar.floating) #position{bottom:110px}
 
 .bottom-left{display:flex;align-items:center;gap:12px;width:300px;min-width:0;flex-shrink:0}
 .bottom-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;max-width:640px;margin:0 auto;min-width:0}

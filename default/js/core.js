@@ -27,7 +27,8 @@ CM.els = {
   playlistHeaderName: $('#playlistHeaderName'), playlistHeaderMeta: $('#playlistHeaderMeta'),
   playlistHeaderTag: $('#playlistHeaderTag'),
   btnPlayAll: $('#btnPlayAll'), btnPlaylistMore: $('#btnPlaylistMore'),
-  trackTableWrap: $('#trackTableWrap'), trackTable: $('#trackTable'), trackTbody: $('#trackTbody'),
+  trackListWrap: $('#trackListWrap'), trackHeader: $('#trackHeader'),
+  trackPhantom: $('#trackPhantom'), trackRows: $('#trackRows'), trackEmpty: $('.track-empty'),
   position: $('#position'),
   // Library / Search
   libraryTree: $('#libraryTree'), libraryDetail: $('#libraryDetail'),
@@ -109,12 +110,10 @@ CM.state = {
   npSeeking: false,
   duration: 0,
   position: 0,
-  volume: 100,
+  volume: 50,
   muted: false,
   libraryView: 'stats',       // stats | artists | albums | genres | artist | album | genre
   libScrollTop: 0,             // 进入下钻详情前的列表滚动位置（返回时恢复）
-  sortKey: null,
-  sortAsc: true,
   trackCache: [],             // 当前播放列表曲目缓存（排序/右键用）
   playlistTracksTotal: 0,
   searchTracks: [],            // 最近一次搜索结果缓存（添加到歌单用）

@@ -164,28 +164,21 @@
                 </button>
               </div>
             </div>
-            <div class="track-table-wrap" id="trackTableWrap">
-              <table class="track-table" id="trackTable">
-                <colgroup>
-                  <col class="c-num">
-                  <col>
-                  <col>
-                  <col>
-                  <col class="c-dur">
-                  <col class="c-bit">
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th data-sort="title">标题<span class="sort-arrow"></span></th>
-                    <th data-sort="artist">艺术家<span class="sort-arrow"></span></th>
-                    <th data-sort="album">专辑<span class="sort-arrow"></span></th>
-                    <th data-sort="duration">时长<span class="sort-arrow"></span></th>
-                    <th data-sort="bitrate">比特率<span class="sort-arrow"></span></th>
-                  </tr>
-                </thead>
-                <tbody id="trackTbody"></tbody>
-              </table>
+            <div class="track-list-wrap" id="trackListWrap">
+              <header class="track-header" id="trackHeader">
+                <span>#</span>
+                <span>标题</span>
+                <span>艺术家</span>
+                <span>专辑</span>
+                <span>时长</span>
+                <span>比特率</span>
+              </header>
+              <div class="track-phantom" id="trackPhantom"></div>
+              <div class="track-rows" id="trackRows">
+                <div class="track-empty" style="display:none">这个歌单还没有曲目<br>
+                  <span style="font-size:11.5px;opacity:0.7">拖放音频文件到窗口即可添加</span>
+                </div>
+              </div>
             </div>
           </div>
           <button class="icon" id="position" tooltip="定位到当前播放" tooltip-pos="left"></button>
@@ -249,7 +242,7 @@
         <span class="icon" font-size-16"></span>
       </button>
       <div class="lyrics-blur-bg" id="lyricsBlurBg"></div>
-      <div class="rp-art-wrap"><img class="rp-art" id="lyricsArt" /></div>
+      <div class="rp-art-wrap"><img class="rp-art" id="lyricsArt"></div>
       <div class="rp-track-info">
         <h2 class="rp-track-title" id="lyricsTrackTitle">未在播放</h2>
         <p class="rp-track-artist" id="lyricsTrackArtist">--</p>

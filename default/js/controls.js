@@ -134,26 +134,8 @@ els.btnPlaylistMore.addEventListener('click', e => {
   ];
   CM.showCtxMenu(rect.left, rect.bottom + 6, items);
 });
-// 表头点击排序（客户端视图排序）
-els.trackTable.$$('thead th[data-sort]').forEach(th => {
-  th.addEventListener('click', () => {
-    const key = th.dataset.sort;
-    if (state.sortKey !== key) {
-      state.sortKey = key;
-      state.sortAsc = true;
-    } else if (state.sortAsc) {
-      state.sortAsc = false;
-    } else {
-      state.sortKey = null;
-      state.sortAsc = true; // 第三次点击取消排序
-    }
-    CM.renderTrackTable();
-  });
-});
 
-els.position.addEventListener('click', () =>
-  els.trackTbody.$(`tr[data-index="${state.playingTrackIndex}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-);
+els.position.addEventListener('click', () => CM.scrollToTrack());
 
 /* ============================================
  * 通用 seekbar 绑定（主进度条 + 沉浸式进度条共用）
@@ -355,9 +337,9 @@ function showMoreMenu(x, y) {
 CM.toggleCapsuleMode = function (state) {
   state ??= !settings.capsuleMode;
   CM.setSettings('capsuleMode', state);
-  els.app.classList.toggle('floating', state);
+  $('#bottomBar').classList.toggle('floating', state);
   els.btnCapsule.classList.toggle('active', state);
-}
+};
 
 /* ============================================
  * 播放增益（ReplayGain）面板
@@ -484,23 +466,21 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
       fb.player.playPause();
       break;
-    case 'arrowleft':
+    case 'ArrowLeft':
       if (e.ctrlKey) fb.player.prev();
       else fb.player.seek(Math.max(0, state.position - 5));
       break;
-    case 'arrowright':
+    case 'ArrowRight':
       if (e.ctrlKey) fb.player.next();
       else fb.player.seek(Math.min(state.duration, state.position + 5));
       break;
-    case 'arrowup':
+    case 'ArrowUp':
       e.preventDefault();
-      if (e.altKey) CM.keyboardMoveTracks(-1); // Alt+↑ 上移选中/聚焦曲目
-      else fb.player.volumeUp();
+      fb.player.volumeUp();
       break;
-    case 'arrowdown':
+    case 'ArrowDown':
       e.preventDefault();
-      if (e.altKey) CM.keyboardMoveTracks(1);  // Alt+↓ 下移选中/聚焦曲目
-      else fb.player.volumeDown();
+      fb.player.volumeDown();
       break;
     case 'm': case 'M':
       fb.player.toggleMute();

@@ -4,10 +4,10 @@
 
 /* ============ Toast ============ */
 .toast-container{
-  position:fixed;right:16px;bottom:calc(var(--bottom-h, 84px) + 14px);z-index:1000;
+  position:fixed;right:16px;bottom:calc(var(--bottom-h, 84px) + 14px);
   display:flex;flex-direction:column;gap:10px;pointer-events:none;
 }
-.app.floating  ~ .toast-container{--bottom-h:0px}
+.app:has(#bottomBar.floating) ~ .toast-container{--bottom-h:0px}
 .toast{
   display:flex;align-items:center;gap:12px;padding:11px 16px 11px 12px;
   background:var(--bg-hover);border:1px solid var(--border-strong);
@@ -177,7 +177,7 @@ dialog[open], dialog[open]::backdrop{opacity:1}
 
 /* ============ 媒体库浮动分页栏 ============ */
 .lib-pager{
-  position:sticky;top:8px;z-index:6;
+  position:sticky;top:8px;z-index:1;
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   padding:9px 12px 9px 14px;margin:0 0 14px;
   background:color-mix(in srgb, var(--bg-color) 74%, transparent);
@@ -236,7 +236,7 @@ option{background:var(--bg-color);color:var(--text)}
 :where([tooltip]){position:relative;}
 [tooltip]:is(:hover, :focus-visible)::after{
   content:attr(tooltip);
-  position:absolute;z-index:2;padding:6px 10px;
+  position:absolute;z-index:1;padding:6px 10px;
   color:var(--accent-light);font-size:13px;white-space:nowrap;
   pointer-events:none;background:transparent;
 }

@@ -42,7 +42,8 @@ function onTrackChanged(track) {
     const changed = state.playingPlaylistIndex !== playlist;
     state.playingPlaylistIndex = playlist;
     state.playingTrackIndex = index;
-    CM.refreshPlayingMarks();
+    CM.renderTrackTable();
+    CM.scrollToTrack();
     if (changed) CM.loadPlaylists();
   });
 }
@@ -161,7 +162,7 @@ fb.on('playback:stopped', () => {
   CM.setArtwork(null);
   CM.updateSeekUI();
   setPlayingVisual(false);
-  CM.refreshPlayingMarks();
+  CM.renderTrackTable();
 });
 
 // 播放列表结构变化 → 刷新侧栏 + 当前列表视图

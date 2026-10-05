@@ -494,6 +494,8 @@ els.mainContent.addEventListener('dblclick', e => {
   const el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');
   if (!el) return;
   CM.playNow(el.dataset.path);
+  els.mainContent.$$('.dc-track[data-path], .search-result-item[data-path]').forEach(el => el.classList.remove('playing'));
+  el.classList.add('playing');
 });
 els.mainContent.addEventListener('contextmenu', e => {
   const el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');

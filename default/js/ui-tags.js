@@ -160,7 +160,7 @@ function _saveSingleTags() {
   els.tagEditorHint.textContent = '正在写入...';
   fb.metadata.write(path, tags).then(r => {
     if (!r.success) {
-      if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
+      els.tagEditorHint.textContent = '写入失败，请重试';
       CM.showToast('写入失败', '标签写入出错', 'error');
       return;
     }
@@ -171,14 +171,11 @@ function _saveSingleTags() {
     if (track) {
       for (const [tagKey, trackKey] of Object.entries(_TAG_TO_TRACK)) {
         if (tags[tagKey] == null) continue;
-        track[trackKey] = _NUMERIC_TRACK_KEYS.has(trackKey)
-          ? parseInt(tags[tagKey], 10) || 0
-          : tags[tagKey];
+        track[trackKey] = _NUMERIC_TRACK_KEYS.has(trackKey) ? +tags[tagKey] || 0 : tags[tagKey];
       }
       CM.renderTrackTable();
     }
-    // 期间用户可能已关闭本编辑器（甚至打开了另一首）：只在仍是同一个上下文时关闭
-    if (_tagCtx === ctx) CM.hideTagEditor();
+    CM.hideTagEditor();
   });
 }
 
