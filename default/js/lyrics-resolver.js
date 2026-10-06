@@ -104,8 +104,15 @@
   function localCandidates(path, artist, title) {
     var list = [];
     if (path && !CM.isUrlPath(path)) {
-      var dir = dirOf(path), stem = stripExt(baseOf(path));
-      if (dir && stem) list.push(dir + BS + stem + '.lrc');   // 音频同名，宿主原生规则
+      // CUE 子曲路径形如 xxx.cue|subsong:N：先剥掉子曲后缀再取同名候选，
+      // 否则 stem 会带着后缀拼出永不存在的 "xxx.cue|subsong:N.lrc"，
+      // 用户放在 cue 旁边的同名 .lrc 永远匹配不上
+      var pFile = String(path).split('|')[0];
+      var dir = dirOf(pFile), base = baseOf(pFile), stem = stripExt(base);
+      if (dir && stem) {
+        list.push(dir + BS + stem + '.lrc');                   // 音频同名，宿主原生规则
+        if (/\.cue$/i.test(base)) list.push(dir + BS + base + '.lrc');   // xxx.cue.lrc 变体
+      }
     }
     var prof = _prof || '';
     if (prof) {
@@ -138,11 +145,19 @@
   }
 
   /* ============================================
-   * 实时匹配（页内调用 QQBridge，无网络 fetch；模块缺失时安静降级）
+   * 实时匹配（页内调用 QQBridge / NeteaseBridge，无网络 fetch；模块缺失时安静降级）
    * ============================================ */
   function fetchOnline(title, artist, duration) {
+    /* 在线曲目按「这条直链属于哪个平台」分发：
+       网易云直链不带歌曲 id，但播放时记下的映射能把直链反查回 id，
+       有映射就按 id 精确取词（比"标题 + 歌手"模糊匹配准得多）。 */
+    var path = CM.trackPath ? CM.trackPath(CM.currentTrack) : '';
+    if (window.NeteaseBridge && typeof NeteaseBridge.isNeteaseUrl === 'function' &&
+        path && NeteaseBridge.isNeteaseUrl(path)) {
+      return NeteaseBridge.lyricForTrack(path, title, artist, duration);
+    }
     if (!window.QQBridge) {
-      return Promise.reject(new Error('qqmusic-core.js 未加载'));
+      return Promise.reject(new Error('qqmusic-core.js / netease-core.js 未加载'));
     }
     return QQBridge.lyric(title, artist, duration);
   }
@@ -251,6 +266,7 @@
     // 在线匹配的命中/未命中同样要作废：只清本模块的 memo，
     // 上一次的「暂无歌词」会被 QQBridge 自己的 30 分钟缓存又送回同一个结果
     if (window.QQBridge && QQBridge.lyricCacheClear) QQBridge.lyricCacheClear();
+    if (window.NeteaseBridge && NeteaseBridge.lyricCacheClear) NeteaseBridge.lyricCacheClear();
     CM.loadLyrics();
   };
 })();

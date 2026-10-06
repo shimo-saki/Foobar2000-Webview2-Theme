@@ -143,7 +143,7 @@
    * 设置持久化（localStorage）
    * ============================================ */
   var SETTINGS_KEY = 'cloudmusic-settings-v2';
-  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, tilt3d: false, lyricModes: {} };
+  CM.settings = { lyricsVisible: true, visualizer: true, tab: 'discover', volume: null, tilt3d: false, lyricModes: {}, onlineNavOpen: false };
   CM.loadSettings = function() {
     try {
       var raw = localStorage.getItem(SETTINGS_KEY);
@@ -219,14 +219,51 @@
     return typeof v === 'string' && v ? v.replace(/"/g, '?') : null;
   };
 
+  /* 在线曲目的显示名
+     ------------------------------------------------------------
+     在线曲目在 foobar 里是**裸直链**，没有任何标签（宿主对 URL 曲目查不出
+     标题），主题只能退回「URL 最后一段」当名字 —— 而 CDN 直链的签名参数里
+     常带 `/`（网易云的 vuutv、QQ 的 vkey），于是界面会把签名碎片当成歌名
+     （实测标题显示成 "GsvWzqeUwhOhb+2GUTYfbcNo="）。搜索列表里名字是对的、
+     一放进 foobar 播放就变乱码，说的就是这里。
+     各在线音源桥接模块在加载时把「直链 → 曲目信息」的查询函数注册进来
+     （QQBridge / NeteaseBridge 播放与下载时都会记下映射并持久化），取名时
+     优先查它，查不到才退回 URL 推断。 */
+  CM.onlineNameProviders = [];
+  CM.registerOnlineName = function(fn) {
+    if (typeof fn === 'function' && CM.onlineNameProviders.indexOf(fn) < 0) {
+      CM.onlineNameProviders.push(fn);
+    }
+  };
+  CM.onlineName = function(path) {
+    if (!path || !CM.isUrlPath(path)) return null;
+    for (var i = 0; i < CM.onlineNameProviders.length; i++) {
+      var r = null;
+      try { r = CM.onlineNameProviders[i](path); } catch (e) { r = null; }
+      if (r && (r.title || r.artist)) return r;
+    }
+    return null;
+  };
+
   CM.trackName = function(t) {
     if (!t) return '未知曲目';
-    return t.title || (t.path ? String(t.path).replace(/\\/g, '/').split('/').pop() : '未知曲目');
+    if (t.title) return t.title;
+    var p = CM.trackPath(t);
+    var nm = CM.onlineName(p);
+    if (nm && nm.title) return nm.title;
+    if (!p) return '未知曲目';
+    var s = String(p).replace(/\\/g, '/');
+    // 直链的查询串里会带 `/`（签名参数），不先切掉就会把碎片当成歌名
+    var q = s.indexOf('?');
+    if (q >= 0) s = s.slice(0, q);
+    return s.split('/').pop() || '未知曲目';
   };
 
   CM.trackArtist = function(t) {
     if (!t) return '';
-    return t.artist || t.albumArtist || '未知艺术家';
+    if (t.artist || t.albumArtist) return t.artist || t.albumArtist;
+    var nm = CM.onlineName(CM.trackPath(t));
+    return (nm && nm.artist) || '未知艺术家';
   };
 
   // 用于 artwork/rating 等 API 的最佳路径
@@ -241,11 +278,6 @@
   CM.isUrlPath = function(p) {
     return /^https?:\/\//i.test(String(p || ''));
   };
-  CM.isLocalPath = function(p) {
-    p = String(p || '');
-    if (!p || CM.isUrlPath(p)) return false;
-    return /^[a-z]:[\\/]/i.test(p) || p.indexOf('\\\\') === 0 || p.indexOf('file://') === 0;
-  };
 
   // foobar2000 配置目录（宿主只给一次就缓存；取不到回 ''）。
   // 下载目录、歌词库、ESLyric 数据目录都挂在它下面，多处复用。
@@ -259,6 +291,65 @@
       _profilePathCache = '';
       return '';
     });
+  };
+
+  /* 把一个目录里的内容整体搬到另一个目录（下载目录改名后的自动迁移）。
+     逐个搬、逐个容错：某个条目搬不动就留在原地，绝不影响别的；
+     搬完若源目录已空就删掉它（宿主同步 file.delete 不删非空目录，所以有残留时
+     删除会失败、原目录保留 —— 不会丢文件）。任何异常都安静降级。
+     返回 Promise<成功搬走的条目数>。
+     注：反斜杠一律用 String.fromCharCode(92) 取，避免源码里出现转义歧义。 */
+  CM.moveDirContents = function(from, to) {
+    var BS = String.fromCharCode(92);
+    function isSep(ch) { return ch === BS || ch === '/'; }
+    function join(dir, name) {
+      var d = String(dir);
+      while (d.length > 1 && isSep(d.charAt(d.length - 1))) d = d.slice(0, -1);
+      return d + BS + name;
+    }
+    function baseName(path) {
+      var t = String(path);
+      while (t.length > 1 && isSep(t.charAt(t.length - 1))) t = t.slice(0, -1);
+      var i = Math.max(t.lastIndexOf(BS), t.lastIndexOf('/'));
+      return i >= 0 ? t.slice(i + 1) : t;
+    }
+    function names(r) {
+      var list = [];
+      if (Array.isArray(r)) list = r;
+      else if (r && typeof r === 'object') {
+        var keys = ['files', 'entries', 'items', 'list', 'children', 'dirs', 'directories', 'subdirs', 'folders'];
+        for (var i = 0; i < keys.length; i++) {
+          if (Array.isArray(r[keys[i]])) list = list.concat(r[keys[i]]);
+        }
+      }
+      var out = [];
+      for (var j = 0; j < list.length; j++) {
+        var e = list[j];
+        var nm = (typeof e === 'string') ? e
+               : String((e && (e.name || e.path || e.fileName || e.fullName)) || '');
+        nm = baseName(nm);
+        if (nm) out.push(nm);
+      }
+      return out;
+    }
+    return CM.api('file.exists', { path: from }).then(function(e) {
+      if (!e || e.exists === false) return 0;
+      return CM.api('file.list', { path: from }).then(function(r) {
+        var list = names(r);
+        if (!list.length) return 0;
+        var chain = Promise.resolve(0);
+        list.forEach(function(n) {
+          chain = chain.then(function(count) {
+            return CM.api('file.move', { source: join(from, n), destination: join(to, n) })
+              .then(function() { return count + 1; }, function() { return count; });
+          });
+        });
+        return chain;
+      }).then(function(moved) {
+        return CM.api('file.delete', { path: from })
+          .then(function() { return moved; }, function() { return moved; });
+      });
+    }).catch(function() { return 0; });
   };
 
   CM.escHtml = function(s) {

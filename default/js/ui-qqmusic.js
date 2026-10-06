@@ -25,16 +25,6 @@
    * 没加载成功时不展开 —— 没有 QQBridge 可保存，面板给了也没用，
    * 那时状态栏会写清楚缺哪个脚本）。
    * ---------------------------------------------------------- */
-  function showSetup(on) {
-    var box = $('qqmSetup');
-    if (!box) return;
-    if (!on) { box.hidden = true; return; }
-    box.hidden = false;
-    var ta = $('qqmCookieInput');
-    if (ta && window.QQBridge && document.activeElement !== ta) {
-      ta.value = QQBridge.getCookie();
-    }
-  }
 
   var S = {
     songs: [],          // 当前**这一页**的搜索结果（翻页会整页替换）
@@ -60,42 +50,33 @@
     impCancel: false    // 请求停止导入
   };
 
+  /* 通用件：样式表、下载落盘、歌单写入、通用小工具都来自 js/online-common.js
+     （与「网易云」页共用同一份实现；以前两边各存一份，已经漂移过）。
+     这里只做本地别名 —— 下面的调用点一行都不用改。 */
+  var K = CM.onlineCommon({
+    prefix: 'qqm',
+    statusId: 'qqmStatus', setupId: 'qqmSetup', cookieInputId: 'qqmCookieInput',
+    dlRowId: 'qqmDlRow', dlPathId: 'qqmDlPath', cssId: 'qqmStyle',
+    bridge: function () { return window.QQBridge; },
+    dirName: 'QQ音乐下载', dirNameOld: 'qqmusic-downloads',
+    state: S,
+    onProgress: function () { updateToolbar(); },
+    getLyric: function (it) { return QQBridge.lyric(it.title || '', it.artist || '', it.duration | 0); }
+  });
+  /* 只别名本页真正用到的（K.buildPlan / K.saveLyric 的包装原来也在这，但都被
+     下面同名函数声明覆盖、从未执行过，连同 hostErr / listsOf / joinPath /
+     grabToFile / showDlRow / dlRowPath 这些只有别名没有调用点的死别名一起删了） */
+  var $ = K.$, mmss = K.mmss, api = K.api, apiOr = K.apiOr, toast = K.toast, setStatus = K.setStatus,
+      copyText = K.copyText, ensurePlaylist = K.ensurePlaylist,
+      dedupePlaylists = K.dedupePlaylists, safeName = K.safeName, extOfUrl = K.extOfUrl,
+      downloadDir = K.downloadDir,
+      openDlFolder = K.openDlFolder, copyDlPath = K.copyDlPath, runDownloads = K.runDownloads,
+      showSetup = K.showSetup, openCookiePanel = K.toggleSetup, injectCss = K.injectCss;
+
   /* ------------------------------------------------------------
    * 通用小工具
    * ---------------------------------------------------------- */
-  function $(id) { return document.getElementById(id); }
-
   var esc = CM.escHtml;                     // 转义复用 core.js 的实现
-
-  function mmss(v) {
-    v = Math.max(0, parseInt(v, 10) || 0);
-    return Math.floor(v / 60) + ':' + ('0' + (v % 60)).slice(-2);
-  }
-
-  function api(method, params) {
-    return CM.api(method, params);
-  }
-
-  /* 写操作专用：失败必须 reject。
-     CM.api 会把任何失败吞成 null（"调用没成功"和"返回 null"混为一谈），
-     歌单写入用它就会出现「没写进去也报成功」甚至播错曲目（索引取 0）。 */
-  function apiOr(method, params) {
-    return fb.invoke(method, params || {}).then(function (r) {
-      if (!r) throw new Error(method + '：宿主没有响应');
-      return r;
-    });
-  }
-
-  function toast(title, sub, type) {
-    if (CM.showToast) CM.showToast(title, sub, type || 'success');
-  }
-
-  function setStatus(text, kind) {
-    var e = $('qqmStatus');
-    if (!e) return;
-    e.textContent = text;
-    e.className = 'qqm-sub' + (kind ? ' qqm-' + kind : '');
-  }
 
   /* ------------------------------------------------------------
    * 状态：桥接自检 / 刷新登录态
@@ -185,7 +166,9 @@
 
   /* 加载下一页并追加到列表末尾 */
   function loadMore() {
-    if (S.loadingMore || !S.more || !S.online || !S.kw) return;
+    // S.paging 也要拦：翻页只重绘翻页条、不清列表，旧列表上的"加载更多"
+    // 仍可点 —— 不拦的话两个响应都会通过各自的 seq 校验，把页码/追加状态搅乱
+    if (S.loadingMore || S.paging || !S.more || !S.online || !S.kw) return;
     S.loadingMore = true;
     var seq = S.seq;                   // 期间若发起新搜索 / 翻页，这个响应就成了旧数据
     setStatus('正在加载第 ' + (S.page + 1) + ' 页…');
@@ -423,81 +406,8 @@
   /* playlist.getAll 的回包归一：宿主直接返回**数组**
      [{index,name,trackCount,isActive,isPlaying,…}]（ui-playlist.js 同款判断），
      对象信封只是兼容写法。此前按 {playlists:…} 解包，数组上取不到字段、
-     永远得到 [] —— 查重永远查空、每次播放都新建「QQ音乐」的真正根因。 */
-  function listsOf(all) {
-    if (Array.isArray(all)) return all;
-    return (all && (all.playlists || all.items || all.list)) || [];
-  }
-
-  function ensurePlaylist(name) {
-    /* getAll 在宿主刚做完 replaceAndPlay / 增删歌单后会短暂抖动
-       （偶发 reject，CM.api 把它吞成 null → 看起来像"没有同名歌单"）。
-       所以查不到同名先重试几轮再决定新建；建完再复核一次真实索引。 */
-    function fetchAll() {
-      return api('playlist.getAll').then(function (all) {
-        return listsOf(all);
-      }, function () { return []; });
-    }
-    function findIn(lists) {
-      for (var i = 0; i < lists.length; i++) {
-        var it = lists[i] || {};
-        var nm = it.name != null ? it.name : it.title;
-        if (nm === name) return it.index != null ? it.index : i;
-      }
-      return -1;
-    }
-    function tryFind(tries) {
-      return fetchAll().then(function (lists) {
-        var idx = findIn(lists);
-        if (idx >= 0 || tries <= 0) return idx;
-        return new Promise(function (res) { setTimeout(res, 250); })
-          .then(function () { return tryFind(tries - 1); });
-      });
-    }
-    return tryFind(4).then(function (idx) {
-      if (idx >= 0) return idx;
-      return api('playlist.create', { name: name }).then(function (cr) {
-        if (cr && cr.success !== false && cr.index != null) return cr.index;
-        // create 没回 index：重查一遍拿真实索引（再不行才退回活动歌单）
-        return tryFind(3).then(function (idx2) {
-          if (idx2 >= 0) return idx2;
-          return api('playlist.getActive').then(function (a) {
-            return a && (a.index != null ? a.index : a.playlist);
-          });
-        });
-      });
-    });
-  }
-
-  /* 同名歌单去重：保留「正在播放 > 活动 > 最靠前」的那一个，其余删掉。
-     这是上面 getAll 抖动留下的疤 —— 每次播放成功后顺手扫一遍。 */
-  function dedupePlaylists(name) {
-    return api('playlist.getAll').then(function (all) {
-      var lists = listsOf(all);
-      var same = [];
-      for (var i = 0; i < lists.length; i++) {
-        var it = lists[i] || {};
-        var nm = it.name != null ? it.name : it.title;
-        if (nm === name) {
-          same.push({ index: it.index != null ? it.index : i,
-                      playing: !!it.isPlaying, active: !!it.isActive });
-        }
-      }
-      if (same.length < 2) return 0;
-      same.sort(function (a, b) {
-        return (b.playing - a.playing) || (b.active - a.active) || (a.index - b.index);
-      });
-      var removes = same.slice(1).map(function (s) { return s.index; })
-                        .sort(function (a, b) { return b - a; });  // 从大到小删，避开索引位移
-      var p = Promise.resolve();
-      removes.forEach(function (ri) {
-        p = p.then(function () {
-          return api('playlist.remove', { playlist: ri }).catch(function () { return null; });
-        });
-      });
-      return p.then(function () { return removes.length; });
-    }).catch(function () { return 0; });
-  }
+     永远得到 [] —— 查重永远查空、每次播放都新建「QQ音乐」的真正根因。
+     （listsOf / ensurePlaylist / dedupePlaylists 均已上移到 online-common。） */
 
   /* 播放固定用这一个歌单：勾选的曲目**追加**进去并从新曲开播 ——
      之前播的歌原地保留，听完可以直接在歌单里接着选下一首；
@@ -510,12 +420,16 @@
     // 与 downloadTracks 同款并发守卫：批量解析进行中，行内「播放」/双击仍可点，
     // 不拦的话会并发跑第二条解析链、两批追加/开播互相竞态
     if (S.busy) { toast('正在处理上一批', '稍等一下再点', 'error'); return; }
+    // busy 先置位再等试听停止：否则"停试听"的那一次 IPC 往返期间还能再点进来一条链
+    S.busy = true;
+    updateToolbar();
+    // 试听（JIT 无痕试听）与正常播放是两路输出：先停掉，避免两首一起响
+    // （播放列表页的播放全部 / 双击与这里保持一致）
+    CM.stopPreviewIfActive().then(function() {
 
     // 记 mediaMid→专辑 映射：在线播放的封面兜底靠它（artwork-resolver 从直链反查）
     if (window.QQBridge) QQBridge.rememberMediaCovers(tracks);
 
-    S.busy = true;
-    updateToolbar();
     var plName = QQ_PLAYLIST;
     var usedLabel = '';
     /* 流播固定 MP3 档：CDN 把所有直链的 Content-Type 打成 audio/x-ogg，
@@ -574,60 +488,13 @@
       S.busy = false;
       updateToolbar();
     });
+    });   // stopPreviewIfActive
   }
 
-  /* ------------------------------------------------------------
-   * 下载
-   * ------------------------------------------------------------
-   * 解析音源 → 落盘到**固定的下载目录**：
-   *     <foobar2000 配置目录>\qqmusic-downloads\
-   * 为什么固定：宿主的写盘策略只放行配置目录与临时目录（组件文档
-   * reference/security），放别处（含 junction 到别的盘）都会被拒。
-   * 所以不提供"选目录"，也不做多通道降级 —— 音频走宿主的 http.download
-   * （见下方 grabToFile 的说明），歌词走 file.write，两条都是实测可用的。
-   * 音频与同名 .lrc 一起写进同一个目录。
-   * 想让曲子进媒体库：直接把这个目录加进媒体库文件夹即可（别做链接）。
-   * ---------------------------------------------------------- */
+  /* 下载目录 / 文件名清洗 / 取流落盘（grabToFile）/ 保存位置条都搬进了
+     js/online-common.js，与网易云页共用同一份实现，本页不再各自留存。 */
 
-  var DL_EXT = { flac: 1, m4a: 1, mp3: 1, ogg: 1, wav: 1, aac: 1, ape: 1, wma: 1 };
-
-  /* 下载目录（配置目录下固定一层）。
-     目录**必须真实存在**：实测目录不存在时 file.write 会失败（哪怕文档说会自动建父目录），
-     所以这里先 mkdir 一次；已存在时是幂等的，失败也不拦（交给写入报错）。 */
-  var _dlDir = '';
-  function downloadDir() {
-    if (_dlDir) return Promise.resolve(_dlDir);
-    return CM.profilePath().then(function (prof) {
-      if (!prof) throw new Error('取不到 foobar2000 配置目录');
-      _dlDir = joinPath(prof, 'qqmusic-downloads');
-      return api('file.mkdir', { path: _dlDir }).then(function () { return _dlDir; },
-                                                       function () { return _dlDir; });
-    });
-  }
-
-  /* 文件名清洗：Windows 非法字符 + 结尾的点 / 空格（会被系统静默吞掉） */
-  function safeName(s) {
-    s = String(s == null ? '' : s)
-      .replace(/[\\/:*?"<>|]/g, '_')
-      .replace(/[\u0000-\u001f]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .replace(/[. ]+$/, '');
-    return s.slice(0, 110) || 'track';
-  }
-
-  /* 扩展名以直链为准 —— CDN 文件名自带格式（C400*.m4a / M800*.mp3 / F000*.flac） */
-  function extOfUrl(u) {
-    var m = /\.([a-z0-9]{2,4})$/.exec(String(u).split('?')[0] || '');
-    var e = m ? m[1].toLowerCase() : '';
-    return DL_EXT[e] ? '.' + e : '.m4a';
-  }
-
-  function joinPath(dir, name) {
-    return String(dir).replace(/[\\/]+$/, '') + '\\' + name;
-  }
-
-  /* 解析结果 + 曲目 → 下载计划（文件名带歌手，同一批里重名自动加序号；
+  /* 解析结果 + 曲目 → 下载计划（文件名带歌手，同一批里重名加序号；
      同时带出歌词要用的字段 —— .lrc 与音频同名同目录，宿主会当成同名歌词）。
      resolves[] 里每项带 songmid（CDN 直链不能附加自定义参数，会破坏签名），
      所以不再像原版那样从 URL 的 sm 参数倒查。 */
@@ -656,189 +523,9 @@
     });
   }
 
-  function hostErr(r) {
-    if (!r) return '宿主没有响应';
-    return r.message || r.error || r.detail || r.code || '未知错误';
-  }
 
-  /* ------------------------------------------------------------
-   * 取流落盘 —— 只能走**宿主的下载器** http.download
-   * ------------------------------------------------------------
-   * 为什么不用页面自己 fetch：QQ音乐 CDN 不给跨源头，页面 fetch 会被
-   * CORS 拦掉，报 "Failed to fetch"。宿主的下载器是原生 HTTP 客户端，
-   * 没有这层限制，且 saveTo 写在配置目录里正好符合它的写盘策略。
-   *
-   * http.download 默认同步（会占住宿主线程），必须显式 async: true：
-   * 回执给 requestId，完成走 http:downloadComplete 事件。事件里带 requestId
-   * 和 path —— 挂等待时还不知道 requestId，所以先按 path 挂，回执回来再补挂。
-   * ---------------------------------------------------------- */
-  var DL_TIMEOUT = 180000;
-  var _dlWaiters = {};
-  var _dlSubscribed = false;
-
-  function dlSubscribe() {
-    if (_dlSubscribed) return;
-    var f = window.fb;
-    if (!f || typeof f.on !== 'function') return;
-    _dlSubscribed = true;
-    f.on('http:downloadComplete', function (e) {
-      if (!e) return;
-      var keys = [];
-      if (e.requestId) keys.push('id:' + e.requestId);
-      if (e.path) keys.push('path:' + String(e.path).toLowerCase());
-      for (var i = 0; i < keys.length; i++) {
-        var w = _dlWaiters[keys[i]];
-        if (w) { w.settle(e); return; }
-      }
-    });
-  }
-
-  function grabToFile(url, saveTo) {
-    dlSubscribe();
-    return new Promise(function (resolve, reject) {
-      var keys = ['path:' + saveTo.toLowerCase()];
-      var done = false, timer = null;
-      function settle(e) {
-        if (done) return;
-        done = true;
-        keys.forEach(function (k) { delete _dlWaiters[k]; });
-        if (timer) clearTimeout(timer);
-        if (e === null) { reject(new Error('等待宿主下载超时')); return; }
-        if (e.success === false) { reject(new Error(hostErr(e))); return; }
-        resolve(e);
-      }
-      keys.forEach(function (k) { _dlWaiters[k] = { settle: settle }; });
-      timer = setTimeout(function () { settle(null); }, DL_TIMEOUT);
-
-      api('http.download', { url: url, saveTo: saveTo, async: true }).then(function (r) {
-        if (done) return;
-        if (!r) { settle({ success: false, error: '宿主没有响应 http.download' }); return; }
-        if (r.success === false) { settle({ success: false, error: hostErr(r) }); return; }
-        // 宿主忽略 async、当场同步下完：回执里直接有路径
-        if (r.path || r.bytesWritten != null) { settle({ success: true, path: r.path }); return; }
-        var rid = r.requestId || (r.data && r.data.requestId);
-        if (rid) { keys.push('id:' + rid); _dlWaiters['id:' + rid] = { settle: settle }; return; }
-        settle({ success: false, error: '宿主未响应 http.download' });
-      }, function (e) {
-        settle({ success: false, error: (e && e.message) || '下载请求失败' });
-      });
-    });
-  }
-
-  /* 歌词：QQBridge.lyric 按「标题 + 歌手 + 时长」匹配，不受会员权限限制。
-     返回 'ok' | 'none'（没匹配到） | 'fail'（写入失败） */
-  function fetchLyric(it) {
-    return QQBridge.lyric(it.title || '', it.artist || '', it.duration | 0)
-      .then(function (r) {
-        return (r && r.ok && r.lrc) ? String(r.lrc) : '';
-      }, function () { return ''; });
-  }
-
-  function saveLyric(it, dir) {
-    if (!it.title) return Promise.resolve('none');
-    return fetchLyric(it).then(function (text) {
-      if (!text) return 'none';
-      // 统一成 CRLF + UTF-8 BOM：Windows 上的播放器认这个，主题自己的检测也吃得下
-      var body = '\ufeff' + text.replace(/\r\n|\r|\n/g, '\r\n');
-      return api('file.write', { path: joinPath(dir, it.lrcName), content: body }).then(function (w) {
-        if (!w) return 'fail';
-        return (w.success === false) ? 'fail' : 'ok';
-      }, function () { return 'fail'; });
-    });
-  }
-
-  /* ------------------------------------------------------------
-   * 下载保存位置条：路径 + 打开文件夹 / 复制路径
-   * ---------------------------------------------------------- */
-  function showDlRow(dir) {
-    if (!dir) return;
-    var row = $('qqmDlRow'), path = $('qqmDlPath');
-    if (!row || !path) return;
-    path.textContent = dir;
-    path.title = dir;
-    row.hidden = false;
-  }
-
-  function dlRowPath() {
-    return $('qqmDlPath') ? $('qqmDlPath').textContent : '';
-  }
-
-  /* 在资源管理器里打开下载目录。官方入口是 shell.showInExplorer
-     （主题的「打开所在文件夹」就用它）；万一宿主拒绝，退回 shell.exec
-     的 explorer 白名单项，再不行就弹错误说明。 */
-  function openDlFolder() {
-    var dir = dlRowPath();
-    if (!dir) return;
-    api('shell.showInExplorer', { path: dir }).then(function (r) {
-      // CM.api 把宿主拒绝吞成 null：null 与 success:false 都要走兜底
-      if (!r || r.success === false) {
-        return api('shell.exec', { command: 'explorer "' + dir + '"' });
-      }
-      return r;
-    }).then(function (r) {
-      if (!r || r.success === false) throw new Error((r && r.error) || '宿主拒绝');
-    }).catch(function (e) {
-      toast('打开文件夹失败', (e && e.message || '未知错误') + ' —— 路径可点「复制路径」手动打开',
-            'error');
-    });
-  }
-
-  function copyDlPath() {
-    var dir = dlRowPath();
-    if (!dir) return;
-    copyText(dir, function (ok) {
-      toast(ok ? '路径已复制' : '复制失败，请手动选中复制', dir, ok ? 'success' : 'error');
-    });
-  }
-
-  function runDownloads(plan) {
-    var ok = 0, failed = [], lyricOk = 0, stopped = false;
-    S.dlTotal = plan.length;
-    S.dlDone = 0;
-    updateToolbar();
-
-    return downloadDir().then(function (dir) {
-      showDlRow(dir);                  // 一开始就亮出保存位置，随时可打开 / 复制
-      function step(i) {
-        if (i >= plan.length) return Promise.resolve();
-        if (S.dlCancel) {
-          stopped = true;
-          setStatus('已停止：完成 ' + ok + ' 首，剩余 ' + (plan.length - i) + ' 首未下载', 'warn');
-          return Promise.resolve();
-        }
-        var it = plan[i];
-        setStatus('正在下载 ' + (i + 1) + '/' + plan.length + '：' + it.name);
-        return grabToFile(it.url, joinPath(dir, it.name)).then(function () {
-          ok++; S.dlDone = ok; updateToolbar();
-          setStatus('正在取歌词 ' + (i + 1) + '/' + plan.length + '：' + it.title);
-          return saveLyric(it, dir).then(function (r) { if (r === 'ok') lyricOk++; });
-        }, function (err) {
-          failed.push(it.name + '（' + ((err && err.message) || '失败') + '）');
-        }).then(function () { return step(i + 1); });
-      }
-
-      return step(0).then(function () {
-        var lyr = lyricOk ? (' · 歌词 ' + lyricOk + ' 首') : '';
-        var where = '已保存到 ' + dir;
-        /* 用户按了停止：这不是失败，别报成「下载失败 / 部分失败」 */
-        if (stopped && !failed.length) {
-          setStatus('已停止下载：完成 ' + ok + ' 首' + lyr + ' · ' + where, 'warn');
-          toast('已停止下载', '完成 ' + ok + ' 首' + lyr + '\n' + where, 'warn');
-        } else if (!failed.length) {
-          setStatus('下载完成：' + ok + ' 首' + lyr , 'ok');
-          toast('下载完成', ok + ' 首' + lyr , 'success');
-        } else {
-          // 状态栏带上第一条失败原因 —— 只有计数的话没法排查（提示条会消失，状态栏留着）
-          setStatus('下载结束：成功 ' + ok + ' 首' + lyr + '，失败 ' + failed.length + ' 首' +
-                    (failed.length ? ' —— ' + failed[0] : ''), 'warn');
-          toast(ok ? '下载结束（部分失败）' : '下载失败',
-                (ok ? '成功 ' + ok + ' 首' + lyr + '，失败 ' + failed.length + ' 首\n' : '') +
-                (failed.slice(0, 3).join('\n') || where),
-                failed.length ? 'error' : 'success');
-        }
-      });
-    });
-  }
+  /* 歌词（下载时附带的同名 .lrc）走 online-common 的 saveLyric，
+     由 cfg.getLyric 回调到 QQBridge.lyric —— 本页不再存一份实现。 */
 
   function downloadTracks(tracks) {
     // 下载中再点一次 = 停止（当前这首下完就停，不会留下半个文件）
@@ -990,7 +677,13 @@
           return step(i).then(function () { return run(i + 1); });
         }
         return run(0).then(function () {
-          if (S.impCancel) return;
+          if (S.impCancel) {
+            // 最后一行处理期间取消：step 里的取消分支已过、汇总又被跳过 ——
+            // 在这里补一条停止汇总，否则状态栏永远停在「导入中 N/N」
+            setStatus('导入已停止：完成 ' + ok + '/' + lines.length +
+                      (failed.length ? '，失败 ' + failed.length : ''), 'warn');
+            return;
+          }
           /* 按原因归类汇总 */
           var groups = {};
           failed.forEach(function (f) {
@@ -1028,8 +721,8 @@
   }
 
   function toggleImportPanel() {
-    var p = $('qqmImportPanel');
-    if (p) p.hidden = !p.hidden;
+    // 与「登录 / Cookie」完全同一套开关实现（K.togglePanel），手感统一
+    K.togglePanel('qqmImportPanel');
   }
 
   /* 复制导出脚本：源码就是 js/qq-playlist-export.js 里定义的那个函数，
@@ -1059,29 +752,6 @@
    *   3) 粘进 Cookie 面板保存。
    * 不填 Cookie 也能用：免费曲库（128K/AAC 96K）照常可播可下载。
    * ---------------------------------------------------------- */
-  function openCookiePanel() {
-    showSetup(true);                                 // 打开 Cookie 面板
-  }
-
-  /* 复制文本（WebView2 里 clipboard API 可能被策略挡掉，退回 execCommand） */
-  function copyText(text, done) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () { done(true); },
-                                            function () { done(false); });
-    } else {
-      try {
-        var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        var ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        done(ok);
-      } catch (e) { done(false); }
-    }
-  }
 
   function copyCookieCommand() {
     var code = $('qqmCookieCmd');
@@ -1262,88 +932,7 @@
   /* ------------------------------------------------------------
    * 样式（自包含，不进主题 CSS 文件，删掉本文件即可完全还原）
    * ---------------------------------------------------------- */
-  var CSS = [
-    '.qqm-root{height:100%;display:flex;flex-direction:column;min-height:0;padding:16px 18px 12px;gap:12px}',
-    '.qqm-head{display:flex;align-items:flex-start;gap:12px}',
-    '.qqm-title{font-size:16px;font-weight:600;color:var(--text)}',
-    '.qqm-sub{font-size:12px;color:var(--text-2);margin-top:3px}',
-    '.qqm-sub.qqm-ok{color:#7ed49b}',
-    '.qqm-sub.qqm-warn{color:#e0b070}',
-    '.qqm-sub.qqm-err{color:#ff8188}',
-    '.qqm-head-actions{margin-left:auto;display:flex;gap:8px;flex:none}',
-    '.qqm-bar{display:flex;gap:8px;align-items:center;flex:none}',
-    '.qqm-search{flex:1;display:flex;align-items:center;gap:8px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-m);padding:0 12px;height:36px}',
-    '.qqm-search svg{width:15px;height:15px;flex:none;fill:none;stroke:var(--text-3);stroke-width:2;stroke-linecap:round}',
-    '.qqm-search input{flex:1;background:none;border:none;outline:none;color:var(--text);font:inherit;height:100%}',
-    '.qqm-select{height:36px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-m);color:var(--text);font:inherit;padding:0 8px;outline:none}',
-    '.qqm-btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:var(--r-m);background:var(--bg-3);color:var(--text);font:inherit;cursor:pointer;border:1px solid var(--border);transition:var(--t-fast)}',
-    '.qqm-btn:hover{background:var(--bg-4)}',
-    '.qqm-btn:disabled{opacity:.42;cursor:not-allowed}',
-    '.qqm-btn svg{width:13px;height:13px;fill:currentColor;stroke:none}',
-    '.qqm-btn-primary{background:var(--accent);border-color:transparent;color:var(--on-accent)}',
-    '.qqm-btn-primary:hover{filter:brightness(1.08)}',
-    '.qqm-btn-sm{height:26px;padding:0 12px;font-size:12px}',
-    '.qqm-toolbar{display:flex;align-items:center;gap:14px;flex:none;font-size:12px;color:var(--text-2)}',
-    '.qqm-flex{flex:1}',
-    '.qqm-check{display:inline-flex;align-items:center;gap:6px;cursor:pointer}',
-    '.qqm-check input{accent-color:var(--accent);cursor:pointer}',
-    '.qqm-list{flex:1;min-height:0;overflow:auto;border:1px solid var(--border);border-radius:var(--r-l);background:var(--bg-1)}',
-    '.qqm-rows{display:flex;flex-direction:column}',
-    '.qqm-row{display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:default;border-bottom:1px solid var(--border)}',
-    '.qqm-row:last-child{border-bottom:none}',
-    '.qqm-row:hover{background:var(--bg-2)}',
-    '.qqm-row.sel{background:var(--accent-soft)}',
-    '.qqm-cover{width:38px;height:38px;flex:none;border-radius:var(--r-s);overflow:hidden;background:var(--bg-3);display:flex;align-items:center;justify-content:center}',
-    '.qqm-cover img{width:100%;height:100%;object-fit:cover;display:block}',
-    '.qqm-meta{min-width:0;flex:1}',
-    '.qqm-name{font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '.qqm-artist{font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '.qqm-tag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;font-size:10px;line-height:15px;background:var(--accent-soft-2);color:var(--accent);vertical-align:1px}',
-    '.qqm-tag-hi{background:rgba(232,74,58,.16);color:#e84a3a;font-weight:600}',
-    '.qqm-tag-sq{background:rgba(64,150,255,.16);color:#4096ff}',
-    '.qqm-dur{flex:none;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums}',
-    '.qqm-empty{height:100%;min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:13px}',
-    '.qqm-empty svg{width:38px;height:38px;fill:none;stroke:var(--text-4);stroke-width:1.6}',
-    '.qqm-more{display:flex;justify-content:center;align-items:center;padding:14px 0 16px}',
-    '.qqm-more-btn{min-width:190px}',
-    '.qqm-more-hint{font-size:12px;color:var(--text-4)}',
-    // 翻页条：固定在列表下方（列表是 flex:1，它是 flex:none）
-    '.qqm-pager{display:none;align-items:center;gap:10px;flex:none;font-size:12px;color:var(--text-2);padding:10px 4px 0}',
-    '.qqm-pager.on{display:flex}',
-    '.qqm-page-info{font-variant-numeric:tabular-nums;white-space:nowrap}',
-    '.qqm-page-info b{color:var(--text);font-weight:600;margin:0 2px}',
-    '.qqm-jump{display:flex;align-items:center;gap:6px;color:var(--text-3);white-space:nowrap}',
-    '.qqm-jump input{width:54px;height:26px;text-align:center;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-s);color:var(--text);font:inherit;outline:none;font-variant-numeric:tabular-nums}',
-    '.qqm-jump input:focus{border-color:var(--accent)}',
-    '.qqm-jump input:disabled{opacity:.42;cursor:not-allowed}',
-    // Cookie 面板。注意 [hidden] 必须显式兜底 —— 这个元素自己带 display:flex，
-    // 会把 hidden 属性自带的 display:none 顶掉，面板就会永远挂在那儿。
-    '.qqm-setup{display:flex;flex-direction:column;gap:6px;flex:none;padding:10px 14px;border-radius:var(--r-m);border:1px solid rgba(224,176,112,.45);background:rgba(224,176,112,.10)}',
-    '.qqm-setup[hidden]{display:none!important}',
-    '.qqm-setup-t{font-size:13px;font-weight:600;color:#e0b070}',
-    '.qqm-setup-d{font-size:12px;line-height:1.6;color:var(--text-2)}',
-    '.qqm-setup-d code{font-family:Consolas,Menlo,monospace;font-size:11px;color:var(--text-3)}',
-    '.qqm-setup-input{width:100%;min-height:60px;max-height:140px;resize:vertical;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r-s);color:var(--text);font-family:Consolas,Menlo,monospace;font-size:11px;padding:6px 8px;outline:none;line-height:1.5;user-select:text}',
-    '.qqm-setup-input:focus{border-color:var(--accent)}',
-    '.qqm-setup-cmd-row{display:flex;align-items:center;gap:8px}',
-    '.qqm-setup-cmd{flex:1;padding:6px 10px;border-radius:var(--r-s);background:var(--bg-1);border:1px solid var(--border);color:var(--text);font-family:Consolas,Menlo,monospace;font-size:12px;user-select:text;overflow-x:auto;white-space:nowrap}',
-    // 下载保存位置条：首轮下载后出现，路径可复制、可一键打开
-    '.qqm-dlrow{display:flex;align-items:center;gap:8px;flex:none;font-size:12px;color:var(--text-2)}',
-    '.qqm-dlrow[hidden]{display:none!important}',
-    '.qqm-dl-label{flex:none;color:var(--text-3)}',
-    '.qqm-dl-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r-s);padding:4px 8px;color:var(--text);font-family:Consolas,Menlo,monospace;font-size:11px;user-select:text;cursor:default}',
-    '.qqm-setup-a{display:flex;align-items:center;gap:8px;margin-top:2px}',
-    '.qqm-setup-name{flex:1;height:26px;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r-s);color:var(--text);font:inherit;padding:0 8px;outline:none}',
-    '.qqm-setup-name:focus{border-color:var(--accent)}'
-  ].join('\n');
 
-  function injectCss() {
-    if (document.getElementById('qqmStyle')) return;
-    var st = document.createElement('style');
-    st.id = 'qqmStyle';
-    st.textContent = CSS;
-    document.head.appendChild(st);
-  }
 
   /* ------------------------------------------------------------
    * 启动：首次进入该页时才做连接检查

@@ -317,9 +317,6 @@ body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
 .ctrl-btn.play-btn:hover{background:#fff;color:#000;transform:scale(1.06);box-shadow:0 4px 14px rgba(0,0,0,0.35)}
 .ctrl-btn.play-btn:active{transform:scale(0.94)}
 .ctrl-btn.play-btn svg{width:19px;height:19px;fill:currentColor;stroke:none}
-.ctrl-btn .badge-1{
-  position:absolute;top:4px;right:4px;font-size:8px;font-weight:800;color:var(--accent);
-}
 
 /* Seek bar */
 .seek-bar-wrap{display:flex;align-items:center;gap:10px;width:100%}
@@ -366,12 +363,6 @@ body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
 /* Mini spectrum */
 .mini-spectrum{display:flex;align-items:flex-end;gap:2px;height:18px;padding:0 6px;width:64px}
 .mini-spec-bar{flex:1;background:var(--accent);border-radius:1px 1px 0 0;height:18px;transform-origin:bottom;opacity:0.85;transition:transform 0.06s linear;will-change:transform}
-
-/* Visualizer canvas */
-.visualizer-canvas{
-  position:absolute;inset:0;width:100%;height:100%;
-  pointer-events:none;z-index:3;opacity:0.55;display:none;
-}
 
 /* ============ Queue Drawer ============ */
 .queue-drawer{
@@ -488,7 +479,6 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .pop-item .check{width:14px;font-size:11px;color:var(--accent);flex-shrink:0}
 .pop-item svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .pop-item .pop-item-note{margin-left:auto;font-size:10.5px;color:var(--text-3)}
-.pop-scroll{max-height:220px;overflow-y:auto}
 
 /* ============ Popover 子菜单（折叠式） ============ */
 .pop-sub-header{
@@ -655,7 +645,7 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
     #222 45.5%,#111 65%,#222 65.5%,#111 85%,
     #222 85.5%,#111 100%);
   box-shadow:0 20px 60px rgba(0,0,0,0.5),inset 0 0 0 1px rgba(255,255,255,0.04);
-  animation:np-spin 5s linear infinite paused;
+  animation:np-spin 8s linear infinite paused;
   transition:box-shadow 0.6s ease;
 }
 .np-overlay.open .np-vinyl-disc.playing{animation-play-state:running}
@@ -935,6 +925,9 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
   animation:batch-in 0.28s var(--ease);
 }
 .batch-bar.hidden{display:none}
+/* 批量栏是 body 子元素、z-index（1500）高于沉浸页 .np-overlay（200），
+   进入沉浸模式时必须压掉，否则它和它的按钮会浮在沉浸页之上被误点 */
+body.np-open .batch-bar{display:none!important}
 @keyframes batch-in{from{transform:translateX(-50%) translateY(16px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
 .batch-bar-text{font-size:13px;color:var(--text-2);white-space:nowrap}
 .batch-bar-text b{color:var(--accent);font-weight:600}

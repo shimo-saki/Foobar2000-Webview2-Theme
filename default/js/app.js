@@ -71,12 +71,28 @@
   function syncInitialState() {
     CM.api('playback.getState').then(function(r) {
       if (!r) return;
-      var playing = r.isPlaying != null ? r.isPlaying : r.playing;
+      // 宿主 playback.getState 返回的是 state（'stopped'|'paused'|'playing'）——
+      // SDK 自己的组件（components.global.js）与 SMP 兼容层都读这个字段；
+      // isPlaying / playing 只在没有 state 的旧回包上兜底，否则加载时正在播放
+      // 也会被判成"未播放"，图标与 body.is-playing 都是错的。
+      var playing;
+      if (r.state != null) playing = (r.state === 'playing' || r.state === 1);
+      else playing = !!(r.isPlaying != null ? r.isPlaying : r.playing);
       var paused = r.isPaused != null ? r.isPaused : r.paused;
       CM.state.duration = r.duration || r.length || 0;
       CM.state.position = r.position || 0;
       CM.updateSeekUI();
       setPlayingVisual(!!playing && !paused);
+    });
+    // getState 回包里没有 duration / position（只有 state/canSeek/canPause），
+    // 另外取一次进度，否则页面加载时进度条与总时长停在 0:00，要等下一次
+    // stateChanged 才补上。
+    CM.api('playback.getPosition').then(function(r) {
+      if (!r) return;
+      if (r.duration) CM.state.duration = r.duration;
+      if (r.position != null && !CM.state.seeking) CM.state.position = r.position;
+      CM.updateSeekUI();
+      CM.updateTaskbarProgress();
     });
     CM.api('playback.getCurrentTrack').then(function(r) {
       var track = r && (r.track || (r.title || r.path ? r : null));
@@ -252,6 +268,9 @@
       subscribeEvents();
       CM.initDragDrop();
       CM.initTaskbar();
+      // 宿主可能晚于本页注入（SDK checkAvailability 轮询可达 5 秒）：boot 时
+      // startSpectrum 会因 fb 不可用静默跳过，就绪后补一次（内部幂等）
+      if (CM.state.visualizerActive) CM.startSpectrum();
       // 打开“上次听歌的歌单”（按名称持久化），找不到/未记忆则退回活跃歌单
       plPromise.then(function() {
         var saved = CM.settings.lastPlaylist;

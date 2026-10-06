@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CloudMusic</title>
-<link rel="stylesheet" href="css/variables.css?v=23">
-<link rel="stylesheet" href="css/layout.css?v=24">
-<link rel="stylesheet" href="css/components.css?v=33">
-<link rel="stylesheet" href="css/utilities.css?v=23">
+<link rel="stylesheet" href="css/variables.css?v=24">
+<link rel="stylesheet" href="css/layout.css?v=28">
+<link rel="stylesheet" href="css/components.css?v=34">
+<link rel="stylesheet" href="css/utilities.css?v=24">
 </head>
 <body>
 <div class="app lyrics-hidden" id="app">
@@ -50,9 +50,24 @@
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <span>搜索</span>
       </div>
-      <div class="nav-item" data-tab="qqmusic" tabindex="0" title="QQ 音乐在线音源">
-        <svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg>
-        <span>QQ 音乐</span>
+      <!-- 在线音源折叠分组：收起时导航回到原本 4 项的高度，歌单栏不被挤下去。
+           表头点击 / 回车 / 空格展开收起，状态记忆在 settings；
+           切到 qqmusic / netease（含顶部 main-tabs）时自动展开。 -->
+      <div class="nav-group" id="navOnlineGroup" tabindex="0" role="button" aria-expanded="false"
+           title="展开 / 收起在线音源页（QQ 音乐 · 网易云）">
+        <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>在线音源</span>
+        <svg class="nav-group-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="nav-sub" id="navOnlineSub" hidden>
+        <div class="nav-item nav-sub-item" data-tab="qqmusic" tabindex="0" title="QQ 音乐在线音源">
+          <svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg>
+          <span>QQ 音乐</span>
+        </div>
+        <div class="nav-item nav-sub-item" data-tab="netease" tabindex="0" title="网易云音乐在线音源">
+          <svg viewBox="0 0 24 24"><path d="M17.5 18H7a4.5 4.5 0 0 1-.7-8.95 5.5 5.5 0 0 1 10.6 1.3A3.8 3.8 0 0 1 17.5 18z"/></svg>
+          <span>网易云</span>
+        </div>
       </div>
     </div>
     <div class="sidebar-section-title">
@@ -72,6 +87,7 @@
       <div class="main-tab" data-tab="library">媒体库</div>
       <div class="main-tab" data-tab="search">搜索</div>
       <div class="main-tab" data-tab="qqmusic">QQ 音乐</div>
+      <div class="main-tab" data-tab="netease">网易云</div>
     </div>
     <div class="main-body" id="mainBody">
 
@@ -121,7 +137,7 @@
           <div class="playlist-header" id="playlistHeader">
             <div class="pl-cover ph" id="plCoverWrap">
               <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-              <img class="pl-cover" id="plCover" src="" alt="" style="position:absolute;inset:0" />
+              <img class="pl-cover" id="plCover" src="static/img/no_cover.svg" alt="" style="position:absolute;inset:0" />
             </div>
             <div class="pl-header-info">
               <div class="pl-header-tag" id="playlistHeaderTag">PLAYLIST</div>
@@ -273,7 +289,7 @@
             <label class="qqm-check"><input type="checkbox" id="qqmAll" title="勾选当前这一页的全部曲目" /> 全选本页</label>
             <span class="qqm-count" id="qqmCount">已选 0 首</span>
             <span class="qqm-flex"></span>
-            <button class="qqm-btn" id="qqmDownloadBtn" disabled title="解析音源并下载到 &lt;配置目录&gt;\qqmusic-downloads（含同名歌词 .lrc；下载中再点一次 = 停止）">
+            <button class="qqm-btn" id="qqmDownloadBtn" disabled title="解析音源并下载到 &lt;配置目录&gt;\QQ音乐下载（含同名歌词 .lrc；下载中再点一次 = 停止）">
               <svg viewBox="0 0 24 24"><path d="M12 15V3m0 12l-4-4m4 4l4-4"/><path d="M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.94-1.515L22 17"/></svg>
               <span>下载选中</span>
             </button>
@@ -306,6 +322,127 @@
           </div>
         </div>
       </div>
+
+      <!-- 网易云音乐在线音源（扩展页，逻辑在 js/ui-netease.js + js/netease-core.js） -->
+      <div class="tab-content" id="tabNetease">
+        <div class="nem-root">
+          <div class="nem-head">
+            <div>
+              <div class="nem-title">网易云音乐在线音源</div>
+              <div class="nem-sub" id="nemStatus">正在初始化页内桥接…</div>
+            </div>
+            <div class="nem-head-actions">
+              <button class="nem-btn" id="nemImportBtn" title="粘贴歌单链接或 ID，直接读取曲目并导入">导入歌单</button>
+              <button class="nem-btn" id="nemLoginBtn" title="免费曲库不需要登录（多为 128K / 320K）；无损音质 / 会员曲目需要粘贴一次 Cookie —— 面板里「怎么取？」给了两种从开发者工具复制的方法（整条 Copy as cURL 可直接粘贴）">登录 / Cookie</button>
+            </div>
+          </div>
+
+          <!-- 下载保存位置条（首轮下载后出现） -->
+          <div class="nem-dlrow" id="nemDlRow" hidden>
+            <span class="nem-dl-label">下载保存到</span>
+            <code class="nem-dl-path" id="nemDlPath"></code>
+            <button class="nem-btn nem-btn-sm" id="nemDlOpen" title="在资源管理器中打开该目录">打开文件夹</button>
+            <button class="nem-btn nem-btn-sm" id="nemDlCopy" title="复制保存路径">复制路径</button>
+          </div>
+
+          <!-- 登录面板：手动粘贴 Cookie（登录态是 HttpOnly，控制台读不到） -->
+          <div class="nem-setup" id="nemSetup" hidden>
+            <div class="nem-setup-t">登录网易云（可选）</div>
+            <div class="nem-setup-d">
+              免费曲库<strong>不需要登录</strong>（多数 128K，部分 320K）。想听<strong>无损 FLAC</strong> 与会员曲目，
+              登录一次即可（Cookie 存在本地，失效时重登一次）。
+            </div>
+            <div class="nem-setup-d">
+              登录态在 <code>MUSIC_U</code> 上，而它是 <strong>HttpOnly</strong> 的（控制台里
+              <code>copy(document.cookie)</code> 读不到，本地也没有副本）。
+              <button class="nem-link" id="nemCookieHelpBtn" type="button">怎么取？</button>
+            </div>
+            <div class="nem-setup-d" id="nemCookieHelp" hidden>
+              ① 浏览器登录 <code>music.163.com</code> → ② <code>F12</code> → <code>网络 / Network</code> → 刷新页面 →
+              ③ 任选一个请求右键 → <code>以 cURL 格式复制 / Copy as cURL</code> → ④ 整条粘贴到下面保存（会自动挑出 Cookie）。<br />
+              也可从 <code>应用 / Application → 存储 → Cookie → https://music.163.com</code> 复制 <code>MUSIC_U</code> 的值。
+            </div>
+            <textarea class="nem-setup-input" id="nemCookieInput" rows="2" spellcheck="false"
+              placeholder="MUSIC_U=…; __csrf=…（或整条 Copy as cURL 命令，直接粘贴即可）"></textarea>
+            <div class="nem-setup-a">
+              <button class="nem-btn nem-btn-sm nem-btn-primary" id="nemCookieSave">保存 Cookie</button>
+              <button class="nem-btn nem-btn-sm" id="nemCookieClear">清除</button>
+              <button class="nem-btn nem-btn-sm" id="nemSetupRetry">收起</button>
+            </div>
+          </div>
+
+          <!-- 歌单导入面板（链接 / ID → 读曲目 → 批量解析 → 写入歌单） -->
+          <div class="nem-setup" id="nemImportPanel" hidden>
+            <div class="nem-setup-t">导入歌单（按链接 / ID）</div>
+            <div class="nem-setup-d">
+              粘贴网易云歌单链接或 ID —— 公开歌单与官方榜单<strong>免登录</strong>就能读到全部曲目，
+              不用像 QQ 音乐那样导出文本再逐首匹配。<br />
+              例：<code>https://music.163.com/#/playlist?id=3778678</code> 或直接 <code>3778678</code>。
+              单次上限 300 首；只有试听片段的会员曲目会被跳过并说明原因。
+            </div>
+            <textarea class="nem-setup-input" id="nemImportInput" rows="2" spellcheck="false"
+              placeholder="https://music.163.com/#/playlist?id=…　或　3778678"></textarea>
+            <div class="nem-setup-cmd-row">
+              <span class="nem-dl-label">导入到歌单</span>
+              <input type="text" class="nem-setup-name" id="nemImportName" value="网易云导入" spellcheck="false" />
+              <button class="nem-btn nem-btn-sm nem-btn-primary" id="nemImportStart">开始导入</button>
+              <button class="nem-btn nem-btn-sm" id="nemImportStop" hidden>停止</button>
+              <button class="nem-btn nem-btn-sm" id="nemImportClose">收起</button>
+            </div>
+          </div>
+
+          <div class="nem-bar">
+            <div class="nem-search">
+              <svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="nemInput" placeholder="搜索网易云音乐：歌名 / 歌手 / 专辑，回车搜索" spellcheck="false" />
+            </div>
+            <select class="nem-select" id="nemQuality" title="音质同时作用于在线播放与下载。网易云的 FLAC 直链内容类型正确、foobar 能直接流播，无损不必下载后再听；无损与 Hi-Res 需要会员登录">
+              <option value="standard">标准 128K</option>
+              <option value="higher">较高 192K</option>
+              <option value="exhigh">极高 320K</option>
+              <option value="lossless">无损 FLAC</option>
+              <option value="hires">Hi-Res</option>
+            </select>
+            <button class="nem-btn nem-btn-primary" id="nemSearchBtn">搜索</button>
+          </div>
+
+          <div class="nem-toolbar">
+            <label class="nem-check"><input type="checkbox" id="nemAll" title="勾选当前这一页的全部曲目" /> 全选本页</label>
+            <span class="nem-count" id="nemCount">已选 0 首</span>
+            <span class="nem-flex"></span>
+            <button class="nem-btn" id="nemDownloadBtn" disabled title="解析音源并下载到 &lt;配置目录&gt;\网易云音乐下载（含同名歌词 .lrc；下载中再点一次 = 停止）">
+              <svg viewBox="0 0 24 24"><path d="M12 15V3m0 12l-4-4m4 4l4-4"/><path d="M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.94-1.515L22 17"/></svg>
+              <span>下载选中</span>
+            </button>
+            <button class="nem-btn nem-btn-primary" id="nemPlayBtn" disabled>
+              <svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+              <span>在 foobar2000 播放</span>
+            </button>
+          </div>
+
+          <div class="nem-list" id="nemList">
+            <div class="nem-empty">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>输入关键词，搜索网易云音乐并直接在 foobar2000 里播放</span>
+            </div>
+          </div>
+
+          <!-- 翻页条 -->
+          <div class="nem-pager" id="nemPager">
+            <button class="nem-btn nem-btn-sm" id="nemPrevBtn" title="上一页">‹ 上一页</button>
+            <span class="nem-page-info">第 <b id="nemPageNo">1</b> 页</span>
+            <button class="nem-btn nem-btn-sm" id="nemNextBtn" title="下一页">下一页 ›</button>
+            <span class="nem-flex"></span>
+            <span class="nem-jump">
+              跳至
+              <input type="text" id="nemPageInput" inputmode="numeric" autocomplete="off"
+                     spellcheck="false" title="输入页码后回车即可跳转" />
+              页
+              <button class="nem-btn nem-btn-sm" id="nemGoBtn">跳转</button>
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Queue Drawer -->
@@ -333,7 +470,7 @@
   </button>
   <div class="lyrics-blur-bg" id="lyricsBlurBg"></div>
     <div class="rp-art-wrap">
-      <img class="rp-art" id="lyricsArt" src="" alt="" />
+      <img class="rp-art" id="lyricsArt" src="static/img/no_cover.svg" alt="" />
     </div>
     <div class="rp-track-info">
       <div class="rp-track-title" id="lyricsTrackTitle">未在播放</div>
@@ -352,7 +489,7 @@
   <div class="bottom-bar" id="bottomBar">
     <div class="bottom-left">
       <div class="bottom-art-wrap" id="bottomArtWrap" title="展开歌词面板">
-        <img class="bottom-art" id="bottomArt" src="" alt="" />
+        <img class="bottom-art" id="bottomArt" src="static/img/no_cover.svg" alt="" />
         <div class="bottom-art-expand">
           <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         </div>
@@ -450,7 +587,7 @@
       <div class="np-vinyl-wrap">
         <div class="np-vinyl-disc" id="npVinylDisc">
           <div class="np-vinyl-art">
-            <img id="npArtwork" src="" alt="" />
+            <img id="npArtwork" src="static/img/no_cover.svg" alt="" />
           </div>
           <div class="np-vinyl-grooves"></div>
           <div class="np-vinyl-hole"></div>
@@ -575,22 +712,25 @@
 <script src="sdk/components.global.js?v=1130"></script>
 <script src="sdk/smp-compat.global.js?v=1130"></script>
 <!-- CloudMusic Theme -->
-<script src="js/core.js?v=28"></script>
-<script src="js/lyric-core.js?v=29"></script>
-<script src="js/ui.js?v=28"></script>
-<script src="js/ui-lyrics.js?v=29"></script>
-<script src="js/ui-playlist.js?v=29"></script>
+<script src="js/core.js?v=32"></script>
+<script src="js/lyric-core.js?v=30"></script>
+<script src="js/ui.js?v=30"></script>
+<script src="js/ui-lyrics.js?v=30"></script>
+<script src="js/ui-playlist.js?v=30"></script>
 <script src="js/ui-discover.js?v=28"></script>
-<script src="js/ui-library.js?v=28"></script>
+<script src="js/ui-library.js?v=29"></script>
 <script src="js/ui-queue.js?v=28"></script>
-<script src="js/ui-nowplaying.js?v=28"></script>
+<script src="js/ui-nowplaying.js?v=29"></script>
 <script src="js/ui-tags.js?v=28"></script>
-<script src="js/controls.js?v=28"></script>
-<script src="js/qqmusic-core.js?v=9"></script>
+<script src="js/controls.js?v=30"></script>
+<script src="js/online-common.js?v=3"></script>
+<script src="js/qqmusic-core.js?v=12"></script>
 <script src="js/qq-playlist-export.js?v=2"></script>
-<script src="js/ui-qqmusic.js?v=20"></script>
-<script src="js/lyrics-resolver.js?v=4"></script>
-<script src="js/artwork-resolver.js?v=6"></script>
-<script src="js/app.js?v=28"></script>
+<script src="js/ui-qqmusic.js?v=25"></script>
+<script src="js/netease-core.js?v=10"></script>
+<script src="js/ui-netease.js?v=25"></script>
+<script src="js/lyrics-resolver.js?v=5"></script>
+<script src="js/artwork-resolver.js?v=7"></script>
+<script src="js/app.js?v=29"></script>
 </body>
 </html>

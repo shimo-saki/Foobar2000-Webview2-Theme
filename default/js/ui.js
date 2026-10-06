@@ -148,6 +148,16 @@
     if (e.key === 'Enter') CM.closeModal(els.modalInput.value.trim());
     if (e.key === 'Escape') CM.closeModal(null);
   });
+  // 确认类弹窗（没有输入框）也要能按 Esc 取消：上面的 Esc 只挂在输入框上，
+  // 而确认模式下输入框是 display:none（不可聚焦）→ 之前 Esc 完全没反应。
+  // 弹窗在最上层，stopImmediatePropagation 吞掉本次事件，避免同一次 Esc 把
+  // 下面的队列抽屉 / 菜单 / 标签编辑器也一并关掉（Esc 一次只关一层）。
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape' || !els.modalMask.classList.contains('open')) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    CM.closeModal(null);
+  });
 
   /* ============================================
    * 右键菜单
@@ -329,12 +339,15 @@
   /* ============================================
    * Tab 切换
    * ============================================ */
-  var TAB_IDS = { discover: 'tabDiscover', playlist: 'tabPlaylist', library: 'tabLibrary', search: 'tabSearch', qqmusic: 'tabQqmusic' };
+  var TAB_IDS = { discover: 'tabDiscover', playlist: 'tabPlaylist', library: 'tabLibrary', search: 'tabSearch', qqmusic: 'tabQqmusic', netease: 'tabNetease' };
   // 缓存 Tab 相关 DOM（静态元素，无需每次 switchTab 都查询）
   var _tabNavItems, _tabMainTabs, _tabContents;
   CM.switchTab = function(tab) {
     if (!TAB_IDS[tab]) return;
     state.currentTab = tab;
+    // 批量选择只属于播放列表页：切到其他页时清掉 —— 否则 fixed 定位的批量栏
+    // 会悬浮在其他标签页上，还能对已经看不见的歌单执行"从歌单删除"
+    if (tab !== 'playlist' && state.batchSelected.size > 0) CM.clearBatchSelection();
     CM.settings.tab = tab;
     CM.saveSettings();
     if (!_tabNavItems) _tabNavItems = document.querySelectorAll('.nav-item[data-tab]');
@@ -681,6 +694,7 @@
     var escTracks = tracks.map(function(t) {
       var p = CM.trackPath(t);
       return {
+        raw: p,
         path: esc(p),
         name: esc(CM.trackName(t)),
         sub: esc(CM.trackArtist(t)) + (t.album ? ' · ' + esc(t.album) : ''),
@@ -689,8 +703,10 @@
     });
     var parts = [];
     escTracks.forEach(function(t, i) {
+      // 播放行比较必须用原始路径：t.path 已被 esc() 转义（& → &amp; 等），
+      // 拿它与原始 curPath 比较会让含 &/<>/"/ 的路径永远不高亮
       parts.push(
-        '<div class="dc-track fade-in' + (curPath && t.path === curPath ? ' playing' : '') + '" data-path="' + t.path + '" data-i="' + (startIdx + i) + '">' +
+        '<div class="dc-track fade-in' + (curPath && t.raw === curPath ? ' playing' : '') + '" data-path="' + t.path + '" data-i="' + (startIdx + i) + '">' +
         '<span class="dc-track-idx">' + (startIdx + i + 1) + '</span>' +
         '<div class="dc-track-art ph" data-art-path="' + t.path + '">' + CM.icons.note + '</div>' +
         '<div class="dc-track-info">' +

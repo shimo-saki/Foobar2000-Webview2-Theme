@@ -92,6 +92,22 @@
 .nav-item.active svg{color:var(--accent)}
 .nav-item svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;transition:color var(--t-fast)}
 
+/* 在线音源折叠分组：收起时导航回到原本 4 项的高度，「我的歌单」不被挤下去。
+   表头是显式按钮（悬停高亮 + 箭头指向），没有半行截断、没有隐藏滚动区；
+   展开时两个子项缩进一级、文字与表头文字对齐（18 padding + 15 图标 + 9 gap ≈ 41）。 */
+.nav-group{
+  display:flex;align-items:center;gap:11px;padding:8px 12px;margin:1px 0;
+  cursor:pointer;color:var(--text-2);font-size:13px;border-radius:var(--r-m);
+  transition:background var(--t-fast),color var(--t-fast);
+}
+.nav-group:hover{background:var(--bg-2);color:var(--text)}
+.nav-group>svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.nav-group .nav-group-chevron{width:14px;height:14px;margin-left:auto;opacity:0.55;transition:transform var(--t-fast)}
+.nav-group.open .nav-group-chevron{transform:rotate(90deg)}
+.nav-sub{padding-bottom:2px}
+.nav-sub .nav-sub-item{padding:6px 12px 6px 18px;font-size:12.5px;gap:9px}
+.nav-sub .nav-sub-item>svg{width:15px;height:15px}
+
 .sidebar-section-title{
   padding:16px 20px 6px;font-size:11px;color:var(--text-3);
   font-weight:600;letter-spacing:0.08em;
@@ -125,8 +141,6 @@
   font-size:9px;color:var(--text-3);border:1px solid var(--border-strong);
   padding:0 4px;border-radius:4px;flex-shrink:0;line-height:1.5;
 }
-.sidebar-empty{padding:16px;color:var(--text-3);font-size:12px;text-align:center}
-.sidebar-error{padding:16px;color:#ff6b6b;font-size:12px;text-align:center}
 
 /* ============ Main Content ============ */
 .main-content{

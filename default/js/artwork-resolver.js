@@ -246,27 +246,45 @@
   }
 
   /* ============================================
-   * 在线音源（QQ 音乐 CDN 直链）的封面
+   * 在线音源（QQ 音乐 / 网易云 CDN 直链）的封面
    * ============================================
    * 在线曲目的「路径」是 http 直链 —— 宿主原生封面取不到，文件系统里
-   * 也无处可扫。好在直链文件名自带 mediaMid（C400<mediaMid>.m4a），
-   * 而 ui-qqmusic 在播放 / 下载时会把 mediaMid→albummid 的映射记进
-   * QQBridge —— 这里把 mediaMid 交给 QQBridge.coverDataUrl() 反查。
+   * 也无处可扫。两个平台各自想办法把直链反查回专辑图：
+   *   · QQ 音乐：直链文件名自带 mediaMid（C400<mediaMid>.m4a），
+   *     ui-qqmusic 播放 / 下载时记下 mediaMid→albummid 映射；
+   *   · 网易云：直链文件名是音频 md5（不含歌曲 id），
+   *     ui-netease 播放 / 下载时记下 md5→{id, 封面直链} 映射。
+   * 取图统一交给对应桥接模块（下面按直链归属分发）。
    *
-   * 为什么取图交给 QQBridge：
-   *   · 必须走宿主 HTTP 客户端（无 CORS）：直接把 y.gtimg.cn 的原始 URL
+   * 为什么取图交给桥接模块：
+   *   · 必须走宿主 HTTP 客户端（无 CORS）：直接把 CDN 的原始 URL
    *     交给取色器会因跨域在 canvas.getImageData 抛 SecurityError，
    *     封面颜色永远取不到。宿主下载后转 data URL 就和本地文件同链路。
-   *   · 必须异步 + 带缓存：下载与缓存都在 QQBridge.coverDataUrl 里做
-   *     （async:false 下载一张封面会冻住 foobar 主线程整个下载时长；
-   *      而切歌 / 翻页 / 列表重绘会反复要同一张图）。
+   *   · 必须异步 + 带缓存：下载与缓存都在桥接里做（async:false 下载一张
+   *     封面会冻住 foobar 主线程整个下载时长；而切歌 / 翻页 / 列表重绘会
+   *     反复要同一张图）。
    * ============================================ */
+  /* 这条直链属于哪个在线音源（'' = 不是在线曲目）。
+     按域名/文件名特征判断，**不要求**映射表里已经有记录 ——
+     有记录才有图，但"是在线曲目"这件事本身要认出来（否则会去扫磁盘目录）。 */
+  function onlineProviderOf(trackPath) {
+    var p = String(trackPath || '');
+    if (!/^https?:\/\//i.test(p)) return '';
+    if (window.NeteaseBridge && typeof NeteaseBridge.isNeteaseUrl === 'function' &&
+        NeteaseBridge.isNeteaseUrl(p)) return 'netease';
+    if (window.QQBridge && typeof QQBridge.mediaMidFromUrl === 'function' &&
+        QQBridge.mediaMidFromUrl(p)) return 'qq';
+    return '';
+  }
+
   function askOnline(trackPath) {
-    if (!window.QQBridge || typeof QQBridge.coverDataUrl !== 'function') return Promise.resolve('');
-    var mediaMid = QQBridge.mediaMidFromUrl(trackPath);
-    if (!mediaMid) return Promise.resolve('');
+    var prov = onlineProviderOf(trackPath);
+    if (!prov) return Promise.resolve('');
     lastStatus.asked++;
-    return QQBridge.coverDataUrl(mediaMid).then(function (url) {
+    return (prov === 'netease'
+      ? NeteaseBridge.coverDataUrlForTrack(trackPath)
+      : QQBridge.coverDataUrl(QQBridge.mediaMidFromUrl(trackPath))
+    ).then(function (url) {
       if (!url) {
         lastStatus.misses++; lastStatus.state = 'miss';
         return '';
@@ -285,10 +303,9 @@
     });
   }
 
-  /* 是 QQ 音乐 CDN 直链吗？（有 mediaMid 文件名特征，且不是本地盘路径） */
+  /* 是在线音源直链吗？（QQ / 网易云任一，且不是本地盘路径） */
   function isOnlineTrack(trackPath) {
-    return /^https?:\/\//i.test(trackPath) && !!window.QQBridge &&
-           !!QQBridge.mediaMidFromUrl(trackPath);
+    return !!onlineProviderOf(trackPath);
   }
 
   /* 宿主的封面回包能否直接用？
@@ -465,6 +482,7 @@
     dirCache = Object.create(null);
     dirPending = Object.create(null);
     if (window.QQBridge && QQBridge.coverCacheClear) QQBridge.coverCacheClear();
+    if (window.NeteaseBridge && NeteaseBridge.coverCacheClear) NeteaseBridge.coverCacheClear();
     lastStatus.asked = lastStatus.hits = lastStatus.misses = lastStatus.rawFallback = 0;
     lastStatus.state = 'reloaded';
     if (typeof CM.loadCurrentArtwork === 'function') CM.loadCurrentArtwork();

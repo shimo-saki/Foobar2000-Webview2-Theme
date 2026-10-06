@@ -16,9 +16,46 @@
     document.querySelectorAll('.nav-item[data-tab]').forEach(function(el) {
       el.addEventListener('click', function() { CM.switchTab(el.dataset.tab); });
       el.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); CM.switchTab(el.dataset.tab); }
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          // 阻止冒泡到全局快捷键：聚焦导航项按空格只切标签，
+          // 不再叠加触发底栏的播放/暂停
+          e.stopPropagation();
+          CM.switchTab(el.dataset.tab);
+        }
       });
     });
+
+    /* 在线音源折叠分组：收起时导航回到原本 4 项的高度，「我的歌单」不被挤下去。
+       表头点击 / 回车 / 空格展开收起，展开状态记忆在 settings；
+       切到 qqmusic / netease（含顶部 main-tabs 的切换）时自动展开，
+       避免激活项藏在收起组里 —— 自动展开只改 UI，不覆盖用户的收起偏好。 */
+    var navGroup = document.getElementById('navOnlineGroup');
+    var navSub = document.getElementById('navOnlineSub');
+    function setOnlineGroup(open, persist) {
+      if (!navGroup || !navSub) return;
+      navSub.hidden = !open;
+      navGroup.classList.toggle('open', open);
+      navGroup.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (persist) { CM.settings.onlineNavOpen = open; CM.saveSettings(); }
+    }
+    if (navGroup && navSub) {
+      setOnlineGroup(!!CM.settings.onlineNavOpen, false);      // 启动恢复：只同步 UI
+      navGroup.addEventListener('click', function() { setOnlineGroup(navSub.hidden, true); });
+      navGroup.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();      // 与导航项同款：别叠加触发底栏的播放/暂停
+          setOnlineGroup(navSub.hidden, true);
+        }
+      });
+      var _switchTabNav = CM.switchTab;
+      CM.switchTab = function(tab) {
+        if (tab === 'qqmusic' || tab === 'netease') setOnlineGroup(true, false);
+        _switchTabNav.apply(this, arguments);
+      };
+    }
+
     document.querySelectorAll('.main-tab[data-tab]').forEach(function(el) {
       el.addEventListener('click', function() { CM.switchTab(el.dataset.tab); });
     });
@@ -77,7 +114,10 @@
   CM.bindPlaylistView = function() {
     els.btnPlayAll.addEventListener('click', function() {
       if (state.currentPlaylistIndex < 0) return;
-      CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: 0 });
+      // 与双击行 / 库页"播放全部"一致：先停掉 JIT 无痕试听，避免两路同时出声
+      CM.stopPreviewIfActive().then(function() {
+        CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: 0 });
+      });
     });
     els.btnPlaylistMore.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -171,7 +211,9 @@
     els.btnOrder.addEventListener('click', function() {
       var next = CM.ORDERS[(CM.orderIndexOf(state.order) + 1) % CM.ORDERS.length];
       CM.api('playback.setPlaybackOrder', { order: next.id }).then(function(r) {
-        if (!r) { CM.showToast('切换失败', null, 'error'); return; }
+        // SDK v1.13 错误信封是正常 resolve 的 {success:false}（真值）：只判 !r
+        // 会把失败当成功 —— 图标翻转、提示成功，实际顺序没变
+        if (!r || r.success === false) { CM.showToast('切换失败', (r && r.error) || null, 'error'); return; }
         state.order = next.id;
         CM.updateOrderIcon();
         CM.showToast(next.name, null);
@@ -231,7 +273,9 @@
     els.btnQueue.addEventListener('click', function() { CM.toggleQueue(); });
     els.queueClose.addEventListener('click', function() { CM.toggleQueue(false); });
     els.queueClear.addEventListener('click', function() {
-      CM.api('queue.clear').then(function() {
+      CM.api('queue.clear').then(function(r) {
+        // 失败（回执为空或错误信封）要如实提示，不能照常弹"已清空"
+        if (!r || r.success === false) { CM.showToast('清空失败', (r && r.error) || null, 'error'); return; }
         CM.renderQueue();
         CM.refreshQueueBadge();
         CM.showToast('已清空播放队列', null);
@@ -386,7 +430,8 @@
       pop.classList.remove('open');
     });
     CM.$('popRescan').addEventListener('click', function() {
-      CM.api('library.refresh').then(function() {
+      CM.api('library.refresh').then(function(r) {
+        if (!r || r.success === false) { CM.showToast('刷新失败', (r && r.error) || null, 'error'); return; }
         CM.showToast('媒体库缓存已刷新', null, 'success');
         pop.classList.remove('open');
         if (state.currentTab === 'discover') CM.renderDiscover();
@@ -543,6 +588,9 @@
   CM.toggleMorePopover = function() {
     var pop = els.morePopover;
     if (pop.classList.contains('open')) { pop.classList.remove('open'); return; }
+    // 两个弹层互斥：更多菜单打开时收起 ReplayGain 弹层（否则叠在一起，且
+    // 外点击处理器豁免了 btnMore，ReplayGain 弹层不会被顺带关掉）
+    if (els.rgPopover) els.rgPopover.classList.remove('open');
     buildMorePopover();
     syncEslyricStates();  // 异步，完成后会调用 updateMorePopoverState
     pop.classList.add('open');
@@ -844,12 +892,20 @@
           CM.toggleQueue();
           break;
         case 'Escape':
-          if (state.queueOpen) CM.toggleQueue(false);
-          els.morePopover.classList.remove('open');
-          CM.hideCtxMenu();
-          // 关闭标签编辑器
-          var teo = CM.$('tagEditorOverlay');
-          if (teo && teo.classList.contains('open')) CM.hideTagEditor();
+          // 优先级链：一次 Esc 只关最上面一层（与指南一致：队列 → 菜单 →
+          // 标签编辑器 → 批量选择）。原先一次全关，会让 Esc 在标签编辑器
+          // 上顺带清掉派生它的批量多选；队列拖拽的取消在 ui-queue 的
+          // 捕获监听里处理（stopPropagation），到不了这里
+          if (state.queueOpen) { CM.toggleQueue(false); break; }
+          if (els.morePopover.classList.contains('open') ||
+              (els.rgPopover && els.rgPopover.classList.contains('open'))) {
+            els.morePopover.classList.remove('open');
+            if (els.rgPopover) els.rgPopover.classList.remove('open');
+            break;
+          }
+          if (!els.ctxMenu.classList.contains('hidden')) { CM.hideCtxMenu(); break; }
+          var escTeo = CM.$('tagEditorOverlay');
+          if (escTeo && escTeo.classList.contains('open')) { CM.hideTagEditor(); break; }
           // 清除批量选择
           if (state.batchSelected.size > 0) CM.clearBatchSelection();
           break;

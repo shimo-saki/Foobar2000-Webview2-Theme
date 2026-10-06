@@ -164,17 +164,21 @@
         var b = data[i];
         if (b >= 0x81 && b <= 0xFE) {
           leadC++;
+          // 4字节 (GB18030)：0x81-0xFE / 0x30-0x39 / 0x81-0xFE / 0x30-0x39。
+          // 必须在二字节分支之前判 —— 四字节序列的第二字节是 0x30-0x39，
+          // 进不了下方要求第二字节 >= 0x40 的二字节分支
+          if (i + 3 < data.length &&
+              data[i+1] >= 0x30 && data[i+1] <= 0x39 &&
+              data[i+2] >= 0x81 && data[i+2] <= 0xFE &&
+              data[i+3] >= 0x30 && data[i+3] <= 0x39) {
+            validC++; leads[b] = 1; mb += 4; i += 4;
+            continue;
+          }
           // 2字节
           if (i + 1 < data.length) {
             var t = data[i+1];
             if (t >= 0x40 && t <= 0xFE && t !== 0x7F) {
               validC++; leads[b] = 1; mb += 2; i += 2;
-              // 4字节 (GB18030): 0x81-0xFE / 0x30-0x39 / 0x81-0xFE / 0x30-0x39
-              if (b >= 0x81 && b <= 0xFE && i + 1 < data.length && data[i] >= 0x30 && data[i] <= 0x39 &&
-                  i + 2 < data.length && data[i+1] >= 0x81 && data[i+1] <= 0xFE &&
-                  i + 3 < data.length && data[i+2] >= 0x30 && data[i+2] <= 0x39) {
-                mb += 2; i += 3;
-              }
               continue;
             }
           }
@@ -804,7 +808,10 @@
    * ============================================ */
 
   var _BI_MIN_MATCH = 0.90;    // 兜底判据（位置相位）的匹配率阈值：两协议实测 0% / 100%，阈值不敏感
-  var _BI_MIN_SIDE = 3;        // 每侧最少行数
+  var _BI_MIN_SIDE = 2;        // 每侧最少行数：4 行（2+2）起就参与判定。
+                               // 原值 3 会让「每侧 2 行」的短双语文件（如两段副歌）完全不归一，
+                               // 相位错一格（译文当主行、下一句原文当副行）只能靠手动指定模式救；
+                               // 判据本身有两道门（同刻协议的相位门 + 跨语言同刻组），降到 2 安全。
   var _BI_MIN_COVER = 0.60;    // 两个脚本族合计占比门槛（第三族=夹英文/数字的译文，占比可以较高）
   var _BI_MIN_MATCH_MAIN = 0.55; // 主判据的关系式匹配率：回移已改成"逐组判定"，
                                  // 少数派段落按各自形态处理、不会被误改，故门槛可放宽以覆盖混合写法文件
@@ -910,17 +917,20 @@
    *     · 块内只有一行 → 它是原文。
    * 空槽信息由 parseLRC 在解析时就标好（_emptySlot），所以不需要看脚本族/语言。
    */
-  function _shiftBack(body, from) {
+  function _shiftBack(body, from, skipFn) {
     var lastOrig = null, i = from;
     while (i < body.length) {
       var j = i + 1;
       while (j < body.length && Math.abs(body[j].time - body[i].time) <= _BI_TOL_MS) j++;
       var first = body[i], many = (j - i) > 1;
-      if (many && !first._emptySlot && lastOrig) {
+      if (many && !first._emptySlot && lastOrig && !(skipFn && skipFn(first, body[j - 1]))) {
         // 首行 = 上一句的译文 → 挂回上一句（标记下来，交给 groupSameTime 配对）
         first.time = lastOrig.time;
         first.startTime = lastOrig.time;
-        if (first.words && first.words.length) first.words[0].startTime = lastOrig.time;
+        if (first.words && first.words.length) {
+          first.words[0].startTime = lastOrig.time;
+          first.words[0].time = lastOrig.time;   // 逐字渲染读的是 word.time
+        }
         first._pair = lastOrig;
         lastOrig = body[j - 1];        // 块内其余行是原文，最后一个成为当前原文
       } else {
@@ -1046,11 +1056,18 @@
       } else lag++;                                               // 末对：译文挂到最后
     }
     if (lag / pairs < _BI_MIN_MATCH) return 'unknown';
+    // 平移必须作用于全部位置对（不能只平移"验证过特征"的对）：个别译文行时间
+    // 抖动（既不同刻也不等于下一行）会让该对缺失延后特征，但按位置它仍是
+    // 「原文+译文」—— 不平移会把译文孤立在自己（错误的）时间戳上；
+    // 而会误伤的"连续原文对"场景（中途漏译）会拉低比例、根本走不到这里。
     for (k = 0; k < pairs; k++) {
       var a = body[k * 2], b = body[k * 2 + 1];
       b.time = a.time;
       b.startTime = a.time;
-      if (b.words && b.words.length) b.words[0].startTime = a.time;
+      if (b.words && b.words.length) {
+        b.words[0].startTime = a.time;
+        b.words[0].time = a.time;   // 逐字渲染读的是 word.time，不同步会按旧时间高亮
+      }
     }
     return 'delay';
   }
@@ -1061,13 +1078,15 @@
    * 用户在歌词面板右键选择该模式时使用：不做任何判定，直接按延后协议的形态改写
    * —— 每个同刻组 [a, b] 视作「上一句的译文 + 本句原文」，把 a 挂回上一条原文的时间。
    * 用于判定判不出来的文件（例如日文歌词里夹未翻译的英文原词，两侧无法分侧的
-   * King Gnu-AIZO 这类）。仍保留两条最小护栏：两侧脚本族相同的组不改（那是同一语言
-   * 的两行，不构成译文对），以及组内两行文字相同的组不改（纯重复行）。
+   * King Gnu-AIZO 这类）。仍保留一条最小护栏（纯机械、不看语言，与手动模式
+   * "不做任何语言分析"的设计一致）：组内首行与末行文字完全相同的组不改 ——
+   * 那是纯重复行（同句反复），不构成译文对。
    */
   function _forceDelayShift(body) {
-    var before = -1, i;
-    for (i = 0; i < body.length; i++) if (body[i]._pair) break;
-    _shiftBack(body, 0);                     // 与自动识别同一条机械规则，保证两种入口行为一致
+    var i;
+    _shiftBack(body, 0, function (a, b) {      // 与自动识别同一条机械规则，保证两种入口行为一致
+      return lineText(a) === lineText(b);      // 纯重复行护栏
+    });
     for (i = 0; i < body.length; i++) if (body[i]._pair) return true;
     return false;
   }
@@ -1287,8 +1306,10 @@
     }
     // 自动检测
     // 逐字（卡拉OK）歌词：ESLyric 的 <mm:ss.xx> 标记，或方括号变体 ]text[mm:ss
-    // （后者必须匹配 ]text[mm:ss 模式，避免误把普通 LRC 的歌词字面括号当成时间标签）
-    if (_HAS_ANGLE_WORD.test(text) || /\][^\[\]\n<]+\[\d{1,2}:\d{2}/.test(text)) {
+    // （后者要求 ] 与 [ 之间至少含一个非空白字符：纯空格分隔的重复时间戳如
+    // "[00:10.00] [00:40.00]Chorus" 是标准 LRC 的多时间标签写法，交 parseLRC
+    // 才能保住两个时间点 —— 误走 ESLRC 会把第二个时间戳当成逐字标记吞掉）
+    if (_HAS_ANGLE_WORD.test(text) || /\][^\[\]\n<]*[^\[\]\n<\s][^\[\]\n<]*\[\d{1,2}:\d{2}/.test(text)) {
       var es = lyric.parseESLRC(text);
       if (es.length) return es;
     }

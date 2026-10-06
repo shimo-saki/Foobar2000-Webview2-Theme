@@ -158,11 +158,17 @@
   CM.openPlaylist = function(idx) {
     state.currentPlaylistIndex = idx;
     state.sortKey = null;
+    // 表格还显示着上一个歌单的行：立即清掉多选，防止批量栏带着旧索引
+    // 在新歌单上执行删除/编辑
+    if (state.batchSelected.size > 0) CM.clearBatchSelection();
     CM.switchTab('playlist'); // 进入播放列表标签会自行渲染该歌单
     CM.loadPlaylists();
   };
 
   CM._playlistViewLoadId = 0;
+  // 当前表格内容归属的歌单索引：getTracks 返回前表格仍是上一个歌单的行，
+  // 行级操作（播放/右键/调序/批量）必须校验归属，否则会用旧行索引操作新歌单
+  CM._tablePlaylist = null;
   CM.renderPlaylistView = function(idx) {
     var pl = (CM.playlists || []).find(function(p) { return p.index === idx; }) || {};
     els.playlistHeaderName.textContent = pl.name || '播放列表';
@@ -174,25 +180,49 @@
     }
 
     var loadId = ++CM._playlistViewLoadId;
+    CM._tablePlaylist = null; // 请求在途：现有行属于旧歌单，行级操作一律拒绝
     // 延迟加载指示器：API 快速返回（<150ms）时不闪烁，保留旧表格内容
     var cancelLoading = CM.delayedLoading(function() {
       if (loadId !== CM._playlistViewLoadId) return;
       els.trackTbody.innerHTML = '<tr><td colspan="6"><div class="table-loading"><div class="spinner"></div>加载中...</div></td></tr>';
     });
 
-    CM.api('playlist.getTracks', { playlist: idx, start: 0, count: 5000 }).then(function(r) {
-      if (loadId !== CM._playlistViewLoadId) { cancelLoading(); return; }
+    var PL_CHUNK = 500;    // 单次 getTracks 的条数（宿主单次请求按 500 档设计）
+    var PL_MAX = 20000;    // 一次渲染的硬上限：超过则不再续拉，并在表头写明"仅显示前 N 首"
+    // 分块拉全（旧实现固定 count:5000，超过 5000 首的歌单会被静默截断 ——
+    // 表头显示真实总数，表格却只有前 5000 行，后半段无法选中/排序/删除）
+    function loadChunk(start, acc) {
+      var want = Math.min(PL_CHUNK, PL_MAX - start);
+      if (want <= 0) return Promise.resolve(acc);
+      return CM.api('playlist.getTracks', { playlist: idx, start: start, count: want }).then(function(r) {
+        if (loadId !== CM._playlistViewLoadId) return null;   // 已切歌单：整轮作废
+        if (!r || r.success === false) {
+          if (!acc.length) {
+            els.trackTbody.innerHTML = '<tr><td colspan="6"><div class="table-error">加载失败</div></td></tr>';
+            return null;
+          }
+          CM.showToast('部分曲目未加载', '从第 ' + (start + 1) + ' 首起加载失败', 'error');
+          return acc;
+        }
+        var batch = CM.respTracks(r);
+        acc = acc.concat(batch);
+        state.playlistTracksTotal = r.total != null ? r.total : acc.length;
+        // 续拉条件看"这一页是否装满"而不是只看 total：宿主没回 total 时也能拉到最后一页
+        if (batch.length >= want && acc.length < PL_MAX) return loadChunk(acc.length, acc);
+        return acc;
+      });
+    }
+    loadChunk(0, []).then(function(tracks) {
+      if (loadId !== CM._playlistViewLoadId || tracks == null) { cancelLoading(); return; }
       cancelLoading();
-      if (!r || r.success === false) {
-        els.trackTbody.innerHTML = '<tr><td colspan="6"><div class="table-error">加载失败</div></td></tr>';
-        return;
-      }
-      var tracks = CM.respTracks(r);
+      CM._tablePlaylist = idx;
       state.trackCache = tracks;
-      state.playlistTracksTotal = r.total != null ? r.total : tracks.length;
+      state.playlistTracksTotal = state.playlistTracksTotal || tracks.length;
+      var total = state.playlistTracksTotal;
       var totalDur = 0;
       tracks.forEach(function(t) { totalDur += t.duration || 0; });
-      els.playlistHeaderMeta.textContent = state.playlistTracksTotal + ' 首曲目 · ' + CM.formatTime(totalDur);
+      els.playlistHeaderMeta.textContent = total + ' 首曲目 · ' + CM.formatTime(totalDur) +
+        (tracks.length < total ? '（仅显示前 ' + tracks.length + ' 首）' : '');
       // 歌单封面取第一首歌；无封面或空歌单回退占位图
       if (tracks.length) {
         CM.api('artwork.getFb2kUrlByPath', { path: CM.trackPath(tracks[0]), type: 'front', maxSize: 300 }).then(function(ar) {
@@ -223,7 +253,118 @@
 
   // 批量预加载缺失元数据（foobar2000 延迟加载：异步添加文件时不立即读取标签）
   // 增量更新：无排序时只更新变化的行，避免全量重渲染闪烁；有排序时防抖重渲染
+  //
+  // 读盘走宿主的**异步探测** metadata.probeBatchAsync：探测在宿主工作线程上跑，
+  // 结果按 metadata:probeProgress 分批回包；metadata.readBatch 是在宿主 UI 线程上
+  // 同步读盘（SDK 文档原话：probe 让"几百个路径不再像 readBatch 那样卡住 UI"），
+  // 几千首未读标签的新歌单会连续上百次卡住主窗口。探测不可用（宿主不收/无回执/
+  // 事件形状不符）时退回 readBatch，保证"该出来的标签一定出来"。
   var _metaRenderTimer = null;
+  var _metaProbeOps = Object.create(null);   // operationId -> { cache, indexByPath, applied, done, timer, resolve }
+  var META_BATCH = 200;                      // 每批（=一次探测操作）的路径数
+  var META_PROBE_TIMEOUT = 1500;             // 回执后等首个事件的上限，超时退回 readBatch
+
+  // 把一批 tags 合并进曲目缓存（readBatch 的 results[] 与 probe 的单条结果同形），
+  // 返回实际发生变化的行号
+  function mergeMetaTags(cache, indexByPath, results) {
+    if (!cache || !indexByPath || !results || !results.length) return [];
+    var changedIdxs = [];
+    for (var ri = 0; ri < results.length; ri++) {
+      var res = results[ri];
+      if (!res || res.success === false || !res.tags) continue;
+      var idx = indexByPath[res.path];
+      if (idx == null) continue;
+      var t = cache[idx];
+      if (!t) continue;
+      var tags = res.tags, changed = false, up, lo;
+      for (up in META_TAG_MAP) {
+        lo = META_TAG_MAP[up];
+        if (tags[up] && !t[lo]) { t[lo] = Array.isArray(tags[up]) ? tags[up].join('; ') : tags[up]; changed = true; }
+      }
+      for (up in META_INT_TAGS) {
+        lo = META_INT_TAGS[up];
+        if (tags[up] && t[lo] == null) { t[lo] = parseInt(tags[up], 10) || 0; changed = true; }
+      }
+      if (changed) changedIdxs.push(idx);
+    }
+    return changedIdxs;
+  }
+
+  function metaTagsChanged(changedIdxs) {
+    if (!changedIdxs.length) return;
+    if (state.sortKey) {
+      // 排序模式下防抖全量重渲染（多批合并为一次）
+      clearTimeout(_metaRenderTimer);
+      _metaRenderTimer = setTimeout(CM.renderTrackTable, 100);
+    } else {
+      CM._updateTrackRows(changedIdxs);
+    }
+  }
+
+  // 兜底：宿主同步批量读（探测不可用时才走这里）
+  function readMetaSync(batch, cache) {
+    var paths = batch.map(function(m) { return m.path; });
+    return CM.api('metadata.readBatch', { paths: paths }).then(function(r) {
+      if (!r || r.success === false || !r.results) return;
+      if (state.trackCache !== cache) return;      // 歌单已切换，放弃写入
+      var indexByPath = {};
+      batch.forEach(function(m) { indexByPath[m.path] = m.idx; });
+      var results = r.results.map(function(res, ri) {
+        // readBatch 按请求顺序返回，可能不带 path：用下标补齐，交给同一套合并逻辑
+        return res && res.path == null ? { path: paths[ri], success: res.success, tags: res.tags } : res;
+      });
+      metaTagsChanged(mergeMetaTags(cache, indexByPath, results));
+    });
+  }
+
+  function ensureMetaProbeEvents() {
+    CM.runOnce('metaProbeEvents', function() {
+      fb.on('metadata:probeProgress', function(e) {
+        var op = e && _metaProbeOps[e.operationId];
+        if (!op || op.done || state.trackCache !== op.cache) return;
+        var idxs = mergeMetaTags(op.cache, op.indexByPath, e.results || e.items || []);
+        if (idxs.length) { op.applied = true; metaTagsChanged(idxs); }
+      });
+      fb.on('metadata:probeComplete', function(e) {
+        var op = e && _metaProbeOps[e.operationId];
+        if (!op) return;
+        delete _metaProbeOps[e.operationId];
+        if (op.done) return;
+        op.done = true;
+        if (op.timer) clearTimeout(op.timer);
+        // 有的实现把最后一批结果一并挂在 complete 上：同样合并一次（幂等）
+        if (state.trackCache === op.cache) {
+          metaTagsChanged(mergeMetaTags(op.cache, op.indexByPath, (e && (e.results || e.items)) || []));
+        }
+        op.resolve();
+      });
+    });
+  }
+
+  function probeMetaBatch(batch, cache) {
+    var paths = batch.map(function(m) { return m.path; });
+    var indexByPath = {};
+    batch.forEach(function(m) { indexByPath[m.path] = m.idx; });
+    return CM.api('metadata.probeBatchAsync', { paths: paths, includeTags: true }).then(function(rec) {
+      var opId = rec && (rec.operationId || rec.operation);
+      if (!rec || rec.success === false || !opId) return readMetaSync(batch, cache);
+      return new Promise(function(resolve) {
+        var op = { cache: cache, indexByPath: indexByPath, applied: false, done: false, timer: null, resolve: resolve };
+        _metaProbeOps[opId] = op;
+        // 看门狗：宿主不回事件（或事件字段与预期不符）时退回同步读，
+        // 不让"标签永远不出来"成为探测路径的失败模式。合并是幂等的
+        // （只填空字段），已由事件补上的标签再读一遍也不会被覆盖。
+        op.timer = setTimeout(function() {
+          if (op.done) return;
+          delete _metaProbeOps[opId];
+          op.done = true;
+          if (state.trackCache !== cache) { resolve(); return; }
+          readMetaSync(batch, cache).then(resolve);
+        }, META_PROBE_TIMEOUT);
+      });
+    });
+  }
+
   CM.preloadTrackMetadata = function(tracks) {
     if (!tracks || !tracks.length) return;
     var missing = [];
@@ -240,40 +381,15 @@
     if (!missing.length) return;
 
     var currentCache = state.trackCache; // 捕获当前引用，防止快速切歌后写入错误歌单
-    var BATCH = 50;
-    for (var b = 0; b < missing.length; b += BATCH) {
-      (function(batch) {
-        var paths = batch.map(function(m) { return m.path; });
-        CM.api('metadata.readBatch', { paths: paths }).then(function(r) {
-          if (!r || r.success === false || !r.results) return;
-          if (state.trackCache !== currentCache) return; // 歌单已切换，放弃写入
-          var changedIdxs = [];
-          r.results.forEach(function(res, ri) {
-            if (!res.success || !res.tags) return;
-            var t = state.trackCache[batch[ri].idx];
-            if (!t) return;
-            var tags = res.tags, changed = false;
-            for (var up in META_TAG_MAP) {
-              var lo = META_TAG_MAP[up];
-              if (tags[up] && !t[lo]) { t[lo] = tags[up]; changed = true; }
-            }
-            for (var up in META_INT_TAGS) {
-              var lo = META_INT_TAGS[up];
-              if (tags[up] && t[lo] == null) { t[lo] = parseInt(tags[up], 10) || 0; changed = true; }
-            }
-            if (changed) changedIdxs.push(batch[ri].idx);
-          });
-          if (!changedIdxs.length) return;
-          if (state.sortKey) {
-            // 排序模式下防抖全量重渲染（多批合并为一次）
-            clearTimeout(_metaRenderTimer);
-            _metaRenderTimer = setTimeout(CM.renderTrackTable, 100);
-          } else {
-            CM._updateTrackRows(changedIdxs);
-          }
-        });
-      })(missing.slice(b, b + BATCH));
-    }
+    ensureMetaProbeEvents();
+    // 逐批串行：一批完成（或超时回退）再发下一批，避免几百个路径的探测同时压给宿主
+    var next = 0;
+    (function step() {
+      if (next >= missing.length || state.trackCache !== currentCache) return;
+      var batch = missing.slice(next, next + META_BATCH);
+      next += META_BATCH;
+      probeMetaBatch(batch, currentCache).then(step, step);
+    })();
   };
 
   // 增量更新表格行（仅更新指定索引的单元格内容，不重建整个表格）
@@ -322,12 +438,18 @@
     els.trackTbody.addEventListener('dblclick', function(e) {
       var tr = e.target.closest('tr[data-index]');
       if (!tr) return;
-      CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: parseInt(tr.dataset.index, 10) });
+      if (CM._tablePlaylist !== state.currentPlaylistIndex) return; // 表格仍是旧歌单的内容
+      var idx = parseInt(tr.dataset.index, 10);
+      // 先停掉 JIT 无痕试听：试听与正常播放是两路输出，不停会两首一起响
+      CM.stopPreviewIfActive().then(function() {
+        CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: idx });
+      });
     });
     els.trackTbody.addEventListener('contextmenu', function(e) {
       var tr = e.target.closest('tr[data-index]');
       if (!tr) return;
       e.preventDefault();
+      if (CM._tablePlaylist !== state.currentPlaylistIndex) return; // 表格仍是旧歌单的内容
       var realIdx = parseInt(tr.dataset.index, 10);
       CM.showTrackCtxMenu(e.clientX, e.clientY, state.trackCache[realIdx], {
         playlist: state.currentPlaylistIndex, index: realIdx
@@ -406,6 +528,7 @@
   // 快捷键移动：批量选择优先，否则移动聚焦行；焦点随移动跟随
   CM.keyboardMoveTracks = function(delta) {
     if (state.currentTab !== 'playlist' || state.currentPlaylistIndex < 0) return;
+    if (CM._tablePlaylist !== state.currentPlaylistIndex) return; // 表格尚未切换到当前歌单
     if (!state.trackCache.length) return;
     var indices, anchor;
     if (state.batchSelected.size > 0) {
@@ -563,14 +686,23 @@
       CM._lastPlayingDc.classList.remove('playing');
       CM._lastPlayingDc = null;
     }
-    // 设置新的 playing 标记：逐项比较 dataset.path（属性选择器在下划线/引号等特殊路径下会失效）
+    // 同一首曲目可能同时出现在多个列表里（如发现页"最近添加 + 随机曲目"），
+    // 渲染时每处都烙了 playing 类，而 _lastPlayingDc 只记得最后一个 ——
+    // 切歌时全量扫一遍清掉其余残留（事件驱动才执行，开销可忽略）
+    var _stalePlaying = els.mainContent.querySelectorAll('.dc-track.playing, .search-result-item.playing');
+    for (var _si = 0; _si < _stalePlaying.length; _si++) {
+      _stalePlaying[_si].classList.remove('playing');
+    }
+    // 设置新的 playing 标记：逐项比较 dataset.path（属性选择器在下划线/引号等特殊路径下会失效）。
+    // 同一曲目可能同时渲染在多个列表里：全部点亮（_lastPlayingDc 只登记第一个，
+    // 供下次清除时兜底 —— 其余已由上面的全量清扫处理）
     if (curPath) {
       var _nodes = els.mainContent.querySelectorAll('.dc-track, .search-result-item');
+      var _markedFirst = false;
       for (var _ni = 0; _ni < _nodes.length; _ni++) {
         if (_nodes[_ni].dataset.path === curPath) {
           _nodes[_ni].classList.add('playing');
-          CM._lastPlayingDc = _nodes[_ni];
-          break;
+          if (!_markedFirst) { CM._lastPlayingDc = _nodes[_ni]; _markedFirst = true; }
         }
       }
     }
@@ -630,8 +762,14 @@
       })(s);
     }
     items.push({ label: '清除评分', action: function() {
-      CM.api('rating.set', { path: path, rating: 0 }).then(function() {
-        if (path === CM.trackPath(CM.currentTrack)) CM.refreshLikeState();
+      CM.api('rating.set', { path: path, rating: 0 }).then(function(r) {
+        if (r && r.success !== false) {
+          CM.showToast('已清除评分', CM.trackName(track));
+          if (path === CM.trackPath(CM.currentTrack)) CM.refreshLikeState();
+        } else {
+          // 与上面的评分项一致：失败要说出来，不能静默
+          CM.showToast('清除失败', '评分功能需要 foo_playcount 组件', 'error');
+        }
       });
     } });
     if (CM.state.previewActive) {
@@ -815,6 +953,7 @@
   // 批量编辑入口（从 batch bar 触发）
   CM._batchEditFromBar = function() {
     if (state.batchSelected.size < 2) return;
+    if (CM._tablePlaylist !== state.currentPlaylistIndex) return; // 表格仍是旧歌单的内容
     var tracks = [];
     state.batchSelected.forEach(function(idx) {
       if (state.trackCache[idx]) tracks.push(state.trackCache[idx]);
@@ -826,6 +965,7 @@
   CM._batchDeleteFromBar = function() {
     var n = state.batchSelected.size;
     if (n < 2) return;
+    if (CM._tablePlaylist !== state.currentPlaylistIndex) return; // 表格仍是旧歌单的内容
     var indices = [];
     state.batchSelected.forEach(function(i) { indices.push(i); });
     CM.removeTracksFromPlaylist(state.currentPlaylistIndex, indices, function(ok) {

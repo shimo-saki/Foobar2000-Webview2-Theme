@@ -87,7 +87,6 @@ a{color:var(--accent);text-decoration:none}
 :focus-visible{outline:2px solid var(--accent-glow);outline-offset:2px;border-radius:var(--r-s)}
 
 /* Utility */
-.text-ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hidden{display:none!important}
 .num{font-variant-numeric:tabular-nums;letter-spacing:0.01em}
 

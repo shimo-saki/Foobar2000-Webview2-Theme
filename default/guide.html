@@ -147,6 +147,7 @@
     background:var(--accent);color:#fff;
     font-size:12px;font-weight:600;
     display:flex;align-items:center;justify-content:center;
+    opacity:1; /* 覆盖 .section-body li::before 的 opacity:0.7，否则序号显示为半透明 */
   }
 
   /* Footer */
@@ -173,7 +174,7 @@
   <h1>CloudMusic 主题功能指南</h1>
   <p>一份覆盖全部功能的操作手册 — 从基础播放到标签编辑，帮助你充分利用 CloudMusic 主题的每一项能力。</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">版本 <b>v2.5.3</b></div>
+    <div class="hero-meta-item">版本 <b>v2.5.4</b></div>
     <div class="hero-meta-item">作者 <b>灵芝含</b></div>
     <div class="hero-meta-item">SDK <b>foo_ui_webview2 1.13.0</b></div>
   </div>
@@ -205,6 +206,7 @@
     <a href="#s19"><span class="num">19</span>键盘快捷键</a>
     <a href="#s20"><span class="num">20</span>更多菜单</a>
     <a href="#s21"><span class="num">21</span>QQ 音乐在线音源</a>
+    <a href="#s22"><span class="num">22</span>网易云音乐在线音源</a>
   </div>
 </div>
 
@@ -217,11 +219,28 @@
       <svg viewBox="0 0 24 24"><path d="M3 3v4h2V5h2V3Z"/><path d="M7 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3v-2"/><path d="M3 9v8"/><path d="M13 8h4"/><path d="M13 12h4"/><path d="M13 16h2"/><path d="M6 17l2 2 3-4"/></svg>
     </div>
     <div>
-      <div class="section-title">更新日志 · v2.5.3</div>
-      <div class="section-desc">QQ 音乐页内桥接 · 页内原生 · 随宿主同生共死</div>
+      <div class="section-title">更新日志 · v2.5.4</div>
+      <div class="section-desc">网易云音乐页内桥接（新增第二个在线音源）</div>
     </div>
   </div>
   <div class="section-body">
+    <strong>v2.5.4 · 新增「网易云」页（第二个在线音源）</strong>
+    <ul>
+      <li><strong>侧边栏多一页「网易云」</strong>：<code>js/netease-core.js</code>（页内桥接）+ <code>js/ui-netease.js</code>（界面），与 QQ 音乐页同构 —— 搜索 / 直链解析 / 歌词 / 封面 / 歌单读取全部走宿主原生 HTTP 客户端，无本地进程、端口、node.js。上游接口<strong>全部免签名</strong>（<code>cloudsearch/pc</code>、<code>song/enhance/player/url</code>、<code>song/lyric</code>、<code>v6/playlist/detail</code>），不需要 QQ 那套 vkey 链路。</li>
+      <li><strong>免登录可用，且额度更宽</strong>：同一批热门搜索实测约一半曲目<strong>完整可放</strong>（绝大多数 320K，其余多为会员曲目的 30/45 秒片段）；作为对照，QQ 免登录时完整可放的约三成且全是 128K。两个平台的曲库互补明显（例：「久石让 Summer」QQ 13/20 可放、网易云 3/20；「米津玄師 Lemon」网易云 19/20、QQ 2/20）。</li>
+      <li><strong>在线即可听无损（QQ 做不到的那部分）</strong>：实测网易云 FLAC 直链的 <code>Content-Type</code> 是 <code>application/octet-stream</code>、MP3 是 <code>audio/mpeg</code>，foobar 按内容嗅探就能正确解码；QQ 的 CDN 把所有直链打成 <code>audio/x-ogg</code>，FLAC/AAC 会被误当 Ogg 拒解，所以那边只能流播 MP3。因此这里的音质下拉框（标准 128K / 较高 192K / 极高 320K / 无损 FLAC / Hi-Res）<strong>同时作用于在线播放与下载</strong>，并且按接口返回的<strong>真实</strong> level 回填 —— 要不到的档位会自动降级，不会把降级结果报成无损。实测会员会话下 270 秒的曲子给出 47MB 的 FLAC（约 1.4 Mbps）。</li>
+      <li><strong>试听片段必须识别（否则等于往歌单里塞 30 秒的歌）</strong>：未登录 / 非会员时，会员曲目的直链接口<strong>照样返回一个能播的 URL</strong>，内容是 30/45 秒片段（响应里 <code>freeTrialInfo.end = 30/45</code>）。桥接据此识别，页面标「VIP · 试听」，播放与下载都会跳过并在提示里写明「仅 45 秒试听，需登录会员」；解析结果里带 <code>trial</code> 的条目根本不会进下载计划。</li>
+      <li><strong>歌单导入：贴链接 / ID 就行</strong>：公开歌单与官方榜单<strong>免登录</strong>可读全部曲目（实测「热歌榜」200 首一次拿全 454ms），不需要 QQ 那套「复制导出脚本 → 控制台跑 → 回贴文本 → 逐首搜索匹配」。导入时批量解析（一次 10 首、并发 3 条），200 首约 3 秒；只有试听片段的曲目被跳过并按原因汇总。</li>
+      <li><strong>Cookie 面板按网易云的实际情况重写</strong>：登录态在 <code>MUSIC_U</code> 上，而它是 <strong>HttpOnly</strong> —— 所以在控制台跑 <code>copy(document.cookie)</code> <strong>读不到</strong>登录态（那正是 QQ 页的做法，直接照搬会得到一份"看起来有 Cookie 但登录无效"的东西）。面板给出两种正确做法：① <code>F12</code> → <code>网络 / Network</code> → 任选一个请求 → 右键 → <code>以 cURL 格式复制 / Copy as cURL</code> → 整条粘贴（解析器会从命令里挑出 Cookie，并丢掉 <code>Hm_lvt_*</code> 之类的统计项）；② <code>应用 / Application → 存储 → Cookie → https://music.163.com</code> 里复制 <code>MUSIC_U</code> 的值。保存后<strong>当场校验</strong>：调账号 + 会员接口，回报「登录成功 + 会员有效期至 X」或「没识别到登录态」「Cookie 未通过校验」，不用靠"能不能放"去猜。</li>
+      <li><strong>歌词 / 封面按平台分发（消费侧改造）</strong>：<code>lyrics-resolver.js</code> 与 <code>artwork-resolver.js</code> 原来直接调 <code>QQBridge</code>，现在按直链归属分发（网易云域名 → NeteaseBridge）。网易云直链<strong>不含歌曲 id</strong>，所以桥接在播放 / 下载时记下「直链(md5) → 歌曲 id / 封面直链」映射（localStorage，上限 400 条，跨会话有效），歌词据此<strong>按 id 精确取词</strong>。<strong>实测价值</strong>：网易云在线曲目在 foobar 里没有标签信息，主题从直链推出的"标题"是乱码片段（<code>GsvWzqeUwhOhb+2GUTYfbcNo=</code>），走模糊匹配基本没戏 —— 靠 id 反查仍取到《富士山下》的正确歌词（<code>CM.lyricStatus()</code> 显示 <code>from: online</code>、面板显示"作词 : 林夕"）。封面同理：反查后经宿主下载成 dataURL（<code>CM.artworkStatus()</code> 显示 <code>hit</code>，取色可用）。</li>
+      <li><strong>搜索限流如实处理</strong>：网易云搜索接口连打十几次会回 <code>code=406 操作频繁，请稍候再试</code>（约 15 秒自行恢复）。桥接把搜索<strong>串行化</strong>并留最小间隔、被限流后进入冷却期不再硬打（实测连打 5 次全部正常）；真被限流时状态栏提示稍后再试，并且限流<strong>只作用于搜索接口</strong> —— 同一时刻直链 / 歌词 / 封面 / 外链全部照常（已实测）。歌词匹配一旦命中限流会立刻放弃并标为临时失败（不写进 30 分钟缓存），不让用户白等几轮冷却。</li>
+      <li><strong>其余实现细节</strong>：直链批量解析一次 10 首、并发 3 条、结果按勾选顺序回填（开播索引依赖第一首）；下载落在 <code>&lt;配置目录&gt;\网易云音乐下载\</code>，音频与同名 <code>.lrc</code>（BOM + CRLF，按 id 取词）一起写入；封面缩图用 <code>?param=500y500</code>（原图 5MB → 约 330KB，无防盗链）；曲库以简体为主，繁→简归一化复用 QQ 桥接那张表（见下条）。</li>
+      <li><strong>扫码登录试过但已放弃（附原因）</strong>：曾实现「面板内画二维码 → 手机扫码确认 → 主题自己收凭据」，链路本身通（取 unikey、轮询、803「授权登陆成功」都到了），但<strong>宿主的 HTTP 客户端对多个 <code>Set-Cookie</code> 只保留最后一个</strong>（实测：服务端同时下发 <code>a=1; b=2</code> 时，宿主只给出 <code>b=2</code>），而网易云这一步会连发 <code>MUSIC_U</code> 与其它 Cookie，<code>MUSIC_U</code> 必然丢 —— 宿主的限制，解析层面无解。因此扫码这条路连同它依赖的二维码库（MIT qrcode-generator，56KB）一并移除，只保留手动粘贴。</li>
+      <li><strong>修复：在线曲目在 foobar 里显示的曲名是乱码（搜索列表里却是对的）</strong>。在线曲目是裸直链、没有任何标签，主题取名时退回「URL 最后一段」—— 而 CDN 直链的签名参数里带 <code>/</code>，于是界面把签名碎片当成了歌名（实测底栏与歌单行显示 <code>GsvWzqeUwhOhb+2GUTYfbcNo=</code>、艺术家「未知艺术家」）。现在两个桥接在解析 / 播放 / 下载时把「直链 → 歌名 / 歌手 / 专辑」记进映射表（localStorage 持久化、上限 400 条），并注册给主题新增的 <code>CM.onlineName</code>；<code>CM.trackName</code> / <code>CM.trackArtist</code> 取名时优先查它 —— 底栏、播放列表行、播放队列、正在播放页、各处提示一次性全部正确（实测歌单行由乱码变为「鲜花 / 回春丹」）。URL 兜底也一并修了：先切掉查询串再取文件名，未映射的直链至少显示 <code>xxx.mp3</code> 而不是签名碎片；本地文件取名逻辑不变。<strong>注意</strong>：改 <code>js/*.js</code> 后要同步升 <code>index.html</code> 里的 <code>?v=NN</code>，否则 WebView2 会命中缓存、改动不生效（这次就踩到了：磁盘上是新代码、页面里跑的还是旧的）。</li>
+      <li><strong>顺带修掉一个既有 bug：繁→简表配对错位</strong>（影响 QQ 与网易云双方的歌词 / 歌单匹配）。原实现把 (繁,简) 对平铺成一个长字符串、用<strong>下标奇偶</strong>判断"这个字是繁体还是简体"，但表里含 <strong>293 个非 BMP 字符</strong>（如 <code>𠮶</code>，在 UTF-16 里占两个码元），第一个非 BMP 字符之后奇偶整体错位。实测 3222 对里<strong>只有 1388 对（43%）能转对</strong>，更糟的是会<strong>错转</strong>（<code>周杰倫 → 進杰伦</code>：把相邻对的第二个字当成了本字的简体），等于长期给曲名 / 歌手打分喂噪音 —— 这也是繁体标题匹配时灵时不灵的原因。现改为按<strong>码点</strong>成对解析成映射表（3222/3222 全对，<code>漢語測試 → 汉语测试</code>、<code>周杰倫 → 周杰伦</code>）；复测繁体匹配：<code>QQBridge.lyric('富士山下','陳奕迅',259)</code> 命中且 <code>score=2.8</code>（标题 + 歌手 + 时长三项满分）。</li>
+    </ul>
+
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:18px 0">
     <strong>v2.5.3 · QQ 音乐页内桥接（新架构）</strong>
     <ul>
       <li><strong>整条链路搬进主题页面</strong>：QQ 音乐在线音源的功能创意与原版桥接程序来自贴吧大佬 <strong>@凌月冰天</strong>，本版在其基础上迁入页内实现 —— <code>js/qqmusic-core.js</code>（页内桥接模块）+ <code>js/ui-qqmusic.js</code>（界面）。利用插件自带的网络服务，搜索 / 直链解析 / 歌词全部走宿主 foo_ui_webview2 的原生 HTTP 客户端（<code>fb.invoke('http.get'/'http.post')</code>，无 CORS、免签名），不再需要单独的桥接程序、本地端口与开关脚本，体积更小；播放用解析出的 CDN 直链直接喂给 foobar2000，下载走宿主 http.download。<strong>随 foobar 启动而在、关闭而消</strong>，无进程、无端口、无 node.js / Python 依赖。</li>
@@ -577,7 +596,7 @@
       <li><strong>翻译 / 音译</strong>：同一时间戳下的多行（原文 + 译文，或再加音译）会作为一组显示 —— 主行下方以更小更暗的副行呈现，整组一起高亮、一起居中，任何一行都不会被丢弃</li>
       <li><strong>纯文本歌词</strong>：无时间轴的歌词以静态文本展示（不会误当作同步歌词而“末行恒亮”）</li>
       <li><strong>点击跳转</strong>：点击任意歌词行可跳转到对应时间点播放</li>
-      <li><strong>歌词来源（本地优先）</strong>：先找音频同目录的<strong>同名 <code>.lrc</code></strong> 与 <code>%profile%\lyrics</code> 歌词库 —— 你自己精修过的词优先，读文件也更快、不依赖网络；本地没有时才经页内桥接（QQBridge）联网匹配 QQ 音乐词库。桌面歌词窗口与 ESLyric 工具菜单需要 foo_uie_eslyric 组件</li>
+      <li><strong>歌词来源（本地优先）</strong>：先找音频同目录的<strong>同名 <code>.lrc</code></strong> 与 <code>%profile%\lyrics</code> 歌词库 —— 你自己精修过的词优先，读文件也更快、不依赖网络；本地没有时才经页内桥接联网匹配（在线曲目按直链归属分发：QQ 音乐走 <code>QQBridge</code>，网易云走 <code>NeteaseBridge</code> —— 后者能用播放时记下的「直链 → 歌曲 id」映射按 id 精确取词）。桌面歌词窗口与 ESLyric 工具菜单需要 foo_uie_eslyric 组件</li>
       <li><strong>多编码支持</strong>：内置 8 层编码检测引擎，可正确识别 GBK/GB18030、UTF-8、UTF-16 编码的 LRC 文件；其他亚洲双字节编码（Big5 / Shift_JIS / EUC）按评分制区分。含引号等特殊标签名也能正确定位</li>
       <li><strong>右键菜单</strong>：在<strong>歌词面板</strong>或<strong>沉浸式页面的歌词区</strong>右键即可打开菜单 ——「翻译对齐方式」是一个二级菜单（鼠标悬停展开，当前项带 ✓）：<strong>自动识别</strong>（自动判断歌词格式）/ <strong>标准双语</strong>（原词和翻译在同一时间）/ <strong>兼容旧版</strong>（翻译在下一句时间）；下方是 刷新歌词 / 复制歌词 / 打开所在文件夹。选择<strong>按文件记忆</strong>，选「自动识别」即恢复。手动指定的两种模式按所选写法<strong>机械处理</strong>、不做语言分析（标准双语下同刻多行一律「首句为主、其余为副」），自动识别判不准的文件指定一下即可。歌词没有重复时间戳时（纯文本、逐字歌词等）<strong>不显示这一项</strong>，因为此时不存在对齐问题</li>
     </ul>
@@ -686,7 +705,7 @@
     </div>
     <div class="callout">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      <div class="callout-text">标签写入为异步操作，保存后面板会自动关闭并在写入完成后刷新播放列表。只有实际修改的字段才会被写入文件。<strong>在线曲目</strong>（QQ 音乐直链）没有本地文件，这项会置灰并在提示里说明 —— 需要改标签请先「下载选中」落盘。</div>
+      <div class="callout-text">标签写入为异步操作，保存后面板会自动关闭并在写入完成后刷新播放列表。只有实际修改的字段才会被写入文件。<strong>在线曲目</strong>（QQ 音乐 / 网易云直链）没有本地文件，这项会置灰并在提示里说明 —— 需要改标签请先「下载选中」落盘。</div>
     </div>
   </div>
 </div>
@@ -952,7 +971,7 @@
     <ol class="steps">
       <li><strong>搜索</strong>：输入歌名 / 歌手 / 专辑后回车。底部「加载更多」把下一页<strong>追加</strong>到列表末尾（已勾选的不受翻页影响，可以跨页攒一批）；下方翻页条可整页跳转（上游不返回总页数，「下一页」按钮的可点状态由是否还有更多决定）。</li>
       <li><strong>勾选与播放</strong>：点行首复选框勾选（点整行也能勾），右侧「播放」按钮或双击整行 = 立刻播放这一首。点「在 foobar2000 播放」把勾选的曲目<strong>追加</strong>到固定的「QQ音乐」歌单末尾并从新曲开播 —— 之前播的歌原地保留，听完可以直接在歌单里接着选下一首。</li>
-      <li><strong>下载</strong>：点「下载选中」逐首落盘到 <code>&lt;foobar2000 配置目录&gt;\qqmusic-downloads\</code>（音频 + 同名 <code>.lrc</code> 一起写入；整目录可加进媒体库）。列表上方常驻「下载保存到 …」条，可一键打开文件夹或复制路径；下载中再点一次 = 停止（当前这首下完就停）。<strong>音质下拉框只影响下载</strong>。</li>
+      <li><strong>下载</strong>：点「下载选中」逐首落盘到 <code>&lt;foobar2000 配置目录&gt;\QQ音乐下载\</code>（音频 + 同名 <code>.lrc</code> 一起写入；整目录可加进媒体库）。列表上方常驻「下载保存到 …」条，可一键打开文件夹或复制路径；下载中再点一次 = 停止（当前这首下完就停）。<strong>音质下拉框只影响下载</strong>。</li>
       <li><strong>导入自己的歌单</strong>：点「导入歌单」→「复制导出脚本」→ 到 <code>y.qq.com</code> 歌单页按 F12 打开控制台粘贴回车（脚本自动滚动抓全曲目，导出「歌名 - 歌手」每行一首）→ 回主题粘贴文本、指定目标歌单名 → 开始导入。逐首多轮搜索匹配（宁缺勿错），失败行会放回文本框可编辑重试，单次上限 300 首、随时可停。</li>
       <li><strong>VIP / 无损</strong>：右上角「设置 Cookie」按面板说明操作 —— 浏览器登录 <code>y.qq.com</code> → F12 控制台运行 <code>copy(document.cookie)</code> → 把 Cookie 粘回面板保存。免费曲库不需要登录；Cookie 失效时表现为 VIP 曲目全部解析不到（重贴一次即可）。</li>
     </ol>
@@ -966,11 +985,40 @@
   </div>
 </div>
 
+<!-- 22 网易云音乐在线音源 -->
+<div class="section" id="s22">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 18H7a4.5 4.5 0 0 1-.7-8.95 5.5 5.5 0 0 1 10.6 1.3A3.8 3.8 0 0 1 17.5 18z"/></svg>
+    </div>
+    <div>
+      <div class="section-title">网易云音乐在线音源</div>
+      <div class="section-desc">在线无损 · 免登录额度更宽 · 贴链接导歌单</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <p>侧边栏「<strong>网易云</strong>」页是第二个在线音源入口，形态与「QQ 音乐」页一致：搜索 → 勾选 → 「在 foobar2000 播放」或「下载选中」。整条链路同样是<strong>页内桥接</strong>（<code>js/netease-core.js</code> + <code>js/ui-netease.js</code>），走宿主原生网络客户端，<strong>没有本地进程、端口、node.js</strong>。</p>
+    <ol class="steps">
+      <li><strong>搜索</strong>：输入歌名 / 歌手 / 专辑后回车。「加载更多」把下一页追加到列表末尾（已勾选不受翻页影响，可跨页攒一批），下方翻页条可整页跳转。<strong>网易云的搜索接口有限流</strong>（连打十几次会回「操作频繁」），桥接已把搜索串行化并留最小间隔；真被限流时状态栏会提示稍后再试，且<strong>只影响搜索</strong> —— 直链 / 歌词 / 封面照常工作。</li>
+      <li><strong>勾选与播放</strong>：点行首复选框或整行勾选，右侧「播放」/ 双击整行 = 立刻播放这一首。「在 foobar2000 播放」把勾选的曲目<strong>追加</strong>到固定的「网易云音乐」歌单末尾并从新曲开播（与「QQ音乐」歌单分开，一眼看得出曲目来自哪个平台）。</li>
+      <li><strong>音质</strong>：下拉框有 标准 128K / 较高 192K / 极高 320K / 无损 FLAC / Hi-Res，<strong>同时作用于在线播放与下载</strong>（不像 QQ 页那样只能流播 MP3）。要不到的档位会自动降级，并按接口返回的真实档位回填，不会把降级结果报成无损；无损 / Hi-Res 需要会员登录。</li>
+      <li><strong>下载</strong>：点「下载选中」落盘到 <code>&lt;foobar2000 配置目录&gt;\网易云音乐下载\</code>（音频 + 同名 <code>.lrc</code> 一起写入，歌词按歌曲 id 精确取词）。列表上方常驻「下载保存到 …」条；下载中再点一次 = 停止。</li>
+      <li><strong>导入歌单</strong>：点「导入歌单」→ 粘贴<strong>歌单链接或 ID</strong>（如 <code>https://music.163.com/#/playlist?id=3778678</code> 或 <code>3778678</code>）→ 指定目标歌单名 → 开始导入。公开歌单与官方榜单<strong>免登录</strong>就能读到全部曲目，不需要 QQ 那种导出脚本；批量解析一次 10 首、并发 3 条，单次上限 300 首。</li>
+    </ol>
+    <ul>
+      <li><strong>会员曲目会明确标注</strong>：未登录 / 非会员时，会员曲目的直链接口<strong>照样返回一个能播的 URL，但内容是 30/45 秒片段</strong>。这类曲目在列表里标「VIP · 试听」，播放与下载都会跳过并说明原因（例如「仅 45 秒试听，需登录会员」）—— 不会往歌单里塞 30 秒的"歌"。列表里能完整播放的曲目会标出真实档位（如「320K」「无损」）。</li>
+      <li><strong>登录（要无损 / 会员曲目时）</strong>：点「登录 / Cookie」展开面板（与「QQ 音乐」页同一套最简模型：<strong>再点一次收起（与「导入歌单」共用同一套开关实现），面板里也有「收起」</strong>，面板与搜索 / 列表共存；取 Cookie 的步骤收在「怎么取？」里按需展开）—— 面板里填 Cookie —— <code>F12</code> → <code>网络 / Network</code> → 刷新 → 任选请求 → 右键「以 cURL 格式复制」→ 整条粘贴进面板（解析器会挑出 Cookie），或从 <code>应用 / Application → 存储 → Cookie → https://music.163.com</code> 复制 <code>MUSIC_U</code>。之所以不能"一条命令直接拿"：<code>MUSIC_U</code> 是 <strong>HttpOnly</strong>，页面 JS（含控制台）读不到，localStorage / sessionStorage / IndexedDB 里也没有副本。保存后<strong>当场校验</strong>：调账号 + 会员接口，回报「登录成功 + 会员有效期至 X」。</li>
+      <li><strong>在线曲目没有本地文件</strong>：右键菜单的「编辑标签」「在资源管理器中显示」会置灰并说明原因，批量标签编辑自动跳过它们；星级评分、封面、歌词、波形、试听、加入队列不受影响。需要改标签请先下载落盘。</li>
+      <li><strong>诊断入口</strong>：<code>NeteaseBridge.bridgeInfo()</code>（版本 / 登录态 / 各缓存条数 / 限流剩余秒数 / 在途请求数）、<code>NeteaseBridge.selfcheckState()</code>（随页面加载跑的一次自检：搜索 / 解析 / 取词三步哪一步断了）、<code>CM.netease.state</code>（页面状态）。</li>
+    </ul>
+  </div>
+</div>
+
 </div>
 
 <!-- Footer -->
 <div class="footer">
-  <p class="footer-author">CloudMusic 主题 v2.5.3 · 作者：灵芝含</p>
+  <p class="footer-author">CloudMusic 主题 v2.5.4 · 作者：灵芝含</p>
   <p>基于 foo_ui_webview2 SDK 1.13.0 · foobar2000 v2</p>
   <p>感谢使用，享受音乐</p>
 </div>

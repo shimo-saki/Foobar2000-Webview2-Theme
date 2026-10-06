@@ -39,7 +39,6 @@
   .list{flex:1;overflow:auto;padding:6px 8px}
   .row{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:12.5px}
   .row:hover{background:var(--bg-1)}
-  .row.sel{background:var(--accent-soft)}
   .row input.t{width:78px;font-family:Consolas,monospace;font-size:11.5px;background:var(--bg-2);color:var(--text-2);border:1px solid transparent;border-radius:4px;padding:2px 4px}
   .row input.t:focus{outline:none;border-color:var(--accent);color:var(--text)}
   .role{font-size:10.5px;padding:1px 7px;border-radius:20px;flex-shrink:0;cursor:pointer;user-select:none;border:1px solid transparent}
@@ -105,7 +104,6 @@
   .wstat.ok{color:var(--main)}
   /* 打轴页的歌词列表：只读，点一行 = 从那一句开始打 */
   #tapList .row{cursor:pointer;align-items:baseline}
-  #tapList .row.cur{background:var(--bg-1)}
   #tapList .t2{font-family:Consolas,monospace;font-size:11.5px;color:var(--text-3);width:78px;flex-shrink:0}
   #tapList .row.tap .t2{color:var(--accent)}
   #tapList .row.past .t2{color:var(--text-2)}
@@ -343,24 +341,29 @@
     }
     var tail=body.slice(pos);
     if(tail) out.push({ t:pending, text:tail });
-    if(out.length<=1) return { text:out.length?out[0].text:body, words:null };
+    // 只有一段也要保留 words：`<00:12.00>夜` 这种"整行就一个字"的逐字行以前会被
+    // 当成普通文本（words=null），wordOnlyLine 随即判它"不是逐字行"塞进文件头，
+    // 导出时整行跑到全部歌词之前，逐字标记也没了
+    if(!out.length) return { text:body, words:null };
     var text='';
     for(var i=0;i<out.length;i++) text+=out[i].text;
     return { text:text, words:out };
   }
-  // 导出用：把词时间拼回 [行时间]<词时间>词… ；没有词时间的词并进前一个词；整行都没时间就返回 null（写纯文本）
+  // 导出用：把词时间拼回 [行时间]<词时间>词… ；没有词时间的词并进前一个词；
+  // 行首还没打时间的词并进后一个词（不能丢字）；整行都没时间就返回 null（写纯文本）
   function wordLineText(row){
     var words=row.words;
-    if(!words || words.length<2) return null;
-    var chunks=[], last=null, i, t;
+    if(!words || !words.length) return null;
+    var chunks=[], last=null, pending='', i, t;
     for(i=0;i<words.length;i++){
       t=(words[i].t!=null)?words[i].t:last;
-      if(t==null) continue;
+      if(t==null){ pending+=words[i].text; continue; }   // 行首尚未打时间的词先攒着，不丢
       if(last!==null && t===last && chunks.length) chunks[chunks.length-1].text+=words[i].text;
       else chunks.push({ t:t, text:words[i].text });
       last=t;
     }
-    if(!chunks.length) return null;
+    if(!chunks.length) return null;                      // 整行都没词时间 → 交回纯文本（不丢字）
+    if(pending) chunks[0].text=pending+chunks[0].text;   // 并进第一个有时间的词（同刻唱出）
     var out='';
     for(i=0;i<chunks.length;i++) out+='<'+msToTag(chunks[i].t)+'>'+chunks[i].text;
     return out;
@@ -477,7 +480,7 @@
     for(var q=0;q<rows.length;q++) if(rows[q].words && rows[q].words.length) return autoAssignWord(rows);
     var out=[], i=0;
     while(i<rows.length && rows[i].role==='other'){ out.push(rows[i]); i++; }
-    var lastMain=-1, hasMain=false;
+    var hasMain=false;
     while(i<rows.length){
       if(rows[i].role==='other'){ out.push(rows[i]); i++; continue; }
       var j=i+1;
@@ -490,8 +493,17 @@
         if(block[b].emptySlot) slotFilled=true;
       }
       if(content.length>=2 && !slotFilled && hasMain){
-        content[0].role='sub';
-        for(var c=1;c<content.length;c++) content[c].role='main';
+        if(content.length>=3 && j>=rows.length){
+          // 末块三行形态：[上一句译文][本句原文][本句译文] —— 这是本工具
+          // 「兼容旧版」导出后重新打开时会形成的形状（末句译文没有"下一句原文"
+          // 可挂，只能与自己的原文同刻）。首行挂上一句、末行挂本句，中间是原文。
+          content[0].role='sub';
+          content[content.length-1].role='sub';
+          for(var c1=1;c1<content.length-1;c1++) content[c1].role='main';
+        } else {
+          content[0].role='sub';
+          for(var c=1;c<content.length;c++) content[c].role='main';
+        }
         hasMain=true;
       } else {
         for(var c2=0;c2<content.length;c2++) content[c2].role='main';
@@ -501,6 +513,68 @@
       i=j;
     }
     return out;
+  }
+
+  /* 打开 / 粘贴时的**自动**角色识别：只做机械判据，判不出就一行都不动。
+   *
+   * 为什么不能无脑跑 autoAssign：那套规则（块内首行=上一句译文）只对「译文晚一行」
+   * 协议成立。同刻协议（标准双语）的文件被套用后每块首行都会被标成译文，导出
+   * 「标准双语」时再按"译文时间=主行时间"改写，就会出现 [00:20] 的原文被写到
+   * [00:10] —— 时间轴被改坏（工具自己导出的标准双语文件重新打开另存一遍就会中招）。
+   *
+   * 判据（与主题 lyric-core 的相位判据同源，只看时间戳结构、不看语言）：
+   *   相位门：主体首行的时间戳在主体内落单（延后协议的必然结果；同刻协议首行必与译文同刻）
+   *   关系式：把主体按扁平顺序两两成对，每对第二行的时间戳 == 下一对第一行的时间戳
+   * 两项都满足才按延后处理；其余情况按同刻分组（块内首行为主、其余为副），
+   * 时间戳一律不改，导出「标准双语」对这些行是恒等变换。 */
+  function looksDeferred(rows){
+    var body=[], i;
+    for(i=0;i<rows.length;i++) if(rows[i].role!=='other' && rows[i].text) body.push(rows[i]);
+    if(body.length<4) return false;                     // 样本太少（不足两对）不冒险，交给手动按钮
+    for(i=1;i<body.length;i++) if(Math.abs(body[i].t-body[0].t)<=TOL) return false;
+    var pairs=Math.floor(body.length/2), lag=0, k;
+    for(k=0;k<pairs;k++){
+      var u=body[2*k], v=body[2*k+1];
+      if(Math.abs(u.t-v.t)<=TOL) continue;              // 同刻 → 非延后特征
+      if(2*k+2<body.length){ if(Math.abs(v.t-body[2*k+2].t)<=TOL) lag++; }
+      else lag++;
+    }
+    return pairs>0 && lag/pairs>=0.9;
+  }
+  function hasSameTimeBlock(rows){
+    for(var i=0;i+1<rows.length;i++){
+      if(rows[i].role==='other'||!rows[i].text) continue;
+      if(Math.abs(rows[i+1].t-rows[i].t)<=TOL) return true;
+    }
+    return false;
+  }
+  /* 同刻协议（标准双语）的机械分配：块内首行为主、其余为副；空槽/信息行块不参与 */
+  function assignSameTime(rows){
+    var out=rows.slice(), i=0;
+    while(i<out.length){
+      if(out[i].role==='other'){ i++; continue; }
+      var j=i+1;
+      while(j<out.length && Math.abs(out[j].t-out[i].t)<=TOL) j++;
+      var content=[], slotFilled=false, b;
+      for(b=i;b<j;b++){
+        if(out[b].role==='other') slotFilled=true; else content.push(out[b]);
+        if(out[b].emptySlot) slotFilled=true;
+      }
+      if(content.length>=2 && !slotFilled){
+        content[0].role='main';
+        for(b=1;b<content.length;b++) content[b].role='sub';
+      }
+      i=j;
+    }
+    return out;
+  }
+  function autoDetectRoles(rows){
+    for(var q=0;q<rows.length;q++) if(rows[q].words && rows[q].words.length) return rows;  // 逐字文件不动
+    var body=[], i;
+    for(i=0;i<rows.length;i++) if(rows[i].role!=='other' && rows[i].text) body.push(rows[i]);
+    if(looksDeferred(rows)) return autoAssign(rows);
+    if(hasSameTimeBlock(body)) return assignSameTime(rows);
+    return rows;
   }
 
   /* 逐字歌词（ESLyric）：同刻块里带 <mm:ss.xx> 逐字标记的那行是主歌词，其它行是同刻译文。
@@ -556,7 +630,11 @@
       var r=state.rows[i];
       if(!r.text) continue;                        // 空行（新增但还没填内容）不写进文件
       var t=(r.role==='sub' && subTime[i]!=null) ? subTime[i] : r.t;
-      var body=(word && r.role!=='sub') ? (wordLineText(r)||r.text) : r.text;
+      // 逐字标记一律保留：勾了「逐字歌词」时主歌词按字轴重写；没勾时也要把原有的
+      // <mm:ss.xx> 标记原样带出去 —— 否则打开一份增强型 LRC、什么都不改直接导出，
+      // 逐字信息就被静默抹掉（与"只改时间戳与行顺序，不改一个字"相悖）。
+      // 译文行如果本来没有逐字标记，走 r.text 整句写，行为不变。
+      var body = r.words ? (wordLineText(r) || r.text) : r.text;
       out.push({ t:t, text:body });
     }
     out.sort(function(a,b){ return a.t-b.t; });
@@ -595,7 +673,9 @@
     function commitEdit(){
       if(done) return; done=true;
       var v=inp.value.replace(/\s+/g,' ').trim();
-      if(v && v!==r.text){ snapshot(); r.text=v; }
+      // 允许清空：v 为空串也要落下去（导出时空行会被跳过）。以前 `if(v && ...)`
+      // 会把"清空某行"的编辑静默丢弃，行里还是旧文字
+      if(v!==r.text){ snapshot(); r.text=v; }
       render();
     }
     inp.addEventListener('keydown',function(ev){
@@ -743,7 +823,59 @@
   }
 
   function commit(){
+    remapTap();
     render();
+  }
+
+  /* 打轴热路径（每次按空格）：只刷新"打轴列表里真正变化的行 + 顶部卡片 + 编辑页统计"。
+     以前每次按键都调 render()，把编辑页整表 + 打轴页整表 + 预览三份 DOM 全重建，
+     上万行歌词时每次按键要重建几万行，跟着节奏打轴明显掉帧。
+     切页 / 撤销 / 点击某行 / 角色变更仍走完整 render()，不会残留旧状态。 */
+  function refreshTapRow(i, cls, withTime){
+    if(!state || i<0 || i>=state.rows.length) return;
+    var el=tapListEl.querySelector('.row[data-i="'+i+'"]');
+    if(!el) return;
+    el.classList.remove('tap','past');
+    if(cls) el.classList.add(cls);
+    if(withTime){
+      var t2=el.querySelector('.t2');
+      if(t2) t2.textContent=msToTag(state.rows[i].t);
+    }
+    var wsEl=el.querySelector('.wstat');
+    if(wsEl){
+      var r=state.rows[i], n=wordCount(r), d=wordDone(r);
+      wsEl.textContent=d+'/'+n+'字';
+      wsEl.classList.toggle('ok', d>=n);
+    }
+  }
+  function renderTapOnly(prevTarget, changedIdxs){
+    var cur=tapTargetIndex();
+    if(prevTarget>=0 && prevTarget!==cur) refreshTapRow(prevTarget, 'past', true);
+    if(cur>=0) refreshTapRow(cur, 'tap', true);
+    for(var k=0;k<(changedIdxs||[]).length;k++){
+      if(changedIdxs[k]!==cur && changedIdxs[k]!==prevTarget) refreshTapRow(changedIdxs[k], null, true);
+    }
+    if(state){
+      var zero=0, lyr=0, q;
+      for(q=0;q<state.rows.length;q++){
+        var x=state.rows[q];
+        if(x.role!=='other'){ lyr++; if(x.text && x.t===0) zero++; }
+      }
+      statEl.textContent=state.rows.length+' 行 · '+lyr+' 条歌词'+
+        (zero>1?(' · '+zero+' 行还是 00:00.000（去「打轴」页打时间）'):'');
+    }
+    renderTap();
+  }
+  // 结构编辑（插行/删行/上下移/粘贴/撤销）后，tapIdx 这个纯下标可能已经指向
+  // 别的歌词行：按 tapRowRef（行对象引用）重新定位；目标被删则置 -1，
+  // 交给 tapTargetIndex 顺延到下一句
+  function remapTap(){
+    if(!state){ tapIdx=-1; tapRowRef=null; return; }
+    if(tapRowRef){
+      var i=state.rows.indexOf(tapRowRef);
+      tapIdx=(i>=0)?i:-1;
+      if(i<0) tapRowRef=null;
+    } else if(tapIdx>=state.rows.length) tapIdx=-1;
   }
 
   listEl.addEventListener('change', function(e){
@@ -766,8 +898,26 @@
   document.getElementById('btnAuto').addEventListener('click', function(){
     if(!state) return;
     snapshot();
+    if(looksDeferred(state.rows)){
+      state.rows=autoAssign(state.rows);
+      commit();
+      toast('已按「译文晚一行」规则识别：块首行挂到上一句');
+      return;
+    }
+    // 不是延后写法：同刻双语里"块首行=上一句译文"会把原文误标成译文，导出
+    // 「标准双语」时再按"译文时间=主行时间"改写 → 原文时间戳被前移。先问一句，
+    // 默认（确定）走无损的同刻分组；只有用户明确要硬套延后规则才照旧执行。
+    if(hasSameTimeBlock(state.rows)){
+      if(confirm('这份歌词没有「译文晚一行」的相位特征（多半是同刻双语）。\n\n确定 = 按同刻分组（块内首行为主、其余为译文，时间戳一律不改）\n取消 = 仍按「译文晚一行」规则硬套（可能把原文时间戳前移，仅适用于延后写法的文件）')){
+        state.rows=assignSameTime(state.rows);
+        commit();
+        toast('已按同刻双语分组（首行为主、其余为译文，时间戳未改）');
+        return;
+      }
+    }
     state.rows=autoAssign(state.rows);
     commit();
+    toast('已按「译文晚一行」规则识别：块首行挂到上一句');
   });
   // 交替配对：首行保持当前角色，其余歌词行按「主 / 译文」交替
   document.getElementById('btnAltPair').addEventListener('click', function(){
@@ -851,7 +1001,15 @@
   document.getElementById('fileInput').addEventListener('change', function(){ if(this.files.length) addFiles(this.files); this.value=''; });
   // 清空：回到初始状态，接着拖下一个文件即可（不用刷新页面）
   document.getElementById('btnClear').addEventListener('click', function(){
-    files=[]; curIdx=-1; state=null; undoStack=[]; redoStack=[]; tapIdx=-1; tapDone=false; wordIdx=0;
+    files=[]; curIdx=-1; state=null; undoStack=[]; redoStack=[]; tapIdx=-1; tapDone=false; wordIdx=0; tapRowRef=null;
+    if(!audio.paused) audio.pause();            // 不清空则已载入的歌还在播、blob URL 也不释放
+    if(songUrl){ URL.revokeObjectURL(songUrl); songUrl=null; }
+    audio.removeAttribute('src');
+    songNameEl.textContent='未载入歌曲 —— 点「载入歌曲」，或把音频文件拖进窗口';
+    songNameEl.title=''; songNameEl.classList.remove('on');
+    seekEl.disabled=true; rateSel.disabled=true; playBtn.disabled=true;
+    document.getElementById('btnBack5').disabled=true;
+    document.getElementById('btnFwd5').disabled=true;
     dropEl.style.display='';
     renderFiles(); render();
   });
@@ -894,8 +1052,17 @@
     var del=e.target.closest('[data-del]');
     if(del){
       var di=+del.dataset.del;
+      var wasCurrent=(di===curIdx);
+      if(wasCurrent && undoStack.length && !confirm('「'+files[di].name+'」有未保存的修改（撤销栈里还有 '+undoStack.length+' 步）。\n\n确定移除并切换到列表里的下一个文件吗？')) return;
       files.splice(di,1);
       if(!files.length){ document.getElementById('btnClear').click(); return; }
+      if(!wasCurrent){
+        // 删的不是当前文件：不重开文件，只是列表变化（以前会整体切到另一个文件，
+        // 当前文件正在编辑的内容无提示丢失）
+        if(di<curIdx) curIdx--;
+        renderFiles();
+        return;
+      }
       openFile(Math.min(di, files.length-1));
       return;
     }
@@ -907,8 +1074,8 @@
     curIdx=i;
     var parsed=parseLRC(decodeBytes(files[i].buf));
     state={ name:files[i].name, head:parsed.head, rows:parsed.rows };
-    undoStack=[]; redoStack=[]; tapIdx=-1; tapDone=false; wordIdx=0;
-    state.rows=autoAssign(state.rows);      // 打开就先按机械规则识别一遍，再让用户改
+    undoStack=[]; redoStack=[]; tapIdx=-1; tapDone=false; wordIdx=0; tapRowRef=null;
+    state.rows=autoDetectRoles(state.rows);   // 自动识别：只在判据明确时才改角色，判不出保持原样
     renderFiles(); render();
     dropEl.style.display='none';
   }
@@ -1000,7 +1167,7 @@
 
   /* --- 打轴目标：tapIdx 是当前目标行下标（-1 = 还没定位，取第一句可打轴的）；tapDone = 打到最后一句之后
          wordIdx 是逐字模式下当前要打的字/词下标 --- */
-  var tapIdx=-1, tapDone=false, wordIdx=0;
+  var tapIdx=-1, tapDone=false, wordIdx=0, tapRowRef=null;   // tapRowRef：目标行对象（编辑页插/删/移行后靠它重新定位，纯下标会指到别的歌词行）
   function wordMode(){ return chkWord.checked; }
   function tapEligible(i){
     var r=state && state.rows[i];
@@ -1017,6 +1184,12 @@
   function tapTargetIndex(){
     if(!state || tapDone) return -1;
     if(tapIdx>=0 && tapIdx<state.rows.length && tapEligible(tapIdx)) return tapIdx;
+    if(tapIdx>=0){
+      // 目标行还在、但已经不可打（改成译文且勾了"跳过译文行"、或正文被清空）
+      // → 顺延到它后面的第一句。以前直接回退到"全表第一句"，等于把进度打回开头。
+      for(var j=tapIdx+1;j<state.rows.length;j++) if(tapEligible(j)) return j;
+      return -1;
+    }
     var list=eligibleList();
     return list.length?list[0]:-1;
   }
@@ -1027,12 +1200,13 @@
     if(wordMode() && r.words && r.words.length){
       var k=Math.min(wordIdx, r.words.length-1);
       for(var j=k;j>=0;j--) if(r.words[j].t!=null) return r.words[j].t;
-      return null;
+      return r.t;                                   // 本行还没打过任何字 → 退回行时间（注释承诺的行为）
     }
     return r.t;
   }
   function renderTap(){
     var i=tapTargetIndex(), list=eligibleList(), pos=-1;
+    if(i>=0){ tapIdx=i; tapRowRef=state.rows[i]; } else { tapRowRef=null; }   // 目标行对象跟随
     for(var k=0;k<list.length;k++) if(list[k]===i){ pos=k; break; }
     tapBtn.disabled=(i<0);
     tapModeEl.style.display=wordMode()?'':'none';
@@ -1080,10 +1254,10 @@
     var el=tapListEl.querySelector('.row[data-i="'+i+'"]');
     if(el && el.scrollIntoView) el.scrollIntoView({block:'center'});   // 连续打轴时不加动画，避免跟不上
   }
-  // 前进到下一句可打轴的行 / 从指定字开始：见下面的 advanceTap（此处不再重复定义）
   function setTapTarget(i){
     if(!state || !tapEligible(i)) return;
-    tapIdx=i; tapDone=false;
+    tapIdx=i; tapDone=false; wordIdx=0;      // 换行必须把"打到第几个字"归零：否则新行会从第 N 个字开始，前 N 个字永远没时间
+    tapRowRef=state.rows[i];
     render();
     scrollToTap();
   }
@@ -1122,6 +1296,7 @@
     if(i<0){ toast(tapDone?'已经打到最后一句了（点某一行从那句继续，或「回到第一句」重来）':'没有可打轴的行'); return; }
     var t=Math.round(audio.currentTime*1000);
     var r=state.rows[i];
+    var changed=[i];
     snapshot();
     if(wordMode()){
       var words=ensureWords(r);
@@ -1130,15 +1305,18 @@
       if(words[0].t!=null) r.t=words[0].t;           // 行时间 = 第一个字的时间
       wordIdx++;
       if(wordIdx>=words.length) advanceTap(i);       // 这句打完 → 下一句（译文行自动跳过）
-      render();
+      renderTapOnly(i, changed);
     } else {
       r.t=t;
       // 跳过译文行时：紧跟其后的译文行也写上同一个时间（导出时仍按所选写法重算）
       if(chkSkipSub.checked){
-        for(var j=i+1;j<state.rows.length && state.rows[j].role==='sub';j++) state.rows[j].t=t;
+        for(var j=i+1;j<state.rows.length && state.rows[j].role==='sub';j++){
+          state.rows[j].t=t;
+          changed.push(j);                             // 这些行的显示时间也要刷新
+        }
       }
       advanceTap(i);
-      render();
+      renderTapOnly(i, changed);
     }
     scrollToTap();
   }
@@ -1246,14 +1424,17 @@
     snapshot();
     if(append){
       state.rows=state.rows.concat(parsed.rows);
-      if(parsed.head.length) state.head=state.head.concat(parsed.head);
+      // 追加时不并入粘贴文本的文件头：原来会把 [ti:]/[ar:] 再拼一份，导出出现重复头。
+      // 需要改元信息请用「替换」。
     } else {
-      state.head=parsed.head;
+      // 替换：粘贴文本自带文件头就用新的，没有则**保留原文件的头**（以前会把
+      // [ti:]/[ar:] 整段清掉，只换正文却丢元信息）
+      if(parsed.head.length) state.head=parsed.head;
       state.rows=parsed.rows;
       curIdx=-1;
     }
-    if(document.getElementById('chkPasteAuto').checked) state.rows=autoAssign(state.rows);
-    tapIdx=-1; tapDone=false; wordIdx=0;
+    if(document.getElementById('chkPasteAuto').checked) state.rows=autoDetectRoles(state.rows);
+    tapIdx=-1; tapDone=false; wordIdx=0; tapRowRef=null;
     closePaste();
     dropEl.style.display='none';
     renderFiles(); render(); scrollToTap();

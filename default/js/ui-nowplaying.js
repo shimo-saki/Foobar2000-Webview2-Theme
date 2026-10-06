@@ -12,19 +12,27 @@
   /* ============================================
    * 沉浸式 NowPlaying
    * ============================================ */
+  // 进入沉浸页前的歌词面板可见状态：退出时据此恢复 —— 不能看到"本来就关着
+  // 面板"的用户在退出沉浸页时被强制打开（setLyricsVisible 会持久化设置）
+  var _npPrevLyricsVisible = false;
   CM.toggleNpOverlay = function(open) {
     state.npOpen = open !== undefined ? open : !state.npOpen;
+    // body 上的 np-open 供 CSS 压掉盖在沉浸页之上的"页面级"浮层（批量操作栏
+    // 是 body 子元素、z-index 1500，比 .np-overlay 的 200 高，不压会浮在沉浸页上）
+    document.body.classList.toggle('np-open', state.npOpen);
     if (state.npOpen) {
       CM.renderNpOverlay();
       els.npOverlay.classList.add('open');
       document.body.style.overflow = 'hidden';
       // 关闭歌词面板节省资源
+      _npPrevLyricsVisible = state.lyricsVisible;
       if (state.lyricsVisible) CM.setLyricsVisible(false, true);
     } else {
       els.npOverlay.classList.remove('open');
       document.body.style.overflow = '';
-      // 恢复歌词面板
-      if (!state.lyricsVisible) CM.setLyricsVisible(true, true);
+      // 恢复歌词面板（仅当进入前它是可见的）
+      if (_npPrevLyricsVisible) CM.setLyricsVisible(true, true);
+      _npPrevLyricsVisible = false;
     }
   };
 
@@ -95,22 +103,39 @@
       _waveBound = true;
       fb.on('audio:fullWaveformReady', function(e) {
         if (!e || !e.taskId || !_wavePending || e.taskId !== _wavePending.taskId) return;
+        var reqPath = _wavePending.path;
         _wavePending = null;
         if (e.waveform && e.waveform.length) {
+          // 波形属于"发起请求的那条曲目"：按请求路径缓存；仅当它仍是当前曲目时展示
+          // （期间切歌且新请求尚未发出时，旧曲目波形不能缓存到新曲目名下）
+          if (reqPath) _waveCache[reqPath] = CM.waveformSVG(e.waveform, 100, 44);
           var cur = CM.trackPath(CM.currentTrack);
-          if (cur) { _waveCache[cur] = CM.waveformSVG(e.waveform, 100, 44); el.innerHTML = _waveCache[cur]; }
-          el.classList.remove('hide');
+          if (reqPath && cur === reqPath && _waveCache[reqPath]) {
+            el.innerHTML = _waveCache[reqPath];
+            el.classList.remove('hide');
+          } else el.classList.add('hide');
         } else el.classList.add('hide');
       });
-      fb.on('audio:fullWaveformFailed', function() { _wavePending = null; el.classList.add('hide'); });
+      fb.on('audio:fullWaveformFailed', function(e) {
+        // 迟到的旧任务失败不能清掉新任务的 pending（否则新任务 ready 时被丢弃）
+        if (e && e.taskId && _wavePending && e.taskId !== _wavePending.taskId) return;
+        _wavePending = null; el.classList.add('hide');
+      });
     }
-    _wavePending = { taskId: null };
+    // req 是本轮请求的身份：回执只在它仍是"最新一轮"时才允许写入 _wavePending。
+    // 否则快速切歌时 A 的回执会把 A 的 taskId 写进 B 的 pending，A 的 ready 事件
+    // 于是命中 B 的记录 —— A 的波形被缓存/显示到 B 名下（_waveCache 被污染）。
+    var req = { taskId: null, path: path };
+    _wavePending = req;
     CM.api('audio.generateFullWaveform', { path: path, resolution: 256, method: 'rms', preferCache: true }).then(function(r) {
-      if (r && r.taskId) { if (_wavePending) _wavePending.taskId = r.taskId; }
-      else if (r && r.waveform && r.waveform.length) {
+      if (_wavePending !== req) return;                 // 期间又发起了新一轮请求，本轮作废
+      if (r && r.taskId) { req.taskId = r.taskId; return; }
+      if (r && r.waveform && r.waveform.length) {       // 命中宿主缓存，直接可用
         _wavePending = null;
         _waveCache[path] = CM.waveformSVG(r.waveform, 100, 44);
-        el.innerHTML = _waveCache[path]; el.classList.remove('hide');
+        if (CM.trackPath(CM.currentTrack) === path) {
+          el.innerHTML = _waveCache[path]; el.classList.remove('hide');
+        } else el.classList.add('hide');
       } else { _wavePending = null; el.classList.add('hide'); }
     });
   };

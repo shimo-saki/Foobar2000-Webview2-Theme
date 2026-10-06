@@ -152,15 +152,6 @@
 }
 .retry-btn:hover{background:var(--bg-3);color:var(--text);border-color:var(--accent-glow)}
 
-/* 加载更多按钮（媒体库歌曲分页） */
-.lib-load-more{
-  display:block;margin:16px auto;padding:8px 28px;background:var(--bg-2);
-  border:1px solid var(--border);border-radius:20px;color:var(--text-2);
-  font-size:12.5px;font-weight:600;cursor:pointer;transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);
-}
-.lib-load-more:hover:not(:disabled){background:var(--bg-3);color:var(--text);border-color:var(--accent-glow)}
-.lib-load-more:disabled{opacity:0.6;cursor:default}
-
 /* ============ 通用徽标 ============ */
 .count-badge{
   position:absolute;top:-2px;right:-4px;min-width:15px;height:15px;

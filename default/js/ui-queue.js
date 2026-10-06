@@ -152,6 +152,9 @@
       var btn = e.target.closest('.queue-item-del');
       if (!btn) return;
       e.stopPropagation();
+      // 排序重建期间宿主队列正在清空+重加，按旧索引 remove 会删错曲目
+      // （pointerdown 已有同款守卫，这里补齐 click 入口）
+      if (CM._queueRebuilding) return;
       var idx = parseInt(btn.closest('.queue-item').dataset.i, 10);
       if (isNaN(idx)) return;
       CM.api('queue.remove', { index: idx }).then(function() {
@@ -273,9 +276,11 @@
     }
     var failCount = 0;
     return CM.api('queue.clear').then(function(clearRes) {
-      if (clearRes && clearRes.success === false) {
+      // 回执为空（CM.api 吞掉的桥接级失败）也算失败：否则会跳过中止分支，
+      // 在没清掉的旧队列上重加一遍 —— 每首曲目都变成两份
+      if (!clearRes || clearRes.success === false) {
         CM._queueRebuilding = false;
-        CM.showToast('调整失败', clearRes.error || '无法清空队列', 'error');
+        CM.showToast('调整失败', (clearRes && clearRes.error) || '无法清空队列', 'error');
         CM.renderQueue();
         return null;
       }

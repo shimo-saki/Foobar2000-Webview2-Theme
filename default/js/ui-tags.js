@@ -45,7 +45,8 @@
                    'error');
       return;
     }
-    _tagCtx = { mode: 'single', tracks: [track], path: path };
+    var ctx = { mode: 'single', tracks: [track], path: path };
+    _tagCtx = ctx;
     els.tagEditorTitle.textContent = '编辑标签';
     els.tagEditorTrack.textContent = CM.trackName(track) + ' — ' + path;
     els.tagEditorHint.textContent = '正在读取标签...';
@@ -54,13 +55,15 @@
     els.tagEditorOverlay.classList.add('open');
     // 读取元数据（扁平格式，大写键名）
     CM.api('metadata.readByPath', { path: path }).then(function(r) {
-      if (!_tagCtx || _tagCtx.mode !== 'single') return; // 已关闭或切换
+      // 必须比对身份而非 mode：先开 A 再开 B 时，A 的迟到响应若被放进 B 的
+      // 编辑器，保存就会把 A 派生的标签写进 B 的文件
+      if (_tagCtx !== ctx) return; // 已关闭或已切换曲目
       if (!r || r.success === false) {
         CM.showToast('读取失败', '无法读取文件标签', 'error');
         CM.hideTagEditor();
         return;
       }
-      _tagCtx.original = r;
+      ctx.original = r;
       _renderTagFields(false, r);
       _renderTagCover(path);
       els.tagEditorHint.textContent = '修改后点击保存写入文件';
@@ -166,9 +169,11 @@
       if (!input) return;
       var newVal = input.value.trim();
       // 与原值比较前统一取文本：多值字段原值是数组，直接比较会恒判为"已改动"，
-      // 于是未改动的多值标签也被写回成单值（多值语义被压掉）
+      // 于是未改动的多值标签也被写回成单值（多值语义被压掉）。
+      // 另外原始输入须与原值全等比较一次：只 trim 新值会把"标签本身带首尾
+      // 空格"的字段恒判为已改动，未编辑也被重写并顺带剥掉原空格
       var oldVal = tagText(ctx.original && ctx.original[f.key]);
-      if (newVal !== oldVal) {
+      if (input.value !== oldVal && newVal !== oldVal) {
         tags[f.key] = newVal || null; // 空值设为 null 以清除标签
         changed = true;
       }
@@ -183,16 +188,17 @@
       }
       var track = ctx.tracks[0];
       CM.showToast('标签已保存', track ? CM.trackName(track) : null, 'success');
-      // 更新本地缓存（写入已完成，即使编辑器已在写入期间被关闭也要刷新列表）
+      // 更新本地缓存（写入已完成，即使编辑器已在写入期间被关闭也要刷新列表）。
+      // 清空的标签（null）同样要反映到缓存，否则列表一直显示旧值
       if (track) {
-        if (tags.TITLE != null) track.title = tags.TITLE;
-        if (tags.ARTIST != null) track.artist = tags.ARTIST;
-        if (tags.ALBUM != null) track.album = tags.ALBUM;
-        if (tags['ALBUM ARTIST'] != null) track.albumArtist = tags['ALBUM ARTIST'];
-        if (tags.GENRE != null) track.genre = tags.GENRE;
-        if (tags.DATE != null) track.date = tags.DATE;
-        if (tags.TRACKNUMBER != null) track.trackNumber = parseInt(tags.TRACKNUMBER, 10) || 0;
-        if (tags.DISCNUMBER != null) track.discNumber = parseInt(tags.DISCNUMBER, 10) || 0;
+        if (tags.TITLE != null) track.title = tags.TITLE; else if ('TITLE' in tags) track.title = '';
+        if (tags.ARTIST != null) track.artist = tags.ARTIST; else if ('ARTIST' in tags) track.artist = '';
+        if (tags.ALBUM != null) track.album = tags.ALBUM; else if ('ALBUM' in tags) track.album = '';
+        if (tags['ALBUM ARTIST'] != null) track.albumArtist = tags['ALBUM ARTIST']; else if ('ALBUM ARTIST' in tags) track.albumArtist = '';
+        if (tags.GENRE != null) track.genre = tags.GENRE; else if ('GENRE' in tags) track.genre = '';
+        if (tags.DATE != null) track.date = tags.DATE; else if ('DATE' in tags) track.date = '';
+        if (tags.TRACKNUMBER != null) track.trackNumber = parseInt(tags.TRACKNUMBER, 10) || 0; else if ('TRACKNUMBER' in tags) track.trackNumber = 0;
+        if (tags.DISCNUMBER != null) track.discNumber = parseInt(tags.DISCNUMBER, 10) || 0; else if ('DISCNUMBER' in tags) track.discNumber = 0;
         CM.renderTrackTable();
       }
       // 期间用户可能已关闭本编辑器（甚至打开了另一首）：只在仍是同一个上下文时关闭
@@ -218,7 +224,7 @@
     var skipped = 0;
     var items = ctx.tracks.map(function(t) {
       var p = CM.trackPath(t);
-      if (!p) return null;
+      if (!p) { skipped++; return null; } // 无路径曲目同样无法写入，计入跳过数
       // 在线曲目没有可写文件：不计入 items，否则成败统计里会多出一批
       // "失败"（其实是本来就写不了），用户还会以为写入出错
       if (CM.isUrlPath && CM.isUrlPath(p)) { skipped++; return null; }
@@ -242,9 +248,14 @@
       } else {
         CM.showToast('批量保存成功', ok + '首曲目标签已更新' + skipNote, 'success');
       }
-      // 更新本地缓存
+      // 更新本地缓存：只更新真正写入过的曲目 —— 在线/无路径曲目被跳过，
+      // 它们的标签没有变，不能在列表里显示从未写入过的新值
+      var written = {};
+      items.forEach(function(it) { written[it.path] = 1; });
       ctx.tracks.forEach(function(track) {
         if (!track) return;
+        var p = CM.trackPath(track);
+        if (!p || !written[p]) return;
         if (tags.TITLE != null) track.title = tags.TITLE;
         if (tags.ARTIST != null) track.artist = tags.ARTIST;
         if (tags.ALBUM != null) track.album = tags.ALBUM;

@@ -52,57 +52,13 @@
     CM._syncNpLyrics();
   };
 
+  // 歌词加载链路已由 lyrics-resolver.js 接管（本地同名 .lrc / 歌词库优先 → 页内桥接
+  // 联网匹配兜底），本文件不再自带一份实现：两份同名函数只会让后加载的那份生效、
+  // 另一份变成带行为差异的死代码（旧实现不做在线匹配，容易误导后续维护）。
   CM._lyricLoadId = 0;
+
   CM._lyricsSynced = false;   // 当前歌词是否带时间轴（纯文本时不做时间高亮）
   CM.lyricSourcePath = '';    // 当前歌词来源路径（右键菜单：模式记忆键 + 打开所在文件夹）
-  CM.loadLyrics = function() {
-    CM.currentLyrics = [];
-    CM._lyricsSynced = false;
-    CM.activeLyricIndex = -1;
-    if (!CM.currentTrack) { CM.renderLyricsEmpty('暂无歌词'); return; }
-    els.lyricsScroll.innerHTML = CM.loadingHTML('歌词加载中...');
-    var path = CM.trackPath(CM.currentTrack);
-    CM.lyricSourcePath = path || CM.lyricSourcePath;
-    var loadId = ++CM._lyricLoadId;
-    CM.api('lyrics.get', path ? { path: path } : {}).then(function(r) {
-      if (loadId !== CM._lyricLoadId) return;
-      // 文件源歌词：用 file.read 读取原始字节，自行编码探测
-      if (r && r.available && r.source === 'file' && r.sourcePath) {
-        CM.api('file.read', { path: r.sourcePath, encoding: 'binary' }).then(function(fr) {
-          if (loadId !== CM._lyricLoadId) return;
-          if (fr && fr.content) {
-            CM._renderLyrics(r, CM.decodeTextBytes(fr.content));
-          } else {
-            CM._renderLyrics(r, r.lyrics);
-          }
-        }).catch(function() {
-          CM._renderLyrics(r, r && r.lyrics);
-        });
-        return;
-      }
-      // 非文件源（内嵌/在线）：直接用插件解码结果
-      if (r && r.available) {
-        CM._renderLyrics(r, r && r.lyrics);
-        return;
-      }
-      // lyrics.get 失败 → 从音频路径推导 LRC 路径，自行读取
-      if (path) {
-        var lrcPath = path.replace(/\.\w+$/i, '.lrc');
-        CM.api('file.read', { path: lrcPath, encoding: 'binary' }).then(function(fr) {
-          if (loadId !== CM._lyricLoadId) return;
-          if (fr && fr.content) {
-            CM._renderLyrics({ available: true, source: 'file', sourcePath: lrcPath }, CM.decodeTextBytes(fr.content));
-          } else {
-            CM.renderLyricsEmpty('暂无歌词');
-          }
-        }).catch(function() {
-          CM.renderLyricsEmpty('暂无歌词');
-        });
-        return;
-      }
-      CM.renderLyricsEmpty('暂无歌词');
-    });
-  };
 
   CM.renderLyricsEmpty = function(text, keepNp) {
     els.lyricsScroll.innerHTML =
@@ -110,6 +66,9 @@
     // 空态一并清掉判定结果：否则切到没有歌词的曲目后，右键菜单仍会显示上一个文件的
     // 「翻译对齐方式 / 识别为：X」，像是这首歌识别出来的
     CM.lyric.lastVerdict = 'none';
+    // 同样清掉歌词来源路径：否则「暂无歌词」时右键菜单的「打开所在文件夹 /
+    // 对齐方式」仍指向上一首有词的曲目
+    CM.lyricSourcePath = '';
     if (!keepNp) CM._syncNpLyrics();
   };
 
@@ -341,7 +300,11 @@
       if (cur === 'auto') items.push({ label: '识别为：' + _verdictText(), isLabel: true });
     }
     items.push({ divider: true },
-      { label: '刷新歌词', action: function() { CM.loadLyrics(); } },
+      // 走 CM.lyricReload：它不仅重载，还会清掉本模块的内存 memo 与 QQBridge 的
+      // 30 分钟在线匹配缓存。直接调 CM.loadLyrics 时两者都还在，刷新十次也是同一结果。
+      { label: '刷新歌词', action: function() {
+        if (typeof CM.lyricReload === 'function') CM.lyricReload(); else CM.loadLyrics();
+      } },
       { label: '复制歌词', disabled: !CM.currentLyrics.length, action: function() { CM.copyLyrics(); } },
       { label: '打开所在文件夹', disabled: !canOpenFolder, action: function() { CM.api('shell.showInExplorer', { path: path }); } });
     CM.showCtxMenu(x, y, items);
