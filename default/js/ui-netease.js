@@ -275,13 +275,13 @@
 
   function renderLoading() {
     var l = $('nemList');
-    if (l) l.innerHTML = '<div class="nem-empty"><span>搜索中…</span></div>';
+    if (l) l.innerHTML = CM.emptyHTML('搜索中…');
     renderPager();
   }
 
   function renderEmpty(msg) {
     var l = $('nemList');
-    if (l) l.innerHTML = '<div class="nem-empty"><span>' + esc(msg) + '</span></div>';
+    if (l) l.innerHTML = CM.emptyHTML(msg);
     renderPager();
   }
 

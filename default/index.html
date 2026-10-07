@@ -5,11 +5,49 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CloudMusic</title>
 <link rel="stylesheet" href="css/variables.css?v=24">
-<link rel="stylesheet" href="css/layout.css?v=28">
-<link rel="stylesheet" href="css/components.css?v=34">
+<link rel="stylesheet" href="css/layout.css?v=37">
+<link rel="stylesheet" href="css/components.css?v=39">
 <link rel="stylesheet" href="css/utilities.css?v=24">
 </head>
 <body>
+<!-- 装饰图形 sprite：命运石之门齿轮（iconfont 路径），全站 <use> 引用，避免重复贴路径。
+     currentColor 继承页面 CSS，因此齿轮颜色随封面取色变化。 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="sym-gear-c" viewBox="60 10 960 960">
+        <!-- 用户自设计齿轮（无 mask 版）：环带 287..387 用描边圆实现（r=337/宽 100）；
+             10 齿在 380..480（36° 间隔）；三支架 92..292；轮毂 92..150（r=121/宽 58）；中心 r<92 天然镂空。
+             原版用 mask 挖孔——mask 在「display:none sprite + <use>」组合下会被 Chromium 忽略
+             （实测画出实心圆），故改为纯描边等价画法，不再依赖任何 mask 资源。 -->
+        <defs>
+          <rect id="gear-tooth" x="495" y="10" width="90" height="100" rx="12" fill="currentColor"/>
+        </defs>
+        <g fill="currentColor">
+          <circle cx="540" cy="490" r="337" fill="none" stroke="currentColor" stroke-width="100"/>
+          <use href="#gear-tooth"/>
+          <use href="#gear-tooth" transform="rotate(36 540 490)"/>
+          <use href="#gear-tooth" transform="rotate(72 540 490)"/>
+          <use href="#gear-tooth" transform="rotate(108 540 490)"/>
+          <use href="#gear-tooth" transform="rotate(144 540 490)"/>
+          <use href="#gear-tooth" transform="rotate(180 540 490)"/>
+          <use href="#gear-tooth" transform="rotate(216 540 490)"/>
+          <use href="#gear-tooth" transform="rotate(252 540 490)"/>
+          <use href="#gear-tooth" transform="rotate(288 540 490)"/>
+          <use href="#gear-tooth" transform="rotate(324 540 490)"/>
+          <rect x="508" y="198" width="64" height="200" rx="10" transform="rotate(0 540 490)"/>
+          <rect x="508" y="198" width="64" height="200" rx="10" transform="rotate(120 540 490)"/>
+          <rect x="508" y="198" width="64" height="200" rx="10" transform="rotate(240 540 490)"/>
+          <circle cx="540" cy="490" r="121" fill="none" stroke="currentColor" stroke-width="58"/>
+        </g>
+      </symbol>
+  <symbol id="sym-gear-b" viewBox="0 0 1024 1024"><path fill="currentColor" d="M512 315.9c-108.3 0-196.1 87.8-196.1 196.1S403.7 708.1 512 708.1 708.1 620.3 708.1 512 620.3 315.9 512 315.9z m93.41 289.51A132.11 132.11 0 1 1 644.1 512a131.25 131.25 0 0 1-38.69 93.41z"/><path fill="currentColor" d="M851.37 512c0-7.13-0.23-14.33-0.69-21.54l68.83-62.15-4.73-18.69a413.07 413.07 0 0 0-45.62-110L859.29 283l-92.59 4.73a340.49 340.49 0 0 0-30.45-30.45l4.75-92.57-16.56-9.87a413.07 413.07 0 0 0-110-45.62l-18.69-4.74-62.15 68.84a336.56 336.56 0 0 0-43.08 0l-62.15-68.84-18.69 4.74a413.07 413.07 0 0 0-110 45.62L283 164.71l4.73 92.59a341.81 341.81 0 0 0-30.45 30.45L164.71 283l-9.87 16.56a413.07 413.07 0 0 0-45.62 110l-4.74 18.69 68.84 62.15c-0.46 7.21-0.69 14.41-0.69 21.54s0.23 14.33 0.69 21.54l-68.84 62.15 4.74 18.69a413.07 413.07 0 0 0 45.62 110l9.87 16.68 92.59-4.73a340.49 340.49 0 0 0 30.45 30.45L283 859.29l16.56 9.87a413.07 413.07 0 0 0 110 45.62l18.69 4.73 62.15-68.83a336.56 336.56 0 0 0 43.08 0l62.15 68.83 18.69-4.73a413.07 413.07 0 0 0 110-45.62l16.68-9.87-4.73-92.59a341.81 341.81 0 0 0 30.45-30.45l92.57 4.75 9.87-16.56a413.07 413.07 0 0 0 45.62-110l4.73-18.69-68.83-62.15c0.46-7.27 0.69-14.47 0.69-21.6z m-65.75-31.06a276.51 276.51 0 0 1 0 62.12l-1.83 16.32L847.57 617a349.88 349.88 0 0 1-24.1 58.1l-85.81-4.38-10.25 12.85a277.6 277.6 0 0 1-43.88 43.88l-12.85 10.25 4.38 85.81a349.88 349.88 0 0 1-58.1 24.1l-57.58-63.78-16.32 1.83a276.51 276.51 0 0 1-62.12 0l-16.32-1.83L407 847.57a349.88 349.88 0 0 1-58.1-24.1l4.38-85.81-12.85-10.25a277.66 277.66 0 0 1-43.89-43.88l-10.24-12.85-85.81 4.38A349 349 0 0 1 176.44 617l63.77-57.58-1.83-16.32a276.51 276.51 0 0 1 0-62.12l1.83-16.32L176.43 407a349.88 349.88 0 0 1 24.1-58.1l85.81 4.38 10.24-12.85a278.57 278.57 0 0 1 43.89-43.89l12.85-10.24-4.38-85.81a349.88 349.88 0 0 1 58.1-24.1l57.58 63.78 16.32-1.83a276.51 276.51 0 0 1 62.12 0l16.32 1.83L617 176.44a349 349 0 0 1 58.1 24.09l-4.38 85.81 12.85 10.24a277.66 277.66 0 0 1 43.88 43.89l10.25 12.85 85.81-4.38a349.88 349.88 0 0 1 24.1 58.1l-63.78 57.58z"/></symbol>
+            <symbol id="sym-speaker" viewBox="0 0 1024 1024">
+        <path fill="currentColor" d="M787.5 161.3H235.3l56.3-42.8c11.6-8.1 19-12.4 25.3-12.4h395.9c6 0 13.3 3.5 22.5 10.7l52.2 44.5z m-521.8-10.2h494l-30.9-26.4c-9.6-7.6-14.4-8.4-16-8.4h-395.9c-3.8 0-11.5 5-19.3 10.4L265.6 151z M751.2 918H272.8a63.3 63.3 0 0 1-63.2-63.2V212.1a63.3 63.3 0 0 1 63.2-63.2h478.5a63.3 63.3 0 0 1 63.2 63.2v642.6a63.3 63.3 0 0 1-63.2 63.2zM272.8 159.1a53 53 0 0 0-53 53v642.6a53.1 53.1 0 0 0 53 53h478.5a53.1 53.1 0 0 0 53-53V212.1a53 53 0 0 0-53-53H272.8z M561.4 513.4A49.4 49.4 0 0 1 512 562.7a49.4 49.4 0 1 1 0-98.8 49.4 49.4 0 0 1 49.4 49.4z M512 567.8a54.5 54.5 0 0 1-54.5-54.5A54.5 54.5 0 0 1 512 458.9a54.6 54.6 0 0 1 54.5 54.5A54.6 54.6 0 0 1 512 567.8z m0-98.8c-24.4 0-44.2 19.9-44.2 44.3 0 24.4 19.8 44.3 44.2 44.3a44.3 44.3 0 0 0 44.3-44.3c0-24.4-19.9-44.3-44.3-44.3z M296.2 216.2a19.1 19.1 0 1 1-38.2 0 19.1 19.1 0 0 1 38.2 0z M277.1 237.8a21.7 21.7 0 1 1 0-43.3 21.7 21.7 0 0 10 43.3z m0-38.2a16.6 16.6 0 0 0 0 33.1 16.5 16.5 0 0 0 0-33.1zM296.2 850.6a19.1 19.1 0 1 1-38.2 0c0-10.6 8.5-19.1 19.1-19.1a19.1 19.1 0 0 1 19.1 19.1z M277.1 872.3a21.7 21.7 0 0 1 0-43.3 21.7 21.7 0 0 1 0 43.3z m0-38.2a16.6 16.6 0 0 0 0 33.1 16.6 16.6 0 0 0 0-33.1z M766 216.2a19.1 19.1 0 1 1-38.2 0c0-10.5 8.6-19.1 19.1-19.1a19.1 19.1 0 0 1 19.1 19.1z M746.9 237.8a21.7 21.7 0 1 1 0-43.3 21.7 21.7 0 0 10 43.3z m0-38.2a16.6 16.6 0 0 0 0 33.1 16.6 16.6 0 0 0 16.6-16.5 16.6 16.6 0 0 0-16.6-16.5z M766 850.6a19.1 19.1 0 1 1-38.2 0c0-10.6 8.6-19.1 19.1-19.1a19.1 19.1 0 0 1 19.1 19.1z M746.9 872.3a21.7 21.7 0 1 1 0.1-43.4 21.7 21.7 0 0 1-0.1 43.4z m0-38.2a16.6 16.6 0 1 0 16.6 16.6 16.6 16.6 0 0 0-16.6-16.6z"/>
+      </symbol>
+      <symbol id="sym-woofer" viewBox="0 0 1024 1024">
+        <!-- 低音炮同心圈：独立 symbol，叠加在箱体上做透明度呼吸 -->
+        <path d="M512 762.6c-131.7 0-238.9-107.2-238.9-238.9 0-131.7 107.2-238.9 238.9-238.9s238.9 107.2 238.9 238.9S643.7 762.6 512 762.6z m0-472.7c-128.9 0-233.8 104.9-233.8 233.8 0 128.9 104.9 233.8 233.8 233.8s233.8-104.9 233.8-233.8c0-128.9-104.9-233.8-233.8-233.8z m0 424.7c-105.3 0-191-85.6-191-190.9 0-105.3 85.7-191 191-191s190.9 85.7 190.9 191c0 105.2-85.6 190.9-190.9 190.9zM512 337.9c-102.5 0-185.8 83.4-185.8 185.8 0 102.4 83.4 185.8 185.8 185.8 102.5 0 185.8-83.3 185.8-185.8S614.5 337.9 512 337.9z m0 355c-93.3 0-169.2-75.9-169.2-169.1 0-93.3 75.9-169.2 169.2-169.2 93.3 0 169.1 75.9 169.1 169.2 0 93.2-75.9 169.1-169.1 169.1z m0-333.2c-90.5 0-164 73.6-164 164 0 90.4 73.6 164 164 164 90.4 0 164-73.6 164-164 0-90.5-73.6-164-164-164z" fill="currentColor"></path>
+      </symbol>
+</svg>
 <div class="app lyrics-hidden" id="app">
 
   <!-- ============ Titlebar ============ -->
@@ -26,6 +64,11 @@
 
   <!-- ============ Sidebar ============ -->
   <div class="sidebar" id="sidebar">
+    <!-- 侧栏氛围层：左下音箱（随播放左右摇晃，颜色随封面取色） -->
+    <div class="deco deco-side" aria-hidden="true">
+      <svg class="deco-item d-speaker" viewBox="0 0 1024 1024"><use href="#sym-speaker"/></svg>
+      <svg class="deco-item d-woofer" viewBox="0 0 1024 1024"><use href="#sym-woofer"/></svg>
+    </div>
     <div class="sidebar-search" id="sidebarSearchWrap">
       <svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input type="text" id="sidebarSearch" placeholder="搜索音乐..." spellcheck="false" />
@@ -81,6 +124,15 @@
 
   <!-- ============ Main Content ============ -->
   <div class="main-content" id="mainContent">
+        <!-- 主内容氛围层（仿命运石之门齿轮 + 封面取色晕染，纯装饰，不可交互）。
+         刻意不用 SVG 模糊滤镜：全屏 feGaussianBlur 实时开销太大，会拖累黑胶/频谱动画，
+         柔和感全部交给 radial-gradient 本身。
+         齿轮只在播放时转动（与黑胶 / eq-bars 同一套 play-state 语言）；沉浸式页面打开时自动暂停。 -->
+    <div class="deco" id="bgGears" aria-hidden="true">
+      <div class="deco-wash"></div>
+      <svg class="deco-item d-gear1" viewBox="0 0 1024 1024"><use href="#sym-gear-c"/></svg>
+      <svg class="deco-item d-gear2" viewBox="0 0 1024 1024"><use href="#sym-gear-b"/></svg>
+    </div>
     <div class="main-tabs" id="mainTabs">
       <div class="main-tab active" data-tab="discover">推荐</div>
       <div class="main-tab" data-tab="playlist">播放列表</div>
@@ -95,7 +147,7 @@
       <div class="tab-content active" id="tabDiscover">
         <div class="discover-wrap">
           <div class="dc-hero">
-          <div class="hero-wave-bg"><img src="static/img/hero-wave.svg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1;opacity:0.6;pointer-events:none;" /></div>
+          <div class="hero-wave-bg"><img src="static/img/hero-wave.svg?v=2" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1;opacity:0.6;pointer-events:none;" /></div>
             <div class="dc-hero-date" id="heroDate"></div>
             <div class="dc-hero-title" id="heroTitle">每日推荐</div>
             <div class="dc-hero-sub" id="heroSub">根据你的媒体库，为你随机挑选 30 首歌曲</div>
@@ -300,7 +352,7 @@
           </div>
 
           <div class="qqm-list" id="qqmList">
-            <div class="qqm-empty">
+            <div class="empty-illustration">
               <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <span>输入关键词，搜索 QQ 音乐并直接在 foobar2000 里播放</span>
             </div>
@@ -421,7 +473,7 @@
           </div>
 
           <div class="nem-list" id="nemList">
-            <div class="nem-empty">
+            <div class="empty-illustration">
               <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <span>输入关键词，搜索网易云音乐并直接在 foobar2000 里播放</span>
             </div>
@@ -712,7 +764,7 @@
 <script src="sdk/components.global.js?v=1130"></script>
 <script src="sdk/smp-compat.global.js?v=1130"></script>
 <!-- CloudMusic Theme -->
-<script src="js/core.js?v=32"></script>
+<script src="js/core.js?v=34"></script>
 <script src="js/lyric-core.js?v=30"></script>
 <script src="js/ui.js?v=30"></script>
 <script src="js/ui-lyrics.js?v=30"></script>
@@ -722,15 +774,15 @@
 <script src="js/ui-queue.js?v=28"></script>
 <script src="js/ui-nowplaying.js?v=29"></script>
 <script src="js/ui-tags.js?v=28"></script>
-<script src="js/controls.js?v=30"></script>
-<script src="js/online-common.js?v=3"></script>
+<script src="js/controls.js?v=32"></script>
+<script src="js/online-common.js?v=4"></script>
 <script src="js/qqmusic-core.js?v=12"></script>
 <script src="js/qq-playlist-export.js?v=2"></script>
-<script src="js/ui-qqmusic.js?v=25"></script>
+<script src="js/ui-qqmusic.js?v=26"></script>
 <script src="js/netease-core.js?v=10"></script>
-<script src="js/ui-netease.js?v=25"></script>
+<script src="js/ui-netease.js?v=26"></script>
 <script src="js/lyrics-resolver.js?v=5"></script>
 <script src="js/artwork-resolver.js?v=7"></script>
-<script src="js/app.js?v=29"></script>
+<script src="js/app.js?v=31"></script>
 </body>
 </html>

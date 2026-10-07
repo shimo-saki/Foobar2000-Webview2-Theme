@@ -7,16 +7,24 @@
 .dc-hero{
   position:relative;border-radius:var(--r-xl);overflow:hidden;
   padding:34px 36px;margin-bottom:30px;isolation:isolate;
-  background:linear-gradient(120deg,hsla(var(--accent-h),var(--accent-s),calc(var(--accent-l) ),0.95),hsla(var(--accent-h),calc(var(--accent-s) - 5%),calc(var(--accent-l) - 35%),0.9) 58%,#1a1a20);
+  /* 三层背景（自上而下绘制）：右下角同色相回暖 + 中上段亮核衔接 + 缓降基底。
+     单段线性渐变的右侧容易读成"黑带"，分层后右端是同色相的"有内容的深"。
+     调节旋钮：基底第二档的 -34%（整体明暗）、右下回暖的 0.45（角落亮度）、
+     亮核的 0.2（中间光感）。 */
+  background:
+    radial-gradient(640px 420px at 96% 118%, hsla(var(--accent-h),calc(var(--accent-s) - 5%),calc(var(--accent-l) - 22%),0.45), transparent 65%),
+    radial-gradient(900px 560px at 62% -30%, hsla(var(--accent-h),var(--accent-s),calc(var(--accent-l) - 4%),0.2), transparent 68%),
+    linear-gradient(115deg,hsla(var(--accent-h),var(--accent-s),calc(var(--accent-l) - 6.5%),0.97),hsla(var(--accent-h),calc(var(--accent-s) - 10%),calc(var(--accent-l) - 34%),0.96));
   box-shadow:var(--shadow-2);
 }
 .dc-hero::before{
   content:'';position:absolute;right:-70px;top:-70px;width:300px;height:300px;border-radius:50%;
-  background:radial-gradient(circle,rgba(255,255,255,0.14),transparent 65%);z-index:-1;
+  /* 高光从纯白改为同色相浅色：纯白叠在暗底上是灰雾，tinted sheen 才像卡面反光 */
+  background:radial-gradient(circle,hsla(var(--accent-h),calc(var(--accent-s) + 10%),80%,0.12),transparent 65%);z-index:-1;
 }
 .dc-hero::after{
-  content:'';position:absolute;right:60px;bottom:-90px;width:220px;height:220px;border-radius:50%;
-  background:radial-gradient(circle,rgba(255,255,255,0.08),transparent 60%);z-index:-1;
+  content:'';position:absolute;right:170px;bottom:-110px;width:220px;height:220px;border-radius:50%;
+  background:radial-gradient(circle,hsla(var(--accent-h),calc(var(--accent-s) + 10%),80%,0.07),transparent 60%);z-index:-1;
 }
 .dc-hero-date{font-size:12px;font-weight:600;letter-spacing:0.14em;opacity:0.72;margin-bottom:8px}
 .hero-wave-bg{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;border-radius:var(--r-xl);}

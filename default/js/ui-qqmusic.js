@@ -284,13 +284,13 @@
    * ---------------------------------------------------------- */
   function renderLoading() {
     var l = $('qqmList');
-    if (l) l.innerHTML = '<div class="qqm-empty"><span>搜索中…</span></div>';
+    if (l) l.innerHTML = CM.emptyHTML('搜索中…');
     renderPager();
   }
 
   function renderEmpty(msg) {
     var l = $('qqmList');
-    if (l) l.innerHTML = '<div class="qqm-empty"><span>' + esc(msg) + '</span></div>';
+    if (l) l.innerHTML = CM.emptyHTML(msg);
     renderPager();
   }
 
