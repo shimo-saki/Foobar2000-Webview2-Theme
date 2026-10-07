@@ -344,7 +344,7 @@ function renderLibraryAlbums() {
 
 function renderLibraryGenres() {
   _renderLibraryGrid(
-    'library.getGenres', { limit: 1000000 }, '全部流派', '暂无流派信息',
+    'library.getGenres', null, '全部流派', '暂无流派信息',
     (name, count) => `
         <div class="artist-card" data-genre="${esc(name)}">
           <div class="artist-avatar">♪</div>

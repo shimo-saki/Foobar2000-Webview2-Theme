@@ -447,6 +447,7 @@ fb.on('dnd:drop', data => {
       if (!paths.length) return;
 
       CM._addPaths(state.currentPlaylistIndex, paths, `正在添加 ${paths.length} 个项目`);
+      CM.renderTrackTable()
     });
   });
 });
@@ -654,7 +655,7 @@ function toggleEQ() {
  * ============================================ */
 let outputDevice = [];
 function syncOutputDevice() {
-  fb.config.getOutputDevices().then(devices => {
+  fb.config.getOutputDevices().then(({ devices }) => {
     if (!devices.length) return CM.showToast('无法获取输出设备', null, 'error');
     outputDevice = devices;
   });

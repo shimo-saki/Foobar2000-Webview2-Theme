@@ -31,11 +31,11 @@ CM.loadLyrics = function (useCache = true) {
   if (useCache && lrcCache.has(path)) return setLyrics(lrcCache.get(path));
 
   const loadId = ++_lyricLoadId;
-  fb.lyrics.get(path).then(r => {
+  fb.lyrics.get().then(({ lyrics }) => {
     if (loadId !== _lyricLoadId) return; // 已被新的切歌请求取代
-    if (!r?.lyrics) return setLyrics(EMPTY_LYRIC); // 没有歌词
+    if (!lyrics) return setLyrics(EMPTY_LYRIC); // 没有歌词
 
-    const parsed = parseLrcLike(r.lyrics).lines.reduce((acc, line) => {
+    const parsed = parseLrcLike(lyrics).lines.reduce((acc, line) => {
       const prev = acc.at(-1);
 
       if (prev?.startTime === line.startTime) prev.translatedLyric = line.words[0]?.word ?? '';

@@ -56,9 +56,7 @@ function syncInitialState() {
     CM.changePlayerState(r.state);
     setPlayingVisual(r.state === "playing");
   });
-  fb.player.getCurrentTrack().then(track => {
-    if (track) onTrackChanged(track);
-  });
+  fb.player.getCurrentTrack().then(({ track }) => { if (track) onTrackChanged(track); });
   fb.player.getPosition().then(r => {
     state.position = r.position || 0;
     state.duration = r.duration || 0;
@@ -158,7 +156,7 @@ fb.on('playback:stopped', () => {
   CM._renderQueueNow(); // 隐藏队列抽屉"正在播放"卡片
   state.playingPlaylistIndex = state.playingTrackIndex = -1;
   state.position = state.duration = 0;
-  CM.updateTrackInfo(null);
+  CM.updateTrackInfo();
   CM.setArtwork(null);
   CM.updateSeekUI();
   setPlayingVisual(false);
@@ -167,10 +165,11 @@ fb.on('playback:stopped', () => {
 
 // 播放列表结构变化 → 刷新侧栏 + 当前列表视图
 const refreshPlaylistUI = CM.debounce(() => {
-  CM.loadPlaylists();
-  if (state.currentTab === 'playlist' && state.currentPlaylistIndex >= 0) {
-    CM.renderPlaylistView(state.currentPlaylistIndex);
-  }
+  CM.loadPlaylists().then(() => {
+    if (state.currentTab === 'playlist' && state.currentPlaylistIndex >= 0) {
+      CM.renderPlaylistView(state.currentPlaylistIndex);
+    }
+  });
 }, 200);
 ['playlist:created', 'playlist:renamed', 'playlist:removed', 'playlist:activated',
   'playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered'

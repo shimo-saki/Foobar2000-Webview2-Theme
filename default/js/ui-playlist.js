@@ -23,13 +23,11 @@ els.playlistList.addEventListener('contextmenu', e => {
 });
 
 CM.loadPlaylists = function () {
-  return fb.playlist.getAll().then(r => {
-    // 宿主直接返回数组 [{index,name,trackCount,isActive,isPlaying,...}]
-    const lists = Array.isArray(r) ? r : (r?.playlists || []);
-    CM.playlists = lists;
+  return fb.playlist.getAll().then(({ playlists }) => {
+    CM.playlists = playlists;
 
     // 预计算所有歌单项的 HTML 片段，避免循环内重复条件判断
-    const parts = lists.map((pl, i) => {
+    const parts = playlists.map((pl, i) => {
       const idx = pl.index ?? i;
       let cls = 'pl-item';
       if (idx === state.currentPlaylistIndex) cls += ' active';
@@ -50,7 +48,7 @@ CM.loadPlaylists = function () {
       ? parts.join('')
       : '<div class="queue-empty" style="padding:24px">暂无歌单</div>';
 
-    return lists;
+    return playlists;
   });
 };
 
@@ -177,7 +175,7 @@ CM.renderPlaylistView = function (idx) {
   }
 
   const loadId = ++_playlistViewLoadId;
-  fb.playlist.getTracks(idx, 0, 5000).then(tracks => {
+  fb.playlist.getTracks(idx, 0, pl.trackCount).then(({ tracks }) => {
     if (loadId !== _playlistViewLoadId) return;
 
     state.trackCache = tracks;
@@ -352,9 +350,6 @@ CM.showTrackCtxMenu = async function (x, y, track, ctx) {
   if (!track) return;
   const pl = (CM.playlists || []).find(p => p.index === ctx?.playlist) || {};
   const path = CM.trackPath(track);
-  const selIdxs = _selectionIndices(ctx?.index);
-  const topDelta = -selIdxs[0] || 0;
-  const botDelta = (state.trackCache.length - selIdxs.at(-1) - 1) || 0;
   const items = [
     {
       label: '播放', icon: icons.play,
