@@ -63,16 +63,18 @@
 .album-card-art{
   position:relative;width:100%;aspect-ratio:1;border-radius:var(--r-l);
   overflow:hidden;background:var(--bg-2);box-shadow:var(--shadow-1);
-  transition:transform var(--t-mid),box-shadow var(--t-mid);will-change:transform;
+  transition:transform var(--t-mid),box-shadow var(--t-mid);
 }
-.album-card-art img{width:100%;height:100%;object-fit:cover;display:block;transition:transform 0.5s var(--ease);will-change:transform}
+/* 封面是挂在 .art-placeholder 上的 background-image（见 ui.js 的 _renderAlbumCard /
+   _loadAlbumCovers），卡里没有 <img>：原先针对 img 的尺寸与"悬停放大封面"规则
+   永远不会命中，已删除（要做放大得改渲染层）。
+   另外这里不挂常驻 will-change —— 一页最多 50 张卡片，各自占一个合成层太贵。 */
 .album-card-art .art-placeholder{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   background-size:cover;background-position:center;background-repeat:no-repeat;
 }
 .album-card-art .art-placeholder svg{width:38%;height:38%;stroke:var(--text-4);fill:none;stroke-width:1.2}
 .album-card:hover .album-card-art{transform:translateY(-5px);box-shadow:var(--shadow-2)}
-.album-card:hover .album-card-art img{transform:scale(1.06)}
 .album-card-play{
   position:absolute;right:10px;bottom:10px;width:38px;height:38px;border-radius:50%;
   background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;
@@ -134,6 +136,40 @@
   text-shadow:0 2px 10px rgba(0,0,0,0.3);
 }
 .pl-header-meta{font-size:12px;color:rgba(255,255,255,0.66);margin-top:8px}
+/* 歌单内筛选（v2 getMatchingRows / getTracksAt）：查询语法与 foobar 搜索框一致 */
+.pl-filter-row{display:flex;align-items:center;gap:10px;margin-top:9px}
+.pl-filter-box{
+  display:flex;align-items:center;gap:7px;height:30px;padding:0 10px;
+  border-radius:15px;background:rgba(255,255,255,0.10);
+  border:1px solid rgba(255,255,255,0.14);
+  transition:border-color var(--t-fast),background var(--t-fast);
+  max-width:340px;flex:1;min-width:150px;
+}
+.pl-filter-box:focus-within{background:rgba(255,255,255,0.16);border-color:var(--accent)}
+.pl-filter-box svg{width:13px;height:13px;flex:none;stroke:rgba(255,255,255,0.6);fill:none;stroke-width:2;stroke-linecap:round}
+.pl-filter-box input{
+  flex:1;min-width:0;background:none;border:none;outline:none;
+  color:#fff;font:inherit;font-size:12px;height:100%;
+}
+.pl-filter-box input::placeholder{color:rgba(255,255,255,0.42)}
+.pl-filter-clear{
+  flex:none;width:17px;height:17px;border-radius:50%;border:none;
+  background:rgba(255,255,255,0.18);color:#fff;font-size:12px;line-height:1;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+}
+.pl-filter-clear:hover{background:rgba(255,255,255,0.3)}
+/* hidden 属性（UA 的 [hidden]{display:none}）会被上面的 display:flex 压过 —— 作者样式
+   优先于 UA 样式，与特异性无关。显式补一条，否则"清除筛选"的 × 永远显示 */
+.pl-filter-clear[hidden]{display:none}
+/* 存为自动歌单：与清除按钮同一行的次要动作，只在有筛选条件时出现 */
+.pl-filter-save{
+  flex:none;height:26px;padding:0 12px;border-radius:13px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.10);
+  color:#fff;font:inherit;font-size:11.5px;font-weight:600;white-space:nowrap;
+  transition:background var(--t-fast),border-color var(--t-fast);
+}
+.pl-filter-save:hover{background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3)}
+.pl-filter-meta{font-size:11.5px;color:rgba(255,255,255,0.66);font-variant-numeric:tabular-nums}
 .pl-header-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;padding-bottom:4px}
 .pl-btn{
   display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border-radius:19px;
@@ -239,7 +275,6 @@ body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
   font-size:26px;font-weight:700;color:var(--text-2);overflow:hidden;
   box-shadow:inset 0 0 0 1px var(--border-strong);
 }
-.artist-avatar img{width:100%;height:100%;object-fit:cover}
 .folder-card .artist-avatar svg{width:30px;height:30px;stroke-width:1.8;flex-shrink:0}
 .artist-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .artist-meta{font-size:11px;color:var(--text-3);margin-top:3px}
@@ -328,6 +363,9 @@ body:not(.is-playing) .eq-bars i{animation-play-state:paused;height:30%}
 
 /* Seek bar */
 .seek-bar-wrap{display:flex;align-items:center;gap:10px;width:100%}
+/* 不可跳转（网络流 / 直播）：整条压暗，与 input 的 disabled 一起给出视觉反馈
+   （类名由 controls.js 的 setSeekable 在 .seek-bar-wrap / .np-seek-rail 上切换） */
+.seek-disabled{opacity:0.45}
 .seek-time{font-size:11px;color:var(--text-3);width:40px;text-align:center;font-variant-numeric:tabular-nums;flex-shrink:0}
 .seek-rail{flex:1;position:relative;height:14px;display:flex;align-items:center}
 .seek-bar{
@@ -461,13 +499,51 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .queue-empty-title{font-size:13px;font-weight:600;color:var(--text-2)}
 .queue-empty-sub{font-size:11.5px;color:var(--text-3)}
 
+/* ---- 播放历史：队列上方的展开按钮（默认收起；展开后列表由旧到新向下排） ---- */
+.queue-hist-toggle{
+  display:flex;align-items:center;gap:8px;width:100%;flex-shrink:0;
+  padding:9px 20px;border:0;background:transparent;color:var(--text-3);
+  font:inherit;font-size:11.5px;font-weight:600;letter-spacing:0.04em;
+  text-align:left;cursor:pointer;
+  transition:background var(--t-fast),color var(--t-fast);
+}
+.queue-hist-toggle:hover{background:var(--bg-2);color:var(--text-2)}
+/* 展开态：与作者版同款（按钮底色亮起 + 强调色），箭头翻向下/上 */
+.queue-hist-toggle[aria-expanded="true"]{background:var(--accent-soft);color:var(--accent)}
+.queue-hist-toggle>svg{width:13px;height:13px;flex-shrink:0}
+.queue-hist-count{
+  font-size:10.5px;font-variant-numeric:tabular-nums;
+  background:var(--bg-3);border-radius:9px;padding:1px 7px;
+}
+.queue-hist-count:empty{display:none}
+.queue-hist-arrow{margin-left:auto;font-size:10px;transition:transform var(--t-fast)}
+.queue-hist-toggle[aria-expanded="true"] .queue-hist-arrow{transform:rotate(180deg)}
+/* 展开区：高度过渡（面板内容固定上限，max-height 给足即可；收起时不占位） */
+.queue-hist-region{flex-shrink:0;overflow:hidden;max-height:0;transition:max-height var(--t-mid)}
+.queue-hist-region.open{max-height:300px}
+.queue-hist-panel{
+  margin:0 12px 8px;padding:6px;border-radius:var(--r-m);
+  background:rgba(255,255,255,0.045);border:1px solid var(--border);
+}
+.queue-hist-head{display:flex;align-items:center;justify-content:space-between;padding:2px 6px 6px}
+.queue-hist-head .queue-clear-btn{padding:2px 8px;font-size:11px}
+.queue-hist-hint{font-size:11px;color:var(--text-3)}
+.queue-hist-list{max-height:216px;overflow-y:auto;overscroll-behavior:contain}
+.queue-hist-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--r-s);cursor:pointer;transition:background var(--t-fast)}
+.queue-hist-item:hover{background:var(--bg-2)}
+.queue-hist-item.hist-cur{background:var(--accent-soft)}
+.queue-hist-item.hist-cur .queue-item-title{color:var(--accent)}
+.queue-hist-num{width:16px;flex-shrink:0;text-align:right;font-size:10.5px;color:var(--text-4);font-variant-numeric:tabular-nums}
+.queue-hist-time{flex-shrink:0;font-size:10.5px;color:var(--text-4);font-variant-numeric:tabular-nums}
+.queue-hist-empty{padding:6px 8px 8px;font-size:11.5px;color:var(--text-3)}
+
 /* ============ Popover (更多菜单/音效) ============ */
 .popover{
   position:absolute;bottom:calc(var(--bottom-h, 84px) - 6px);right:12px;z-index:80;
   width:280px;background:var(--bg-2);border:1px solid var(--border-strong);
   border-radius:var(--r-l);box-shadow:var(--shadow-pop);
   /* 内容超高时向上滚动而非溢出视口被裁剪 */
-  max-height:calc(100vh - var(--titlebar-h, 48px) - var(--bottom-h, 84px) - 8px);
+  max-height:calc(100vh - var(--titlebar-h) - var(--bottom-h, 84px) - 8px);
   overflow-y:auto;overscroll-behavior:contain;
   scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.22) transparent;
   opacity:0;transform:translateY(10px) scale(0.97);pointer-events:none;visibility:hidden;
@@ -487,6 +563,7 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .pop-item .check{width:14px;font-size:11px;color:var(--accent);flex-shrink:0}
 .pop-item svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .pop-item .pop-item-note{margin-left:auto;font-size:10.5px;color:var(--text-3)}
+.pop-item:disabled{opacity:0.4;pointer-events:none}
 
 /* ============ Popover 子菜单（折叠式） ============ */
 .pop-sub-header{
@@ -508,7 +585,10 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .pop-sub-item:hover{background:var(--bg-3);color:var(--text)}
 .pop-sub-item.checked{color:var(--accent)}
 .pop-sub-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
-.pop-sub-item .pop-item-note{margin-left:auto;font-size:10.5px;color:var(--text-3)}
+/* 折叠组多缩进 44px，右侧备注又可能很长（输出设备名）：备注可以换行、标签必须单行，
+   否则「输出设备」会被挤成两行 */
+.pop-sub-item > span:not(.pop-item-note){white-space:nowrap}
+.pop-sub-item .pop-item-note{margin-left:auto;font-size:10.5px;color:var(--text-3);text-align:right}
 .pop-sub-item:disabled{opacity:0.4;pointer-events:none}
 
 /* ============ ReplayGain 增益面板 ============ */
@@ -583,6 +663,20 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .np-tilt-btn:hover{background:rgba(255,255,255,0.14);color:var(--text)}
 .np-tilt-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .np-tilt-btn.on{color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent-glow)}
+
+/* 频谱显示开关（频谱条 / 声场 / 瀑布图 / 示波器 / 矢量示波器）：紧邻倾斜钮左侧，点击循环切换。
+   五种显示都画在下方那一条频谱的位置上，这个按钮只负责切换（不改布局）。 */
+.np-viz-btn{
+  position:absolute;top:20px;right:128px;z-index:10;
+  width:34px;height:34px;border-radius:50%;
+  background:rgba(255,255,255,0.06);color:var(--text-3);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:background var(--t-fast),color var(--t-fast),box-shadow var(--t-fast);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
+.np-viz-btn:hover{background:rgba(255,255,255,0.14);color:var(--text)}
+.np-viz-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.np-viz-btn.non-bars{color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent-glow)}
 
 /* ============ 歌词 3D 斜墙（可选，右上角开关切换） ============
    整块歌词像贴在一面斜墙上：对歌词包裹层做一次真正的 CSS 3D 平面旋转（父级 perspective
@@ -719,20 +813,37 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .np-ctrl-play .np-icon-pause{display:none}
 .np-ctrl-play.playing .np-icon-play{display:none}
 .np-ctrl-play.playing .np-icon-pause{display:inline}
-.np-spectrum{display:flex;align-items:flex-end;gap:3px;height:40px;padding:0 8px}
+/* 沉浸页频谱：四种显示都占这一条（40px），点它切换 —— 不新增按钮、不改变布局 */
+.np-spectrum{display:flex;align-items:flex-end;gap:3px;height:40px;padding:0 8px;
+  position:relative;cursor:pointer}
 .np-spec-bar{width:4px;height:36px;border-radius:2px;
   background:var(--accent);opacity:0.6;transform-origin:bottom;
   transition:transform 0.06s linear,opacity 0.3s ease;will-change:transform}
+/* 瀑布图 / 示波器 / 矢量示波器：画布就叠在频谱条的槽位里（左右各留 8px 与频谱条对齐）。
+   注意 canvas 是替换元素 —— 只写 left/right 加 width:auto 会退回固有尺寸 300×150，
+   必须给出确切的宽高（calc 相对容器的 padding box，减去两侧 8px）。 */
+.np-spectrum .np-spec-canvas{
+  position:absolute;left:8px;top:0;height:100%;
+  width:calc(100% - 16px);
+  border-radius:8px;background:rgba(0,0,0,0.28);
+}
+.np-spectrum .np-spec-canvas.hide{display:none}
+/* 画布模式下频谱条让位（visibility 保留占位，绝不引起重排） */
+.np-spectrum.mode-canvas .np-spec-bar{visibility:hidden}
+/* 声场：中缝分隔 + 左声道半排压暗一点，一眼能分出左右 */
+.np-spectrum.field::after{
+  content:'';position:absolute;left:50%;top:5px;bottom:5px;width:1px;
+  background:rgba(255,255,255,0.16);pointer-events:none;
+}
+.np-spectrum.field .np-spec-bar:nth-child(-n+16){opacity:0.42}
 
 .np-lyrics-side{
   flex:1;min-width:280px;max-width:600px;height:100%;
   display:flex;flex-direction:column;justify-content:center;
   position:relative;
   transition:opacity 0.5s var(--ease),transform 0.5s var(--ease);
-}
-/* 歌词渐隐遮罩（mask-image 实现，避免出现可见边框）
-   透明区收窄到 5%，保证很高的长句也能完整落在实色安全区内不被淡出 */
-.np-lyrics-side{
+  /* 歌词渐隐遮罩（mask-image 实现，避免出现可见边框）
+     透明区收窄到 5%，保证很高的长句也能完整落在实色安全区内不被淡出 */
   mask-image:linear-gradient(to bottom,transparent 0%,#000 5%,#000 95%,transparent 100%);
   -webkit-mask-image:linear-gradient(to bottom,transparent 0%,#000 5%,#000 95%,transparent 100%);
 }
@@ -917,6 +1028,95 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .tag-editor-hint{font-size:11.5px;color:var(--text-3)}
 .tag-editor-btns{display:flex;gap:10px}
 
+/* ============ 歌词候选面板（多源搜索） ============ */
+.lyr-search-mask{
+  position:fixed;inset:0;z-index:2600;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,8,10,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  opacity:0;pointer-events:none;visibility:hidden;transition:opacity var(--t-mid),visibility var(--t-mid);
+}
+.lyr-search-mask.open{opacity:1;pointer-events:auto;visibility:visible}
+.lyr-search-panel{
+  width:600px;max-width:92vw;max-height:78vh;display:flex;flex-direction:column;gap:12px;
+  background:var(--bg-2);border:1px solid var(--border-strong);border-radius:var(--r-xl);
+  box-shadow:var(--shadow-pop);padding:20px 20px 16px;
+  transform:translateY(14px) scale(0.97);transition:transform var(--t-mid);
+}
+.lyr-search-mask.open .lyr-search-panel{transform:none}
+.lyr-search-head{display:flex;align-items:center;gap:10px}
+.lyr-search-title{font-size:15px;font-weight:700}
+.lyr-search-hint{font-size:11.5px;color:var(--text-3);margin-left:auto;margin-right:4px}
+.lyr-search-x{
+  width:26px;height:26px;flex:none;border-radius:var(--r-s);color:var(--text-3);font-size:13px;
+  transition:background var(--t-fast),color var(--t-fast);
+}
+.lyr-search-x:hover{background:var(--bg-3);color:var(--text)}
+.lyr-search-bar{display:flex;gap:8px;flex:none}
+.lyr-search-in{
+  flex:1;min-width:0;height:34px;background:var(--bg-1);border:1px solid var(--border);
+  border-radius:var(--r-m);padding:0 12px;font-size:13px;color:var(--text);outline:none;
+  transition:border-color var(--t-fast);
+}
+.lyr-search-in:focus{border-color:var(--accent-glow)}
+.lyr-search-go{
+  flex:none;height:34px;padding:0 18px;border-radius:var(--r-m);font-size:12.5px;font-weight:600;
+  background:var(--accent);color:var(--on-accent);transition:filter var(--t-fast),transform var(--t-fast);
+}
+.lyr-search-go:hover{filter:brightness(1.08)}
+.lyr-search-go:active{transform:scale(0.96)}
+.lyr-search-go:disabled{opacity:0.45;cursor:not-allowed}
+.lyr-search-srcs{display:flex;gap:8px;flex:none;flex-wrap:wrap}
+.lyr-src-chip{
+  padding:4px 12px;border-radius:14px;font-size:11.5px;font-weight:600;cursor:pointer;
+  background:var(--bg-3);color:var(--text-3);border:1px solid var(--border);
+  transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);
+}
+.lyr-src-chip.on{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.lyr-search-status{flex:none;font-size:11.5px;color:var(--text-3);min-height:15px}
+.lyr-search-status.err{color:#ff8188}
+.lyr-search-list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:2px}
+/* 候选行与预览都是 .lyr-search-list（flex 列）的子项：
+   必须显式 flex:none —— 默认的 flex-shrink:1 会让它们在列表装不下时被压缩，
+   而行有 min-content 下限（文字高度）、预览作为滚动容器下限为 0，于是整份差额
+   全落在预览上：它被压成十几像素的细缝（内容裁掉一大半），行也不再收缩、列表
+   仅勉强可滚。设为不收缩后，差额交给列表自身的 overflow:auto 滚动。 */
+.lyr-cand{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-m);cursor:pointer;
+  transition:background var(--t-fast);flex:none;
+}
+.lyr-cand:hover{background:var(--bg-3)}
+.lyr-cand.sel{background:var(--accent-soft)}
+.lyr-cand-src{
+  flex:none;width:56px;text-align:center;padding:2px 0;border-radius:4px;font-size:10.5px;font-weight:700;
+  background:var(--accent-soft-2);color:var(--accent);
+}
+.lyr-cand-src.lrclib{background:rgba(64,150,255,0.16);color:#4096ff}
+.lyr-cand-src.qq{background:rgba(43,183,119,0.16);color:#2bb777}
+.lyr-cand-src.netease{background:rgba(232,74,58,0.16);color:#e84a3a}
+.lyr-cand-main{min-width:0;flex:1}
+.lyr-cand-title{font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lyr-cand-sub{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lyr-cand-badges{flex:none;display:flex;gap:5px}
+.lyr-cand-badge{
+  padding:1px 6px;border-radius:4px;font-size:10px;line-height:15px;
+  background:var(--bg-4);color:var(--text-3);
+}
+.lyr-cand-badge.sync{background:rgba(126,212,155,0.18);color:#7ed49b}
+.lyr-cand-badge.plain{background:rgba(224,176,112,0.18);color:#e0b070}
+.lyr-cand-badge.words{background:rgba(160,120,255,0.18);color:#a078ff}
+.lyr-cand-dur{flex:none;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;min-width:38px;text-align:right}
+.lyr-cand-preview{
+  margin:2px 0 8px;padding:10px 12px;border-radius:var(--r-m);background:var(--bg-1);
+  border:1px solid var(--border);font-size:12px;line-height:1.7;color:var(--text-2);
+  white-space:pre-wrap;max-height:190px;overflow:auto;flex:none;
+}
+.lyr-cand-preview .pv-actions{display:flex;justify-content:flex-end;margin-top:10px}
+.lyr-cand-apply{
+  padding:6px 16px;border-radius:16px;font-size:12px;font-weight:600;
+  background:var(--accent);color:var(--on-accent);transition:filter var(--t-fast);
+}
+.lyr-cand-apply:hover{filter:brightness(1.08)}
+.lyr-cand-empty{font-size:12px;color:var(--text-3);padding:18px 4px;text-align:center}
+
 /* Batch mode field (with checkbox) */
 .tag-field.batch .tag-field-label{width:72px}
 
@@ -935,7 +1135,7 @@ body.is-reordering,body.is-reordering *{cursor:grabbing!important}
 .batch-bar.hidden{display:none}
 /* 批量栏是 body 子元素、z-index（1500）高于沉浸页 .np-overlay（200），
    进入沉浸模式时必须压掉，否则它和它的按钮会浮在沉浸页之上被误点 */
-body.np-open .batch-bar{display:none!important}
+body.np-open .batch-bar{display:none}
 @keyframes batch-in{from{transform:translateX(-50%) translateY(16px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
 .batch-bar-text{font-size:13px;color:var(--text-2);white-space:nowrap}
 .batch-bar-text b{color:var(--accent);font-weight:600}
@@ -953,3 +1153,48 @@ body.np-open .batch-bar{display:none!important}
 /* Multi-select row highlight */
 tr.batch-selected{background:var(--accent-soft) !important}
 tr.batch-selected:hover{background:var(--accent-soft-2) !important}
+/* ============ 设置与工具页（js/ui-settings.js 生成） ============
+   底栏「更多」只留常用入口，低频项与排障工具收在这一页。样式沿用主题令牌：
+   卡片 = --bg-2 + --border，圆角 --r-m，强调色 --accent，动效 --t-fast。 */
+.set-page{max-width:760px;margin:0 auto;padding:26px 28px 60px}
+.set-head{margin-bottom:20px}
+.set-title{font-size:21px;font-weight:700;letter-spacing:-0.01em}
+.set-head-sub{font-size:12.5px;color:var(--text-3);margin-top:6px}
+.set-group{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-m);
+  margin-bottom:14px;overflow:hidden}
+.set-group-title{font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:0.06em;
+  padding:12px 16px 8px;text-transform:uppercase}
+.set-row{display:flex;align-items:center;gap:16px;padding:11px 16px;
+  border-top:1px solid var(--border)}
+.set-group-title + .set-row{border-top:none}
+.set-row-main{flex:1;min-width:0}
+.set-row-label{font-size:13.5px;font-weight:600}
+.set-row-sub{font-size:11.5px;color:var(--text-3);margin-top:3px;line-height:1.5}
+.set-right{display:flex;align-items:center;gap:10px;flex:none}
+.set-note{font-size:11.5px;color:var(--text-3);min-width:28px;text-align:right}
+.set-btn{flex:none;padding:7px 15px;border-radius:16px;font-size:12.5px;font-weight:600;
+  background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.14);
+  transition:background var(--t-fast),transform var(--t-fast)}
+.set-btn:hover{background:rgba(255,255,255,0.18)}
+.set-btn:active{transform:scale(0.96)}
+/* 开关：一个胶囊 + 圆钮，aria-checked 与 .on 同步（设置页里脚本生成，别只写样式不置位） */
+.set-switch{flex:none;position:relative;width:38px;height:21px;border-radius:11px;
+  background:var(--bg-4);border:1px solid var(--border-strong);padding:0;
+  transition:background var(--t-fast),border-color var(--t-fast)}
+.set-switch .set-knob{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+  background:var(--text-3);transition:transform var(--t-fast),background var(--t-fast)}
+.set-switch.on{background:var(--accent-soft);border-color:var(--accent)}
+.set-switch.on .set-knob{transform:translateX(17px);background:var(--accent)}
+.set-switch:disabled{opacity:0.45;cursor:not-allowed}
+/* 分段选择 */
+.set-seg{display:flex;gap:2px;background:var(--bg-3);border-radius:16px;padding:2px;flex:none}
+.set-seg-btn{padding:6px 13px;border-radius:14px;font-size:12px;color:var(--text-2);font-weight:600;
+  transition:background var(--t-fast),color var(--t-fast)}
+.set-seg-btn:hover{color:var(--text)}
+.set-seg-btn.on{background:var(--accent);color:var(--on-accent)}
+/* 歌词源开关（紧凑胶囊，亮=启用） */
+.set-chips{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end;max-width:300px}
+.set-chip{padding:5px 11px;border-radius:14px;font-size:11.5px;font-weight:600;
+  background:var(--bg-3);color:var(--text-3);border:1px solid var(--border);
+  transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast)}
+.set-chip.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}

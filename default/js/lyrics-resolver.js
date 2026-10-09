@@ -72,6 +72,19 @@
   function memoKey(title, artist, dur) {
     return (title + '\u0001' + artist + '\u0001' + (dur | 0));
   }
+  // 曲目 → 缓存键。**一处算法两处用**：lyricReload 要删的键必须与 loadLyrics 存的
+  // 键逐字节相同 —— 占位符（'未知艺术家' / '未在播放'）与 duration 兜底链
+  // （track.duration → track.length → state.duration）都要按同一口径处理，
+  // 否则无艺人标签的曲目上「刷新歌词」删不掉缓存、看起来毫无作用
+  function memoKeyFor(track) {
+    if (!track) return '';
+    var title = CM.trackName ? CM.trackName(track) : (track.title || '');
+    if (!title || title === PLACEHOLDER_TITLE) return '';
+    var artist = CM.trackArtist ? CM.trackArtist(track) : (track.artist || '');
+    var artistOk = !!artist && artist !== PLACEHOLDER_ARTIST;
+    var duration = track.duration || track.length || CM.state.duration || 0;
+    return memoKey(title, artistOk ? artist : '', duration);
+  }
   function memoPut(k, v) {
     if (!k) return;
     if (!(k in memo) && memoN >= MEMO_MAX) {
@@ -145,21 +158,18 @@
   }
 
   /* ============================================
-   * 实时匹配（页内调用 QQBridge / NeteaseBridge，无网络 fetch；模块缺失时安静降级）
+   * 实时匹配（多源聚合，见 js/lyrics-sources.js）
    * ============================================ */
-  function fetchOnline(title, artist, duration) {
-    /* 在线曲目按「这条直链属于哪个平台」分发：
-       网易云直链不带歌曲 id，但播放时记下的映射能把直链反查回 id，
-       有映射就按 id 精确取词（比"标题 + 歌手"模糊匹配准得多）。 */
+  /* 在线曲目按「这条直链属于哪个平台」精确取词：网易云直链不带歌曲 id，但播放时
+     记下的映射能把直链反查回 id，有映射就按 id 取词（比"标题 + 歌手"模糊匹配准得多）。
+     返回 null 表示没有可精确取词的平台 —— 交给多源聚合。 */
+  function fetchPlatformExact(title, artist, duration) {
     var path = CM.trackPath ? CM.trackPath(CM.currentTrack) : '';
     if (window.NeteaseBridge && typeof NeteaseBridge.isNeteaseUrl === 'function' &&
         path && NeteaseBridge.isNeteaseUrl(path)) {
       return NeteaseBridge.lyricForTrack(path, title, artist, duration);
     }
-    if (!window.QQBridge) {
-      return Promise.reject(new Error('qqmusic-core.js / netease-core.js 未加载'));
-    }
-    return QQBridge.lyric(title, artist, duration);
+    return null;
   }
 
   /* ============================================
@@ -173,6 +183,11 @@
   CM.loadLyrics = function () {
     CM.currentLyrics = [];
     CM.activeLyricIndex = -1;
+    // 换歌先清"原文 + 来源"并同步给小窗：在线匹配可能耗时数秒，这段窗口里右键
+    // 「保存到文件 / 嵌入标签」会把**上一首**的原文写进新曲目的 .lrc / 标签
+    CM.currentLyricsRaw = '';
+    CM.lyricSourcePath = '';
+    if (CM.publishLyrics) CM.publishLyrics();
     if (!CM.currentTrack) { CM.renderLyricsEmpty('暂无播放曲目'); return; }
 
     var track = CM.currentTrack;
@@ -185,6 +200,8 @@
 
     var titleOk = !!title && title !== PLACEHOLDER_TITLE;
     var artistOk = !!artist && artist !== PLACEHOLDER_ARTIST;
+    // 与 lyricReload 共用同一个键算法（见 memoKeyFor）：两处算法不一致时
+    // 「刷新歌词」删不掉内存缓存，看起来毫无作用
     var mKey = titleOk ? memoKey(title, artistOk ? artist : '', duration) : '';
 
     function render(srcTag, text, from) {
@@ -197,32 +214,104 @@
       CM._renderLyrics({ available: true, source: from, sourcePath: srcTag }, text);
     }
 
-    function empty(msg) {
+    /* 失败原因分级（改进指南 §3.6）：不再笼统「暂无歌词」，四种态各说各话，
+       并且都给一个可点的出口（搜索歌词 / 重试）。 */
+    function gradeEmpty(kind, detail) {
       if (loadId !== CM._lyricLoadId) return;
-      CM.renderLyricsEmpty(msg);
+      var map = {
+        'meta-missing': { state: 'meta-missing', text: '无法识别曲目信息' },
+        'miss': { state: 'miss', text: '暂无歌词' },
+        'match-error': { state: 'match-error', text: '在线取词失败，可重试' }
+      };
+      var m = map[kind] || map['miss'];
+      lastStatus = { title: title, artist: artist, state: m.state, from: '', note: detail || '' };
+      CM.renderLyricsEmpty(m.text, false, kind === 'match-error' ? 'retry' : 'search');
     }
 
-    /* 联网匹配：内存缓存 → QQBridge.lyric()。
-       缓存只服务这条路 —— 本地文件每次现读，改了立刻生效。 */
-    function tryOnline() {
-      if (!titleOk) { empty('无法识别曲目信息'); return; }
-      if (mKey && memo[mKey]) { render('', memo[mKey], 'memo'); return; }
-      fetchOnline(title, artistOk ? artist : '', duration).then(function (r) {
+    /* 宿主原生歌词（v2 的 lyrics.get）：补上本地同名候选漏掉的两类 ——
+       ① 歌词写在标签里（LYRICS / UNSYNCEDLYRICS / SYNCEDLYRICS 等内嵌歌词）；
+       ② 宿主自己认识的旁挂文件名变体。
+       取回来的文本照样走主题的编码检测 / LRC 解析 / 双语归组（render 只负责渲染）。
+       v2 顺带修掉了「LYRICIST 标签被当成歌词读取」，这里不会拿到作词人标签。 */
+    function tryHost() {
+      if (!path || CM.isUrlPath(path)) { tryOnline(); return; }
+      CM.api('lyrics.get', { path: path }).then(function (r) {
         if (loadId !== CM._lyricLoadId) return;
-        if (r && r.ok && r.lrc) {
-          memoPut(mKey, r.lrc);
-          render('', r.lrc, 'online');
+        if (r && r.success !== false && r.available && r.lyrics &&
+            String(r.lyrics).replace(/\s/g, '').length > 0) {
+          lastStatus = { title: title, artist: artist, state: 'hit',
+                         from: 'host-' + (r.source || 'any'), note: '' };
+          // 内嵌歌词没有文件路径：srcTag 传 '' 让对齐方式仍按音频路径记忆
+          render(r.source === 'file' ? (r.sourcePath || '') : '', String(r.lyrics), 'host');
           return;
         }
-        lastStatus = { title: title, artist: artist, state: 'miss',
-                       from: '', note: (r && r.note) || 'no-match' };
-        empty('暂无歌词');
-      }).catch(function (e) {
+        tryOnline();
+      }, function () {
+        // 换歌后旧一轮的失败续体不能再发起整轮联网（会白打三个源）
         if (loadId !== CM._lyricLoadId) return;
-        // 匹配失败要说清楚 —— 否则用户只看到「暂无歌词」，不知道是哪里出了问题
-        lastStatus = { title: title, artist: artist, state: 'match-error', from: '',
-                       note: (e && e.message) || 'unreachable' };
-        empty('暂无歌词（在线匹配失败）');
+        tryOnline();
+      });
+    }
+
+    /* 联网匹配：手动选择（按文件记忆）→ 平台精确取词 → 多源聚合。
+       内存缓存只服务"多源聚合"这条路 —— 本地文件每次现读，改了立刻生效。 */
+    function tryOnline() {
+      if (!titleOk) { gradeEmpty('meta-missing'); return; }
+      var pickKey = path || (CM.currentTrack && CM.trackPath ? CM.trackPath(CM.currentTrack) : '');
+      var pin = (CM.lyricSources && CM.lyricSources.pick) ? CM.lyricSources.pick(pickKey) : null;
+      if (pin) { tryPinned(pin); return; }
+      if (mKey && memo[mKey]) { render('', memo[mKey], 'memo'); return; }
+      autoMatch();
+    }
+
+    /* 用户在候选面板里手动选过这首歌的歌词 → 优先用它（按文件记忆，重启后仍生效）。
+       取不到时静默回落到自动匹配，不把用户卡在"选过就再也搜不了"的死角里。 */
+    function tryPinned(pin) {
+      if (!CM.lyricSources) { autoMatch(); return; }
+      CM.lyricSources.fetch(pin).then(function (text) {
+        if (loadId !== CM._lyricLoadId) return;
+        if (text) {
+          lastStatus = { title: title, artist: artist, state: 'hit', from: 'picked', note: pin.src };
+          render('', text, 'picked');
+          return;
+        }
+        autoMatch();
+      }, function () {
+        if (loadId !== CM._lyricLoadId) return;
+        autoMatch();
+      });
+    }
+
+    function autoMatch() {
+      var exact = fetchPlatformExact(title, artistOk ? artist : '', duration);
+      if (exact) {
+        exact.then(function (r) {
+          if (loadId !== CM._lyricLoadId) return;
+          if (r && r.ok && r.lrc) { memoPut(mKey, r.lrc); render('', r.lrc, 'online'); return; }
+          multiSource();
+        }, function () {
+          if (loadId !== CM._lyricLoadId) return;
+          multiSource();
+        });
+        return;
+      }
+      multiSource();
+    }
+
+    function multiSource() {
+      if (!CM.lyricSources) { gradeEmpty('match-error', '歌词源模块未加载'); return; }
+      CM.lyricSources.auto({
+        title: title, artist: artistOk ? artist : '',
+        album: track.album || '', duration: duration, path: path
+      }).then(function (r) {
+        if (loadId !== CM._lyricLoadId) return;
+        if (r && r.ok && r.lrc) { memoPut(mKey, r.lrc); render('', r.lrc, 'online'); return; }
+        // 分级：至少一个源正常应答 = "在线确实没有"；全部源都失败 = "取词失败可重试"
+        if (r && r.anyOk) gradeEmpty('miss', (r && r.note) || '');
+        else gradeEmpty('match-error', (r && r.errors && r.errors[0] && r.errors[0].message) || '');
+      }, function (e) {
+        if (loadId !== CM._lyricLoadId) return;
+        gradeEmpty('match-error', (e && e.message) || '');
       });
     }
 
@@ -241,7 +330,7 @@
       }, function () {
         if (loadId !== CM._lyricLoadId) return;
         lastStatus = { title: title, artist: artist, state: 'local-miss', from: '', note: '' };
-        tryOnline();
+        tryHost();   // 本地同名/歌词库没有 → 先问宿主（内嵌歌词 + 宿主认识的旁挂文件名）→ 再联网
       });
     });
   };
@@ -262,7 +351,10 @@
   CM.lyricReload = function () {
     var t = CM.currentTrack;
     if (!t) return;
-    memoDel(memoKey(CM.trackName(t), CM.trackArtist(t), t.duration || t.length || 0));
+    memoDel(memoKeyFor(t));
+    // 本地的 .lrc 也要重读：解析结果的缓存键是"路径+模式+长度+头部 64 字"，
+    // 就地改错别字 / 改行内时间戳不会改变键，不清就只能刷出旧解析
+    if (CM.clearLRCCache) CM.clearLRCCache();
     // 在线匹配的命中/未命中同样要作废：只清本模块的 memo，
     // 上一次的「暂无歌词」会被 QQBridge 自己的 30 分钟缓存又送回同一个结果
     if (window.QQBridge && QQBridge.lyricCacheClear) QQBridge.lyricCacheClear();

@@ -52,55 +52,17 @@
     return (r && (r.count != null ? r.count : r.total)) || 0;
   };
 
-  // 通用：替换播放列表并原子播放（多处复用：playAlbum / renderLibraryDrill / renderLibraryTracks）
+  // 通用：播放一个"视图列表"（专辑 / 每日推荐 / 库页播放全部等）。
+  // 双轨制模型：列表进上下文歌单（`_MediaLibraryContext_`）并定位播放，
+  // 不再"替换当前活动歌单"——用户自己的歌单不会被顶掉内容。
   CM.playAllTracks = function(tracks, title, onDone) {
     var paths = CM.trackPaths(tracks);
     if (!paths.length) { CM.showToast('无法播放', '未找到有效文件路径', 'error'); if (onDone) onDone(false); return; }
-    // 先停掉 JIT 无痕试听，避免与正常播放同时输出（两首一起播）
-    CM.stopPreviewIfActive().then(function() {
-      // 若当前活动歌单是锁定/自动歌单，replace 会被宿主拒绝（"playlist is lock"），先切到可写歌单
-      CM.ensureWritableActivePlaylist().then(function(idx) {
-        if (idx < 0) { CM.showToast('播放失败', '没有可写入的播放列表', 'error'); if (onDone) onDone(false); return; }
-        CM.api('playlist.replaceAllAndPlay', { paths: paths, playIndex: 0, autoPlay: true, stopFirst: true }).then(function(res) {
-          var ok = res && res.success !== false;
-          if (ok) {
-            if (!onDone) CM.showToast('开始播放', (title || '全部') + ' · ' + paths.length + ' 首', 'success');
-          } else {
-            CM.showToast('播放失败', res && res.error ? res.error : '未知错误', 'error');
-          }
-          if (onDone) onDone(ok);
-        });
-      });
-    });
-  };
-
-  // 确保存在一个可写活动歌单：当前活动歌单被锁定/不可写时，复用或新建专用歌单并设为活动，返回其索引
-  CM.ensureWritableActivePlaylist = function() {
-    var TEMP = 'CloudMusic 播放';
-    return CM.api('playlist.getActive').then(function(active) {
-      if (active && active.found && !active.isLocked && !active.isAutoplaylist) return active.index;
-      return CM.api('playlist.getAll').then(function(r) {
-        var pls = (r && Array.isArray(r)) ? r : [];
-        var reused = pls.find(function(p) { return p && p.name === TEMP && !p.isLocked && !p.isAutoplaylist; });
-        var pPromise = reused
-          ? Promise.resolve(reused.index)
-          : CM.api('playlist.create', { name: TEMP }).then(function(r2) {
-              var idx = r2 && (r2.index != null ? r2.index : r2.playlist);
-              return idx != null ? idx : -1;
-            });
-        return pPromise.then(function(idx) {
-          if (idx < 0) return -1;
-          return CM.api('playlist.setActive', { playlist: idx }).then(function() { return idx; });
-        });
-      });
-    });
-  };
-
-  // 若正处于 JIT 无痕试听，则静默停止并复位状态；否则直接完成
-  CM.stopPreviewIfActive = function() {
-    if (!CM.state.previewActive) return Promise.resolve();
-    return CM.api('jitQueue.stop').then(function(r) {
-      if (r && r.success !== false) CM.state.previewActive = false;
+    CM.playContextList(tracks, 0, title, {
+      onDone: function(ok) {
+        if (ok && !onDone) CM.showToast('开始播放', (title || '全部') + ' · ' + paths.length + ' 首', 'success');
+        if (onDone) onDone(ok);
+      }
     });
   };
 
@@ -327,7 +289,69 @@
     CM.updateMaxIcon();
     fb.on('window:stateChanged', function() {
       CM.updateMaxIcon();
+      CM.pushSnapRegion();
     });
+    CM.initSnapRegion();
+  };
+
+  /* Win11 贴靠布局（插件 v2 的 window.setMaximizeButtonRegion）
+     把自绘最大化按钮的矩形报给宿主，在它上面悬停才会弹贴靠面板。
+     矩形随窗口尺寸/最大化状态变化，用 ResizeObserver + resize 跟随（去重后上报）。
+     单位是 **CSS 像素**（SDK 文档明确），与 getBoundingClientRect 一致，不要乘 DPR；
+     但缩放比变化会改变物理几何，所以也监听 DPI 变化重报一次。
+
+     **按钮被盖住时必须撤销区域**（SDK：省略 region 即撤销）：沉浸页是 fixed + z-index:200，
+     盖在标题栏（z-index:100）之上，但 DOM 里按钮位置没变 —— 只按矩形去重的话，鼠标停在
+     沉浸页右上角（那里是沉浸页自己的按钮）也会弹出贴靠布局。所以每次上报前先做一次
+     命中测试：那个点最上层不是最大化按钮（或它被隐藏、点不在视口内）就撤销区域。 */
+  CM._snapSig = '';
+  CM.pushSnapRegion = function() {
+    var b = CM.$('capMax');
+    if (!b) return;
+    var r = b.getBoundingClientRect();
+    var covered = true;
+    if (r.width > 0 && r.height > 0) {
+      var hit = document.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+      covered = !(hit && (hit === b || b.contains(hit)));
+    }
+    var sig = covered ? 'none'
+      : Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
+    if (sig === CM._snapSig) return;
+    CM._snapSig = sig;
+    if (covered) CM.api('window.setMaximizeButtonRegion');   // 省略 region = 撤销
+    else CM.api('window.setMaximizeButtonRegion', {
+      region: {
+        x: Math.round(r.left), y: Math.round(r.top),
+        width: Math.round(r.width), height: Math.round(r.height)
+      }
+    });
+  };
+  CM.initSnapRegion = function() {
+    if (CM._snapBound) return;
+    CM._snapBound = true;
+    if (window.ResizeObserver) {
+      try {
+        new ResizeObserver(function() { requestAnimationFrame(CM.pushSnapRegion); })
+          .observe(document.documentElement);
+      } catch (e) { /* 观察不了就只靠 resize */ }
+    }
+    window.addEventListener('resize', function() { requestAnimationFrame(CM.pushSnapRegion); });
+    // 换显示器 / 改缩放后，窗口尺寸可能没变但按钮的物理位置变了 —— 强制重报
+    if (CM.onDpiChange) CM.onDpiChange(function() { CM._snapSig = ''; requestAnimationFrame(CM.pushSnapRegion); });
+    // 覆盖物一开一合也要重判（否则"被盖住"这件事没人通知我们）：
+    // 沉浸页 / 标签编辑器 / 模态遮罩 / 右键菜单 —— 观察 class/style/hidden，rAF 里统一重报
+    if (window.MutationObserver) {
+      try {
+        var mo = new MutationObserver(function() { requestAnimationFrame(CM.pushSnapRegion); });
+        var watch = function(el) { if (el) mo.observe(el, { attributes: true, attributeFilter: ['class', 'style', 'hidden'] }); };
+        watch(document.body);
+        watch(CM.els.npOverlay); watch(CM.els.tagEditorOverlay); watch(CM.els.modalMask);
+        watch(CM.els.ctxMenu); watch(CM.els.ctxSubMenu);
+      } catch (e) { /* 观察不了就退化成只在 resize/DPI 时重判 */ }
+    }
+    // 首帧布局可能还没稳定（字体/封面加载会改变标题栏），稍后再报一次
+    setTimeout(CM.pushSnapRegion, 500);
+    setTimeout(CM.pushSnapRegion, 2000);
   };
   CM.updateMaxIcon = function() {
     CM.api('window.isMaximized').then(function(r) {
@@ -339,7 +363,7 @@
   /* ============================================
    * Tab 切换
    * ============================================ */
-  var TAB_IDS = { discover: 'tabDiscover', playlist: 'tabPlaylist', library: 'tabLibrary', search: 'tabSearch', qqmusic: 'tabQqmusic', netease: 'tabNetease' };
+  var TAB_IDS = { discover: 'tabDiscover', playlist: 'tabPlaylist', library: 'tabLibrary', search: 'tabSearch', qqmusic: 'tabQqmusic', netease: 'tabNetease', settings: 'tabSettings' };
   // 缓存 Tab 相关 DOM（静态元素，无需每次 switchTab 都查询）
   var _tabNavItems, _tabMainTabs, _tabContents;
   CM.switchTab = function(tab) {
@@ -359,6 +383,7 @@
     if (tab === 'playlist' && state.currentPlaylistIndex >= 0) CM.renderPlaylistView(state.currentPlaylistIndex);
     if (tab === 'library') CM.renderLibrary();
     if (tab === 'search') setTimeout(function() { els.searchInput.focus(); }, 60);
+    if (tab === 'settings' && CM.renderSettings) CM.renderSettings();
   };
 
   /* ============================================
@@ -372,25 +397,26 @@
   var ORDER_ICONS = null; // 延迟初始化（els 尚未就绪）
   CM.updateOrderIcon = function() {
     if (!ORDER_ICONS) ORDER_ICONS = { seq: els.iconOrderSeq, loop: els.iconOrderLoop, one: els.iconOrderOne, shuffle: els.iconOrderShuffle };
-    var order = CM.ORDERS[CM.orderIndexOf(state.order)];
+    var order = CM.ORDERS[state.order] || CM.ORDERS[0];
     for (var icon in ORDER_ICONS) ORDER_ICONS[icon].style.display = order.icon === icon ? '' : 'none';
     els.btnOrder.title = '播放顺序：' + order.name;
-    els.btnOrder.classList.toggle('active', order.id !== 0);
+    els.btnOrder.classList.toggle('active', order.key !== 'seq');
   };
 
+  // 音量图标只有三档（静音 / 低于半 / 半以上）：常量化 + 按档位去重。
+  // volumeChanged 事件在拖音量条时能连发几十次，原来每次都重新解析一份 SVG 的 innerHTML
+  var VOL_ICONS = {
+    mute: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>',
+    low: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>',
+    high: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>'
+  };
+  var _volIconTier = '';
   CM.updateVolumeIcon = function() {
-    var v = state.muted ? 0 : state.volume;
-    var svg;
-    if (v <= 0) {
-      svg = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>';
-    } else if (v < 50) {
-      svg = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>';
-    } else {
-      svg = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>';
-    }
-    els.volIcon.innerHTML = svg;
-    els.volSlider.value = state.muted ? 0 : state.volume;
-    els.volSlider.style.setProperty('--vol-pct', (state.muted ? 0 : state.volume) + '%');
+    var vol = state.muted ? 0 : state.volume;
+    var tier = vol <= 0 ? 'mute' : (vol < 50 ? 'low' : 'high');
+    if (tier !== _volIconTier) { _volIconTier = tier; els.volIcon.innerHTML = VOL_ICONS[tier]; }
+    els.volSlider.value = vol;
+    els.volSlider.style.setProperty('--vol-pct', vol + '%');
   };
 
   // 通用进度条更新（主进度条 + 沉浸式进度条共用）
@@ -439,6 +465,11 @@
     if (els.lyricsArt.getAttribute('src') !== next) els.lyricsArt.src = next;
     if (els.npArtwork && els.npArtwork.getAttribute('src') !== next) els.npArtwork.src = next;
     els.lyricsBlurBg.style.backgroundImage = 'url("' + next + '")';
+    // 同步给小窗：在线曲目的封面只有主窗口拿得到（反查 + 下载成 dataURL），
+    // 小窗自己问宿主只会得到加载不出来的代理地址
+    if (CM.publishArt) {
+      CM.publishArt(CM.trackPath(CM.currentTrack), next === DEFAULT_TRACK_COVER ? '' : next);
+    }
     CM.extractColorFromImage(next);
   };
 
@@ -522,8 +553,13 @@
 
   // 专辑卡片渲染（复用：发现页 + 媒体库全部专辑）
   // 不含封面数据；封面通过 _loadAlbumCovers 异步批量加载
+  // data-album-artist 单独带出：v2 的 library.getAlbumTracks 要求传专辑行的 albumArtist
+  // （逐字节比较，不能用 artist 顶替），展示仍用 artist 兜底
   CM._renderAlbumCard = function(al) {
-    return '<div class="album-card fade-in" data-album="' + esc(al.name || al.album || '') + '" data-artist="' + esc(al.artist || al.albumArtist || '') + '">' +
+    var albumArtist = al.albumArtist || al.artist || '';
+    return '<div class="album-card fade-in" data-album="' + esc(al.name || al.album || '') +
+      '" data-album-artist="' + esc(albumArtist) +
+      '" data-artist="' + esc(al.artist || al.albumArtist || '') + '">' +
       '<div class="album-card-art">' +
       '<div class="art-placeholder">' + CM.icons.note + '</div>' +
       '<div class="album-card-play">' + CM.icons.play + '</div>' +
@@ -538,32 +574,53 @@
   // 挂 CM 供 ui-discover.js（搜索结果）等跨模块调用
   CM._ensureMainContentDelegation = function() {
     CM.runOnce('mainContentDelegation', function() {
+    // 行所属的列表容器：renderTrackRows / 搜索结果都会把列表上下文挂在容器上
+    // （_cmTracks / _cmTitle），双击与右键「播放」据此切播放上下文
+    function listHostOf(el) {
+      var n = el.parentElement;
+      while (n && n !== els.mainContent) {
+        if (n._cmTracks) return n;
+        n = n.parentElement;
+      }
+      return null;
+    }
+    function rowPlayCtx(el) {
+      var host = listHostOf(el);
+      var i = parseInt(el.dataset.i, 10);
+      if (host && !isNaN(i) && i >= 0 && i < host._cmTracks.length) {
+        return { tracks: host._cmTracks, index: i, title: host._cmTitle || '' };
+      }
+      return { path: el.dataset.path };
+    }
     // 专辑卡片：播放按钮 + 点击进详情
     els.mainContent.addEventListener('click', function(e) {
       var playBtn = e.target.closest('.album-card-play');
       if (playBtn) {
         e.stopPropagation();
         var card = playBtn.closest('.album-card');
-        if (card) CM.playAlbum(card.dataset.album, card.dataset.artist);
+        if (card) CM.playAlbum(card.dataset.album, card.dataset.albumArtist || card.dataset.artist);
         return;
       }
       var card = e.target.closest('.album-card');
-      if (card) CM.openLibraryAlbum(card.dataset.album, card.dataset.artist);
+      if (card) CM.openLibraryAlbum(card.dataset.album, card.dataset.albumArtist || card.dataset.artist);
     });
-    // dc-track / search-result-item：双击播放 + 右键菜单
+    // dc-track / search-result-item：双击播放（切播放上下文）+ 右键菜单
     els.mainContent.addEventListener('dblclick', function(e) {
       var el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');
       if (!el) return;
-      CM.playNow(el.dataset.path);
+      CM.playRow(rowPlayCtx(el));
     });
     els.mainContent.addEventListener('contextmenu', function(e) {
       var el = e.target.closest('.dc-track[data-path], .search-result-item[data-path]');
       if (!el) return;
       e.preventDefault();
-      // 从 DOM 构造最小 track 对象（showTrackCtxMenu 只需 path + title）
+      // 从 DOM 构造最小 track 对象（showTrackCtxMenu 只需 path + title）；
+      // 带上列表上下文，右键「播放」与双击同一条路径（切上下文而不是游离曲）
       var path = el.dataset.path;
       var titleEl = el.querySelector('.dc-track-title, .search-result-title');
-      CM.showTrackCtxMenu(e.clientX, e.clientY, { absolutePath: path, title: titleEl ? titleEl.textContent : '' });
+      var ctx = rowPlayCtx(el);
+      ctx.path = path;
+      CM.showTrackCtxMenu(e.clientX, e.clientY, { absolutePath: path, title: titleEl ? titleEl.textContent : '' }, ctx);
     });
     });
   };
@@ -573,65 +630,64 @@
     CM._ensureMainContentDelegation();
   };
 
-  // 批量加载专辑封面：对每张专辑取首曲路径，再批量请求封面
-  // 分批处理（每批24张），避免一次性发起过多 API 调用
+  // 批量加载专辑封面。
+  // v2 起 library.getAlbums 的行自带首曲路径（firstTrackAbsolutePath / firstTrackPath），
+  // 直接用它即可 —— 旧的「逐张专辑调 library.getAlbumTracks 取首曲」写法有两个问题：
+  //   ① 参数 artist / limit 在 v2 属于未声明键，调用被整体拒绝（INVALID_PARAMS）；
+  //   ② 几百张专辑就是几百次宿主调用。
+  // 每批 50 条与 fillArtworkBatch 的分片一致，避免一次上百条进封面批接口。
   CM._loadAlbumCovers = function(container, albums, maxSize) {
     if (!albums || !albums.length) return;
     var cards = container.querySelectorAll('.album-card');
     if (!cards.length) return;
-    var CHUNK = 24;
-    function processChunk(start) {
-      var slice = albums.slice(start, start + CHUNK);
-      if (!slice.length) return;
-      var promises = slice.map(function(al, i) {
-        var name = al.name || al.album || '';
-        var artist = al.artist || al.albumArtist || undefined;
-        if (!name) return Promise.resolve(null);
-        return CM.api('library.getAlbumTracks', { album: name, artist: artist, limit: 1 }).then(function(r) {
-          var tracks = r ? CM.respTracks(r) : [];
-          // 专辑名或艺术家名含引号时宿主内部查询必然失配（无转义机制），回退 ? 通配查询
-          if (!tracks.length && (name.indexOf('"') >= 0 || (artist || '').indexOf('"') >= 0)) {
-            var wild = CM.wildValue(name);
-            if (!wild) return null;
-            return CM.api('library.search', { query: 'album IS "' + wild + '"', limit: 500 }).then(function(sr) {
-              var st = CM.respTracks(sr).filter(function(t) { return t.album === name; });
-              return st.length ? { index: start + i, path: CM.trackPath(st[0]) } : null;
-            });
-          }
-          if (!tracks.length) return null;
-          return { index: start + i, path: CM.trackPath(tracks[0]) };
-        });
-      });
-      Promise.all(promises).then(function(results) {
-        // 仅保留有 path 的结果，保证 valid 与 paths 一一对应（修复封面错位）
-        var valid = [];
-        results.forEach(function(v) { if (v && v.path) valid.push(v); });
-        if (!valid.length) { processChunk(start + CHUNK); return; }
-        var paths = valid.map(function(v) { return v.path; });
-        CM.api('artwork.getFb2kUrlByPathBatch', { paths: paths, type: 'front', maxSize: maxSize || 320 }).then(function(r) {
-          if (r && r.artworks) {
-            r.artworks.forEach(function(entry, i) {
-              if (!entry || !valid[i]) return;
-              var card = cards[valid[i].index];
-              if (!card) return;
-              var url = entry.dataUrl || entry.url;
-              var artEl = card.querySelector('.art-placeholder');
-              if (entry.success !== false && url && artEl) {
-                artEl.style.backgroundImage = 'url("' + url + '")';
-                artEl.innerHTML = '';
-              }
-            });
-          }
-          processChunk(start + CHUNK);
-        });
-      });
+    var slots = [], paths = [];
+    var n = Math.min(albums.length, cards.length);
+    for (var i = 0; i < n; i++) {
+      var al = albums[i] || {};
+      var p = al.firstTrackAbsolutePath || al.firstTrackPath || '';
+      if (!p) continue;
+      // 封面要挂在 .art-placeholder 上（它带 background-size:cover 等样式），
+      // 挂到外层 .album-card-art 会被占位图标盖住 —— 与 fillArtworkBatch 的做法一致
+      var artEl = cards[i].querySelector('.art-placeholder') || cards[i].querySelector('.album-card-art');
+      if (!artEl) continue;
+      slots.push(artEl);
+      paths.push(p);
     }
-    processChunk(0);
+    if (!paths.length) return;
+    // 分批请求封面：每批 50 张，最多 3 批并发 —— 全串行要等 N 个往返
+    //（500 张专辑 = 10 次，每次都等前一批回来），全并行又会把 N×50 次目录扫描
+    // 同时压给宿主的 UI 线程，所以取一个折中（fillArtworkBatch 是纯并行，
+    // 那边一批最多几十个；专辑页可能是几百张，需要限流）。
+    var CHUNK = 50, MAX_CONCURRENT = 3;
+    var jobs = [];
+    for (var s = 0; s < paths.length; s += CHUNK) {
+      jobs.push({ slots: slots.slice(s, s + CHUNK), paths: paths.slice(s, s + CHUNK) });
+    }
+    var nextJob = 0;
+    function runJob() {
+      if (nextJob >= jobs.length) return Promise.resolve();
+      var job = jobs[nextJob++];
+      return CM.api('artwork.getFb2kUrlByPathBatch', { paths: job.paths, type: 'front', maxSize: maxSize || 320 }).then(function(r) {
+        if (!r || !r.artworks) return;
+        r.artworks.forEach(function(entry, j) {
+          var el = job.slots[j];
+          if (!el || !entry) return;
+          var url = entry.dataUrl || entry.url;
+          if (entry.success === false || !url) return;
+          el.style.backgroundImage = 'url("' + url + '")';
+          el.innerHTML = '';
+        });
+      }).then(runJob, runJob);
+    }
+    var workers = [];
+    for (var w = 0; w < Math.min(MAX_CONCURRENT, jobs.length); w++) workers.push(runJob());
+    return Promise.all(workers);
   };
 
-  CM.playAlbum = function(album, artist) {
+  // v2：library.getAlbumTracks 的必填参数是 album + albumArtist（专辑行的值，逐字节比较）
+  CM.playAlbum = function(album, albumArtist) {
     CM.showToast('正在加载', '正在获取专辑「' + album + '」...', null);
-    CM.api('library.getAlbumTracks', { album: album, artist: artist || undefined }).then(function(r) {
+    CM.api('library.getAlbumTracks', { album: album, albumArtist: albumArtist || '' }).then(function(r) {
       var tracks = CM.respTracks(r);
       if (!tracks.length) { CM.showToast('无法播放', '未找到专辑曲目', 'error'); return; }
       CM.playAllTracks(tracks, '专辑 ' + album);
@@ -639,8 +695,8 @@
   };
 
   // 打开专辑详情视图（媒体库下钻）
-  CM.openLibraryAlbum = function(album, artist) {
-    CM.openLibraryDetail('album', { album: album, artist: artist });
+  CM.openLibraryAlbum = function(album, albumArtist) {
+    CM.openLibraryDetail('album', { album: album, albumArtist: albumArtist || '', artist: albumArtist || '' });
   };
 
   // 通用媒体库下钻导航（切换到媒体库标签页并设置视图）
@@ -656,34 +712,19 @@
     }
   };
 
-  /* 单曲即时播放：加入队列顶部并播放下一首（队列消费模型，不修改歌单）
-   * 队列为空时直接 add+next；非空时 add 到末尾再 moveToTop，保证双击曲目立即播放 */
-  CM.playNow = function(path) {
-    if (!path) return;
-    // 先停掉 JIT 无痕试听，避免与正常播放同时输出（两首一起播）
-    CM.stopPreviewIfActive().then(function() {
-      CM.api('queue.getCount').then(function(r) {
-        var insertIdx = CM.respCount(r);
-        CM.api('queue.addPaths', { paths: [path] }).then(function(r) {
-          if (!r || r.success === false) {
-            CM.api('playback.playPath', { path: path });
-            return;
-          }
-          if (insertIdx > 0) {
-            // 队列非空：将新曲目移到队首，再播放下一首
-            CM.api('queue.moveToTop', { index: insertIdx }).then(function() {
-              CM.api('playback.next');
-            });
-          } else {
-            // 队列为空：新曲目已在队首
-            CM.api('playback.next');
-          }
-        });
-      });
-    });
-  };
+  // 注：旧的「单曲即时播放 playNow（加入队列顶部并 next）」已并入
+  // playback-model.js —— 统一入口是 CM.playRow（按行所属列表切上下文）与
+  // CM.playNowPath（游离曲：插队后立即播放）。不要再在 ui.js 里重开一份。
 
-  CM.renderTrackRows = function(container, tracks, emptyText, startIdx) {
+  CM.renderTrackRows = function(container, tracks, emptyText, startIdx, listCtx) {
+    // 列表上下文：双击 / 右键「播放」要按"这一行属于哪个列表"来切播放上下文
+    // （媒体库视图、发现页列表、搜索结果都是视图列表，见 playback-model.js 的 playContextList）。
+    // listCtx = {tracks: 完整列表, title: 列表名}；分页渲染时 container 里只有一页，
+    // 但 data-i 用的是完整列表下标，所以上下文必须另存完整列表。
+    if (container) {
+      container._cmTracks = (listCtx && listCtx.tracks) || tracks || [];
+      container._cmTitle = (listCtx && listCtx.title) || '';
+    }
     if (!tracks.length) {
       container.innerHTML = CM.emptyHTML(emptyText);
       return;

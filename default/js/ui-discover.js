@@ -54,14 +54,16 @@
   CM.renderDiscoverRecent = function() {
     els.discoverRecent.innerHTML = CM.loadingHTML();
     CM.api('library.getRecentlyAdded', { limit: 8 }).then(function(r) {
-      CM.renderTrackRows(els.discoverRecent, CM.respTracks(r), '暂无最近添加的曲目');
+      var recent = CM.respTracks(r);
+      CM.renderTrackRows(els.discoverRecent, recent, '暂无最近添加的曲目', 0, { tracks: recent, title: '最近添加' });
     });
   };
 
   CM.renderDiscoverRandom = function() {
     els.discoverRandom.innerHTML = CM.loadingHTML();
     CM.api('library.getRandomTracks', { count: 10 }).then(function(r) {
-      CM.renderTrackRows(els.discoverRandom, CM.respTracks(r), '媒体库为空');
+      var random = CM.respTracks(r);
+      CM.renderTrackRows(els.discoverRandom, random, '媒体库为空', 0, { tracks: random, title: '随机曲目' });
     });
   };
 
@@ -85,6 +87,7 @@
   CM.doSearch = function(query) {
     query = (query || '').trim();
     if (!query) {
+      els.searchResults._cmTracks = null;
       els.searchResults.innerHTML =
         CM.emptyHTML('输入关键词搜索媒体库', '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>');
       return;
@@ -101,11 +104,16 @@
       }
       var tracks = CM.respTracks(r);
       if (!tracks.length) {
+        els.searchResults._cmTracks = null;
         els.searchResults.innerHTML = '<div class="search-empty">没有找到与「' + esc(query) + '」相关的结果</div>';
         return;
       }
       var curPath = CM.trackPath(CM.currentTrack);
       state.searchTracks = tracks;
+      // 搜索结果也是可播放的"视图列表"：双击/右键播放按它切播放上下文
+      // （详见 playback-model.js 的 playContextList）
+      els.searchResults._cmTracks = tracks;
+      els.searchResults._cmTitle = '搜索：' + query;
       var total = r.total != null ? r.total : tracks.length;
       var parts = [
         '<div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px">' +

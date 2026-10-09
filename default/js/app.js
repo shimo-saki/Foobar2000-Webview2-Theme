@@ -6,11 +6,23 @@
   'use strict';
   var CM = window.CloudMusic;
 
+  // 音量落盘防抖：拖动音量条时 playback:volumeChanged 会连发几十次，而
+  // CM.saveSettings 是一次同步的 localStorage 写（整个设置 JSON）
+  var saveVolumeSetting = CM.debounce(function() {
+    CM.settings.volume = CM.state.volume;
+    CM.saveSettings();
+  }, 400);
+
   /* ============================================
    * 播放/暂停可视状态（图标 + 表格均衡器动画 + 任务栏）
    * ============================================ */
   function setPlayingVisual(isPlaying) {
+    CM.state.playing = !!isPlaying;
+    // 播放时钟插值循环随播放状态起停（暂停/停止时位置不再前进，没必要烧 rAF）
+    if (isPlaying) { if (CM.startPlayhead) CM.startPlayhead(); }
+    else if (CM.stopPlayhead) CM.stopPlayhead();
     CM.updatePlayPauseIcon(isPlaying);
+    if (CM.publishNow) CM.publishNow(!!isPlaying);   // 小窗同步播放/暂停状态
     document.body.classList.toggle('is-playing', isPlaying);
     CM.updateTaskbarProgress();
     // 更新沉浸式唱片旋转 + 播放按钮状态
@@ -30,6 +42,8 @@
     CM.loadLyrics();
     CM.refreshLikeState();
     CM._renderQueueNow(); // 队列抽屉"正在播放"卡片
+    CM.history.note(track); // 播放历史（事件栈 + cursor，见 playback-model.js）
+    if (CM.publishNow) CM.publishNow(!!CM.state.playing);   // 小窗同步曲目信息
     // 如果沉浸式页面打开，重新渲染
     if (CM.state.npOpen) {
       setTimeout(function() { CM.renderNpOverlay(); }, 200);
@@ -51,6 +65,7 @@
 
   function onStopped() {
     CM.currentTrack = null;
+    if (CM.publishNow) CM.publishNow(false);   // 小窗同步"未在播放"
     CM._renderQueueNow(); // 隐藏队列抽屉"正在播放"卡片
     CM.state.playingTrackIndex = -1;
     CM.state.position = 0;
@@ -81,6 +96,8 @@
       var paused = r.isPaused != null ? r.isPaused : r.paused;
       CM.state.duration = r.duration || r.length || 0;
       CM.state.position = r.position || 0;
+      // v2 的 getState 会带 canSeek（网络流多不可跳转）：不可跳转时禁用两条进度条
+      if (r.canSeek != null && CM.setSeekable) CM.setSeekable(r.canSeek);
       CM.updateSeekUI();
       setPlayingVisual(!!playing && !paused);
     });
@@ -107,7 +124,8 @@
     });
     CM.api('playback.getPlaybackOrder').then(function(r) {
       if (!r) return;
-      CM.state.order = r.order != null ? r.order : (r.index != null ? r.index : 0);
+      // 宿主的 order 是序号（0..6），name 才是权威：优先按 name 认档位
+      CM.state.order = CM.orderIndexOf(r.name, r.order != null ? r.order : r.index);
       CM.updateOrderIcon();
     });
     CM.api('playback.getStopAfterCurrent').then(function(r) {
@@ -134,9 +152,14 @@
       // duration 为 0/无效时回退到 length（如部分 .aac 流 duration=0 但 length 有效）
       var dur = data.duration || data.length;
       if (dur != null) CM.state.duration = dur;
-      if (data.position != null && !CM.state.seeking) CM.state.position = data.position;
-      CM.updateSeekUI();
+      // v2：stateChanged 每次都带 canSeek（电台流等不可跳转）
+      if (data.canSeek != null && CM.setSeekable) CM.setSeekable(data.canSeek);
+      // 位置交给时钟推算（无时钟时用事件值）
+      if (data.position != null && !CM.state.seeking) {
+        CM.applyPosition(CM.clock ? CM.nowPosition() : data.position);
+      }
       if (data.state != null) setPlayingVisual(data.state === 'playing' || data.state === 1);
+      else setPlayingVisual(CM.clockPlaying ? CM.clockPlaying() : !!CM.state.playing);
     });
 
     fb.on('playback:paused', function(data) {
@@ -144,27 +167,23 @@
     });
 
     // 高分辨率进度事件 — 驱动进度条 + 歌词高亮 + 任务栏进度
+    // v2：位置以播放时钟为准（事件 ≈30fps 且高负载会抖），事件值只作无时钟时的回退；
+    // 两次事件之间由 CM.startPlayhead 的 rAF 循环插值
     fb.on('playback:timeHighRes', function(data) {
       if (!data || data.position == null) return;
-      if (!CM.state.seeking) {
-        CM.state.position = data.position;
-        CM.updateSeekUI();
-      }
-      CM.updateLyricHighlight();
-      CM.updateTaskbarProgress();
-      // 同步更新沉浸式页面
-      if (CM.state.npOpen) {
-        if (!CM.state.npSeeking) CM.updateNpSeekUI();
-        CM.updateNpLyricHighlight();
-      }
+      CM.applyPosition(CM.clock ? CM.nowPosition() : data.position);
     });
 
     fb.on('playback:seeked', function(data) {
-      if (data && data.position != null) CM.state.position = data.position;
-      CM.state.seeking = false;
-      CM.state.npSeeking = false;
-      CM.updateSeekUI();
-      if (CM.state.npOpen) CM.updateNpSeekUI();
+      if (data && data.position != null) {
+        CM.state.seeking = false;
+        CM.state.npSeeking = false;
+        CM.applyPosition(data.position, true);
+      }
+      // 时钟里可能还留着跳转前的锚点：重新读一次状态与位置（异步，失败忽略）
+      if (CM.clock && CM.clock.resync) {
+        try { var pr = CM.clock.resync(); if (pr && pr.catch) pr.catch(function() {}); } catch (e) {}
+      }
       CM.updateLyricHighlight(true);
     });
 
@@ -174,13 +193,13 @@
       if (data.isMuted != null) CM.state.muted = data.isMuted;
       if (CM.els.volSlider) CM.els.volSlider.value = CM.state.volume;
       CM.updateVolumeIcon();
-      CM.settings.volume = CM.state.volume;
-      CM.saveSettings();
+      // 拖动音量条一次会连发几十次事件：落盘防抖，避免每次都同步写一遍设置 JSON
+      saveVolumeSetting();
     });
 
     fb.on('playback:orderChanged', function(data) {
-      if (!data || data.order == null) return;
-      CM.state.order = data.order;
+      if (!data) return;
+      CM.state.order = CM.orderIndexOf(data.name, data.order != null ? data.order : data.index);
       CM.updateOrderIcon();
     });
 
@@ -189,17 +208,17 @@
       CM.updateStopAfterIcon();
     });
 
-    fb.on('playback:queueChanged', function() {
-      CM.refreshQueueBadge();
+    fb.on('playback:queueChanged', function(e) {
+      // 载荷带 { origin, count }：徽标借 count 省掉一次 queue.getCount（内部先校准）
+      CM.refreshQueueBadge(e);
       if (CM.state.queueOpen) CM.renderQueue();
     });
 
     // 输出设备切换（如接入解码器）会打断宿主侧的频谱计算管线，但页面仍持有旧订阅句柄，
-    // 导致频谱流永久中断（直到刷新页面）。此处先停掉旧订阅再重新订阅即可恢复。
+    // 导致频谱流永久中断（直到刷新页面）。这里直接重启订阅（音频可视化模块内部另有
+    // "播放中 N 秒没有帧" 的看门狗兜底）——持有者计数不受影响。
     fb.on('audio:outputDeviceChanged', function() {
-      if (!CM.state.visualizerActive) return;
-      CM.stopSpectrum();
-      CM.startSpectrum();
+      if (CM.viz && CM.viz.restart) CM.viz.restart();
     });
 
     fb.on('playback:stopped', onStopped);
@@ -234,6 +253,7 @@
    * ============================================ */
   function boot() {
     CM.loadSettings();
+    CM.history.init();   // 播放历史：读 localStorage + 挂「播放历史」展开按钮（默认收起，状态持久化）
     CM.state.lyricsVisible = CM.settings.lyricsVisible !== false;
     CM.state.visualizerActive = CM.settings.visualizer !== false;
 
@@ -242,6 +262,7 @@
     CM.bindNavigation();
     CM.bindDiscover();
     CM.bindPlaylistView();
+    CM.bindPlaylistFilter();
     CM.bindPlaybackControls();
     CM.initSpectrumBars();
     CM.initKeyboard();
@@ -264,29 +285,42 @@
     // 宿主就绪后：状态同步 + 事件订阅 + 宿主专属能力
     var readyFn = (typeof fb.ready === 'function') ? fb.ready.bind(fb) : function() { return Promise.resolve(); };
     readyFn().then(function() {
+      CM.initClock();
+      // 能力探测：拉一次宿主方法表，新功能据此显隐（失败保持"未知"，不误藏功能）
+      var capsP = (CM.caps && CM.caps.init) ? CM.caps.init() : Promise.resolve();
+      // 常驻托盘：等能力表回来再按设置恢复（旧宿主上 supported() 为假，自动跳过）
+      capsP.then(function() { if (CM.tray && CM.tray.restore) CM.tray.restore(); });
+      // 缩放比变化（换显示器 / 改系统缩放 / 页面缩放）——供依赖 DPR 的布局重算
+      if (CM.watchDpi) CM.watchDpi();
       syncInitialState();
       subscribeEvents();
+      if (CM.bindPopupTracking) CM.bindPopupTracking();   // 小窗的形态/几何回报
       CM.initDragDrop();
       CM.initTaskbar();
       // 宿主可能晚于本页注入（SDK checkAvailability 轮询可达 5 秒）：boot 时
       // startSpectrum 会因 fb 不可用静默跳过，就绪后补一次（内部幂等）
       if (CM.state.visualizerActive) CM.startSpectrum();
-      // 打开“上次听歌的歌单”（按名称持久化），找不到/未记忆则退回活跃歌单
+      // 打开”上次听歌的歌单”：优先按 v2 的 playlist guid 恢复（改名/挪位也能命中），
+      // guid 失效时退回按名称，都没有则退回活跃歌单
       plPromise.then(function() {
         var saved = CM.settings.lastPlaylist;
-        var lists = CM.playlists || [];
         var target = -1;
-        if (saved) {
+        if (CM.settings.rememberGuid) target = CM.playlistIndexByGuid(CM.settings.rememberGuid);
+        if (target < 0 && saved) {
+          var lists = CM.playlists || [];
           for (var i = 0; i < lists.length; i++) {
             if (lists[i].name === saved) { target = lists[i].index; break; }
           }
         }
+        // 侧栏不显示的内部歌单（上下文容器 / 宿主的 [WebView Queue]）不该被自动打开：
+        // 记着它们的时候退回活动歌单
+        if (target >= 0 && CM.isInternalPlaylist(CM.playlistRow(target))) target = -1;
         CM.api('playlist.getActive').then(function(r) {
           var idx = r && (r.index != null ? r.index : r.playlist);
           var use = target >= 0 ? target : (idx != null && idx >= 0 ? idx : target);
           if (use >= 0) {
             CM.state.currentPlaylistIndex = use;
-            CM.loadPlaylists(); // 刷新侧栏“当前歌单”高亮
+            CM.loadPlaylists(); // 刷新侧栏”当前歌单”高亮
             if (CM.state.currentTab === 'playlist') CM.renderPlaylistView(use);
           }
         });

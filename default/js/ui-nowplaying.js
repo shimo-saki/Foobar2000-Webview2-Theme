@@ -23,13 +23,21 @@
     if (state.npOpen) {
       CM.renderNpOverlay();
       els.npOverlay.classList.add('open');
+      // 沉浸页注册自己的频谱帧消费方：底栏那条频谱关掉时这条照样动
+      // （调度器按持有者计数，最后一个消费方离开才真正退订）
+      if (CM.sched) CM.sched.want('np', { fps: 30, onFrame: CM.updateNpSpectrum });
+      syncWave();
       document.body.style.overflow = 'hidden';
       // 关闭歌词面板节省资源
       _npPrevLyricsVisible = state.lyricsVisible;
       if (state.lyricsVisible) CM.setLyricsVisible(false, true);
     } else {
       els.npOverlay.classList.remove('open');
+      if (CM.sched) CM.sched.release('np');
+      stopWave();
       document.body.style.overflow = '';
+      // 退出沉浸页：停掉瀑布/示波器/矢量示波器的画布轮询与实时波形轮询（都不该在后台常驻）
+      if (CM.spectrumMode && CM.spectrumMode.suspend) CM.spectrumMode.suspend();
       // 恢复歌词面板（仅当进入前它是可见的）
       if (_npPrevLyricsVisible) CM.setLyricsVisible(true, true);
       _npPrevLyricsVisible = false;
@@ -51,8 +59,10 @@
     els.npTrackArtist.textContent = els.bottomArtist.textContent;
     CM.updateNpFormat();
     CM.loadNpWaveform(CM.trackPath(CM.currentTrack));
-    // 同步播放按钮状态
-    var playing = !!(fb.state && fb.state.isPlaying);
+    // 同步播放按钮状态。播放态统一读 CM.state.playing（app.js 的 setPlayingVisual
+    // 维护）：SDK 那份 fb.state 镜像只由 stateChanged/trackChanged/stopped 更新，
+    // 走 playback:paused 恢复时不跟着变 —— 会出现"在播但按钮/唱片显示暂停"
+    var playing = !!CM.state.playing;
     els.npBtnPlay.classList.toggle('playing', playing);
     els.npLcPlay.classList.toggle('playing', playing);
     // 同步进度条
@@ -61,6 +71,8 @@
     CM.renderNpLyrics();
     // 初始化频谱
     CM.initNpSpectrum();
+    // 恢复上次选中的频谱显示（频谱条 / 声场 / 瀑布图 / 示波器 / 矢量示波器），并同步画布尺寸
+    if (CM.spectrumMode) { CM.spectrumMode.set(CM.settings.spectrumMode || 'bars'); CM.spectrumMode.refresh(); }
     // 更新唱片动画
     CM.updateNpVinylState();
     // 设置初始模式
@@ -83,7 +95,17 @@
   };
 
   // 沉浸式波形：把当前曲目完整波形作为进度条背景
-  var _waveCache = {}, _wavePending = null, _waveBound = false;
+  // 缓存上限：每首一份 256 点的 SVG 字符串，不设上限的话长会话会一直涨
+  var WAVE_CACHE_MAX = 40;
+  var _waveCache = {}, _waveCacheKeys = [], _wavePending = null, _waveBound = false;
+  function putWaveCache(path, svg) {
+    if (!path) return;
+    if (_waveCache[path] === undefined) {
+      _waveCacheKeys.push(path);
+      if (_waveCacheKeys.length > WAVE_CACHE_MAX) delete _waveCache[_waveCacheKeys.shift()];
+    }
+    _waveCache[path] = svg;
+  }
   CM.waveformSVG = function(data, w, h) {
     var n = data.length, step = w / n, mid = h / 2, amp = (h - 6) / 2;
     var d = 'M0 ' + mid.toFixed(1);
@@ -108,7 +130,7 @@
         if (e.waveform && e.waveform.length) {
           // 波形属于"发起请求的那条曲目"：按请求路径缓存；仅当它仍是当前曲目时展示
           // （期间切歌且新请求尚未发出时，旧曲目波形不能缓存到新曲目名下）
-          if (reqPath) _waveCache[reqPath] = CM.waveformSVG(e.waveform, 100, 44);
+          if (reqPath) putWaveCache(reqPath, CM.waveformSVG(e.waveform, 100, 44));
           var cur = CM.trackPath(CM.currentTrack);
           if (reqPath && cur === reqPath && _waveCache[reqPath]) {
             el.innerHTML = _waveCache[reqPath];
@@ -132,7 +154,7 @@
       if (r && r.taskId) { req.taskId = r.taskId; return; }
       if (r && r.waveform && r.waveform.length) {       // 命中宿主缓存，直接可用
         _wavePending = null;
-        _waveCache[path] = CM.waveformSVG(r.waveform, 100, 44);
+        putWaveCache(path, CM.waveformSVG(r.waveform, 100, 44));
         if (CM.trackPath(CM.currentTrack) === path) {
           el.innerHTML = _waveCache[path]; el.classList.remove('hide');
         } else el.classList.add('hide');
@@ -179,7 +201,7 @@
   };
 
   CM.updateNpVinylState = function() {
-    var isPlaying = fb.state && fb.state.isPlaying;
+    var isPlaying = !!CM.state.playing;   // 同上：不用 SDK 的 fb.state 镜像
     els.npVinylDisc.classList.toggle('playing', !!isPlaying);
     els.npTonearm.classList.toggle('playing', !!isPlaying);
   };
@@ -210,12 +232,489 @@
   var npSpecBarEls = [];
   CM.initNpSpectrum = function() {
     npSpecBarEls = CM.createSpectrumBars(els.npSpectrum, NP_SPEC_BARS, 'np-spec-bar');
+    // createSpectrumBars 是 innerHTML 重建：瀑布/示波器/矢量示波器那张画布会被一起清掉。
+    // 画布是复用同一个元素的（不重建、不重设 bitmap），这里必须重新挂回去 ——
+    // 否则第二次打开沉浸页时画的是一张已经脱离文档的画布，看起来就是"没反应"。
+    if (specCanvas && specCanvas.parentNode !== els.npSpectrum) {
+      els.npSpectrum.appendChild(specCanvas);
+    }
   };
 
-  CM.updateNpSpectrum = function(data) {
-    if (!state.npOpen || !npSpecBarEls.length) return;
-    CM.updateSpectrumBars(npSpecBarEls, data && data.spectrum, NP_SPEC_BARS, 36, 28);
+  /* ============================================
+   * 沉浸页频谱的显示模式 —— 五种都画在主题自己那一条频谱的位置上
+   *
+   *   bars      频谱条（默认，就是主题原来的样子）
+   *   field     声场：同一排 32 条，中缝左右分开（低频靠中缝，蝶形对称）
+   *   waterfall 瀑布图：同一条 40px 槽位里的画布，时间 × 频率，配色取自封面强调色
+   *   oscillo   示波器：同槽位画布 + 宿主可视化流的实时 PCM（audio.getWaveform）
+   *   vector    矢量示波器：同一份 PCM 的左右声道当 (L,R) 坐标打点（相位图）
+   *
+   * 尺寸与位置完全不变（画布就叠在频谱条的槽位里），所以不会挤动布局；
+   * 切换方式是"点这一条频谱"——不新增任何按钮或元件。选择记进设置。
+   * ============================================ */
+  var SPEC_MODES = ['bars', 'field', 'waterfall', 'oscillo', 'vector'];
+  var SPEC_LABEL = {
+    bars: '频谱条', field: '声场', waterfall: '瀑布图',
+    oscillo: '示波器（实时波形）', vector: '矢量示波器（相位图）'
   };
+  var specMode = 'bars';
+  var specCanvas = null, specCtx = null, specBitmap = { w: 0, h: 0, dpr: 1 }, specRO = null;
+
+  // 实时波形类模式（示波器 / 矢量示波器）都靠 audio.getWaveform 供数，且都依赖可视化流
+  function needsWave(mode) { return mode === 'oscillo' || mode === 'vector'; }
+  // 画布类模式：频谱条让位给叠在槽位里的画布
+  function isCanvasMode(mode) { return mode === 'waterfall' || needsWave(mode); }
+  function canUseSpecMode(mode) {
+    return !needsWave(mode) || waveAvailable();
+  }
+
+  function ensureSpecCanvas() {
+    if (specCanvas) {
+      // 被 innerHTML 重建甩出文档时挂回来（见 initNpSpectrum 的说明）
+      if (els.npSpectrum && specCanvas.parentNode !== els.npSpectrum) {
+        els.npSpectrum.appendChild(specCanvas);
+      }
+      return specCanvas;
+    }
+    var box = els.npSpectrum;
+    if (!box) return null;
+    specCanvas = document.createElement('canvas');
+    specCanvas.className = 'np-spec-canvas';
+    box.appendChild(specCanvas);
+    return specCanvas;
+  }
+
+  // 布局变化（开窗、改窗口大小、DPI 变化）后重新量画布：画布是替换元素，
+  // 位图尺寸必须跟着 CSS 尺寸走，否则要么糊、要么只画到一角。
+  // 重量的同时按当前模式补一张：瀑布图不能因为一次窗口缩放就从右边重新长起。
+  var specSizeWatched = false;
+  function watchSpecSize() {
+    if (!specSizeWatched) {
+      specSizeWatched = true;
+      // DPI 变化（换显示器 / 改缩放）不会触发 ResizeObserver（CSS 尺寸没变），
+      // 但位图要换：清掉缓存尺寸，下一帧按新 DPR 重量
+      if (CM.onDpiChange) CM.onDpiChange(function() {
+        specBitmap = { w: 0, h: 0, dpr: specBitmap.dpr || 1 };
+        if (specCtx) clearSpecCanvas(true);
+        if (specMode === 'waterfall') prefillSpecWaterfall(CM.viz && CM.viz.frame);
+      });
+    }
+    if (specRO || typeof ResizeObserver !== 'function') return;
+    var box = els.npSpectrum;
+    if (!box) return;
+    specRO = new ResizeObserver(function() {
+      if (!specCanvas || specCanvas.classList.contains('hide')) return;
+      if (!sizeSpecCanvas(true)) return;
+      clearSpecCanvas(true);
+      if (specMode === 'waterfall') prefillSpecWaterfall(CM.viz && CM.viz.frame);
+    });
+    specRO.observe(box);
+  }
+
+  // force = true 时才真的量一次（首次 / 开沉浸页 / 切模式 / 布局或 DPI 变化）；
+  // 画布模式的绘制是 30fps，每帧 getBoundingClientRect() 是白花钱，其余帧用缓存尺寸。
+  function sizeSpecCanvas(force) {
+    var c = ensureSpecCanvas();
+    if (!c) return false;
+    if (!force && specBitmap.w > 0 && specBitmap.h > 0) return true;
+    var r = c.getBoundingClientRect();
+    var w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+    // 缩放比统一走 CM.dpr()（与主窗口/小窗同一口径）；画布位图上限 2x，避免 4K 下过度绘制
+    var dpr = Math.min(CM.dpr ? CM.dpr() : (window.devicePixelRatio || 1), 2);
+    if (specBitmap.w === w && specBitmap.h === h && specBitmap.dpr === dpr) return true;
+    specBitmap = { w: w, h: h, dpr: dpr };
+    c.width = Math.round(w * dpr);
+    c.height = Math.round(h * dpr);
+    specCtx = c.getContext('2d');
+    return true;
+  }
+
+  function clearSpecCanvas(soft) {
+    if (!specCtx || !specCanvas) return;
+    specCtx.setTransform(1, 0, 0, 1, 0, 0);
+    specCtx.clearRect(0, 0, specCanvas.width, specCanvas.height);
+    if (soft) {
+      specCtx.fillStyle = 'rgba(0,0,0,0.28)';
+      specCtx.fillRect(0, 0, specCanvas.width, specCanvas.height);
+    }
+  }
+
+  // 画布配色跟随主题的封面取色。色相由 core.js 在写 --accent-h 时同步到
+  // CM._accentHue：画布类模式是 30fps，每帧 getComputedStyle() 会强制样式重算。
+  function specHue() {
+    var h = (typeof CM._accentHue === 'number' && isFinite(CM._accentHue)) ? CM._accentHue : 0;
+    return ((h % 360) + 360) % 360;
+  }
+  var _specLut = null, _specLutHue = -1;
+  function specLut() {
+    var hue = specHue();
+    if (_specLut && _specLutHue === hue) return _specLut;
+    var out = new Array(64);
+    for (var i = 0; i < 64; i++) {
+      var v = i / 63;
+      // 低强度：偏暗偏灰；高强度：亮到接近强调色本体（与主题那条频谱的观感一致）
+      out[i] = 'hsl(' + hue + ',' + (66 + v * 26).toFixed(0) + '%,' + (12 + v * 52).toFixed(0) + '%)';
+    }
+    _specLut = out; _specLutHue = hue;
+    return out;
+  }
+
+  // 画布上的提示文字（等数据 / 不可用时的唯一反馈 —— 那块地方本来什么都没有）
+  function specHint(text) {
+    if (!specCtx || !specCanvas) return;
+    var dpr = specBitmap.dpr || 1;
+    specCtx.fillStyle = 'rgba(255,255,255,0.42)';
+    specCtx.font = (10 * dpr) + 'px "Segoe UI","Microsoft YaHei UI",sans-serif';
+    specCtx.textAlign = 'center';
+    specCtx.fillText(text, specCanvas.width / 2, specCanvas.height / 2 + 3.5 * dpr);
+  }
+
+  // 瀑布图是"从右往左一条条推出去"的：刚切进来（或刚重建画布）时左边一大片
+  // 还是空的，看着像没生效。这里用当前这一帧把整幅填满，之后照常向左滚动。
+  function prefillSpecWaterfall(frame) {
+    if (!frame || !CM.viz || !sizeSpecCanvas()) return;
+    var bars = CM.viz.barsFor(frame, 96);
+    var c = specCanvas, ctx = specCtx, W = c.width, H = c.height, lut = specLut();
+    var n = bars.length;
+    if (!n) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(0, 0, W, H);
+    for (var y = 0; y < H; y++) {
+      var f = (H - 1 - y) / H;
+      var idx = Math.floor(f * n);
+      if (idx < 0) idx = 0; else if (idx >= n) idx = n - 1;
+      var v = bars[idx] || 0;
+      if (v < 0.04) continue;
+      ctx.fillStyle = lut[Math.round(v * 63)];
+      ctx.fillRect(0, y, W, 1);
+    }
+  }
+
+  function drawSpecWaterfall(frame) {
+    if (!sizeSpecCanvas()) return;
+    var c = specCanvas, ctx = specCtx;
+    var shift = Math.max(1, Math.round(specBitmap.dpr));   // 每帧向左滚动 1 设备像素
+    var W = c.width, H = c.height;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'copy';
+    ctx.drawImage(c, -shift, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over';
+    if (!frame || !CM.viz) { specHint('等待音频数据…'); return; }
+    var bars = CM.viz.barsFor(frame, 96);
+    var lut = specLut();
+    var n = bars.length;
+    for (var y = 0; y < H; y++) {
+      // 纵向：底=低频。条数组本身已按对数频率轴排列，这里线性取值即对数纵轴
+      var f = (H - 1 - y) / H;
+      var idx = Math.floor(f * n);
+      if (idx < 0) idx = 0; else if (idx >= n) idx = n - 1;
+      var v = bars[idx] || 0;
+      if (v < 0.04) continue;                       // 近静音不画，保留底色
+      ctx.fillStyle = lut[Math.round(v * 63)];
+      ctx.fillRect(W - shift, y, shift, 1);
+    }
+  }
+
+  /* ---------- 实时波形（示波器 / 矢量示波器） ----------
+     v2 官方给可视化流留了 audio.getWaveform：最近 duration 秒的 PCM，
+     signed 直接给 [-1, 1] 的正负波形。旧实现走 fb.audio.subscribeStream
+     （实验性的共享缓冲接口）：宿主没给共享缓冲时既没有帧也没有错误，画布上
+     永远只有"等待音频数据…"。这里改成官方接口。
+     拉取不再自己起 rAF —— 交给 CM.sched.wantWave：它统一单飞（上一次没回来
+     不发下一次）、未播放即停、页面隐藏即停，多个视图也只发一份请求。
+     这里只管"拿到数据后画一帧"。频谱订阅同时是可视化流的保活，沉浸页开着
+     时它一直持有（见 toggleNpOverlay 里的 sched.want('np')）。 */
+  var wave = { buf: null, lr: null, fails: 0, ok: false };
+
+  function waveAvailable() {
+    return !!(fb.audio && typeof fb.audio.getWaveform === 'function');
+  }
+
+  function onWaveData(r) {
+    var stereo = specMode === 'vector';
+    if (r && r.success !== false) {
+      if (stereo) {
+        if (r.left && r.right && r.left.length) {
+          wave.lr = { left: r.left, right: r.right };
+          wave.ok = true;
+          wave.fails = 0;
+        }
+      } else if (r.waveform && r.waveform.length) {
+        wave.buf = r.waveform;
+        wave.ok = true;
+        wave.fails = 0;
+      }
+      // success 但没数据（起播头几十毫秒 / 静音）：不算失败，等下一拍
+    } else {
+      wave.fails++;
+      // 连续拿不到（宿主没有可视化流 / 一直在停止态之外的地方失败）就不要再
+      // 停在一块空画布上：说明原因并切回频谱条（示波器与矢量示波器共用这条兜底）
+      if (wave.fails >= 8 && needsWave(specMode)) {
+        var was = SPEC_LABEL[specMode];
+        applySpecMode('bars');
+        if (CM.showToast) CM.showToast(was + '不可用', '宿主暂时给不出实时波形，已切回频谱条', 'error');
+        return;
+      }
+    }
+    if (!state.npOpen || !needsWave(specMode)) return;
+    if (specMode === 'vector') drawSpecVector(); else drawSpecOscillo();
+  }
+
+  // 波形消费方只在"沉浸页开着 + 当前是波形类模式 + 宿主有该接口"时注册；
+  // 其余情况一律退订，避免后台白拉
+  function syncWave() {
+    if (state.npOpen && needsWave(specMode) && waveAvailable() && CM.sched) {
+      CM.sched.wantWave('np', {
+        fps: 30,
+        channels: specMode === 'vector' ? 'stereo' : 'mix',
+        points: specMode === 'vector' ? 512 : 600,
+        onWave: onWaveData
+      });
+    } else {
+      stopWave();
+    }
+  }
+
+  function stopWave() {
+    if (CM.sched) CM.sched.releaseWave('np');
+    wave.buf = null;
+    wave.lr = null;
+    wave.fails = 0;
+    wave.ok = false;
+  }
+
+  function drawSpecOscillo() {
+    if (!sizeSpecCanvas()) return;
+    var c = specCanvas, ctx = specCtx;
+    var W = c.width, H = c.height, dpr = specBitmap.dpr, mid = H / 2;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // 轻微拖尾（0.72 覆盖）比整幅清屏更像示波器，也让快扫的线不至于抖
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0, 0, W, H);
+    // 中线
+    ctx.strokeStyle = 'hsla(' + specHue() + ',60%,60%,0.22)';
+    ctx.lineWidth = Math.max(1, Math.round(dpr * 0.5));
+    ctx.beginPath(); ctx.moveTo(0, mid + 0.5); ctx.lineTo(W, mid + 0.5); ctx.stroke();
+    var buf = wave.buf;
+    if (!buf || buf.length < 2) {
+      if (!wave.ok) specHint('等待音频数据…');
+      return;
+    }
+    ctx.strokeStyle = 'hsl(' + specHue() + ',88%,62%)';
+    ctx.shadowColor = 'hsla(' + specHue() + ',88%,60%,0.8)';
+    ctx.shadowBlur = 6 * dpr;
+    ctx.lineWidth = Math.max(1, 1.4 * dpr);
+    ctx.beginPath();
+    for (var i = 0; i < buf.length; i++) {
+      var x = (i / (buf.length - 1)) * W;
+      var val = buf[i];
+      if (val > 1) val = 1; else if (val < -1) val = -1;
+      var y = mid - val * (mid * 0.86);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  /* 矢量示波器（Lissajous / 相位图）：把左右声道的时域样本当 (L, R) 坐标打点。
+     与"声场"互补 —— 声场看的是频谱左右声道，这里看的是相位关系：
+     全相关（单声道）的点全落在主对角线上，反相落在副对角线上，声像偏移则整团偏向一侧。
+     槽位是"宽而矮"的一条（40px），按等比例画会把九成宽度浪费掉，
+     故 X/Y 各自按半宽/半高铺满；单声道的主对角线仍是直线，方向判读不受影响。 */
+  function drawSpecVector() {
+    if (!sizeSpecCanvas()) return;
+    var c = specCanvas, ctx = specCtx;
+    var W = c.width, H = c.height, dpr = specBitmap.dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // 轻拖尾：靠余晖把散点连成轨迹，快速扫过时更像示波器
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(0,0,0,0.34)';
+    ctx.fillRect(0, 0, W, H);
+    var hue = specHue();
+    var pad = 3 * dpr;
+    var cx = W / 2, cy = H / 2;
+    var rx = Math.max(1, W / 2 - pad), ry = Math.max(1, H / 2 - pad);
+    // 参考框：外椭圆 + 主对角线（单声道信号所在的那条线）
+    ctx.strokeStyle = 'hsla(' + hue + ',50%,58%,0.20)';
+    ctx.lineWidth = Math.max(1, Math.round(dpr * 0.5));
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - rx * 0.7071, cy + ry * 0.7071);
+    ctx.lineTo(cx + rx * 0.7071, cy - ry * 0.7071);
+    ctx.stroke();
+    var lr = wave.lr;
+    if (!lr || !lr.left || !lr.right || lr.left.length < 2) {
+      if (!wave.ok) specHint('等待音频数据…');
+      return;
+    }
+    var L = lr.left, R = lr.right, n = Math.min(L.length, R.length);
+    // 一条路径画完所有点（moveTo+lineTo 成对、圆头端点 => 圆点），
+    // 再同路径描两遍当辉光；比逐点 arc+fill / shadowBlur 省下几百次绘制调用
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+      var l = L[i], r = R[i];
+      if (l > 1) l = 1; else if (l < -1) l = -1;
+      if (r > 1) r = 1; else if (r < -1) r = -1;
+      // Lissajous 旋转 45°：X 走 L-R（左右声像），Y 走 L+R（同相在正上方）
+      var x = cx + (l - r) * 0.7071 * rx;
+      var y = cy - (l + r) * 0.7071 * ry;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y);   // 零长线段 + 圆头端点 = 一个圆点
+    }
+    ctx.strokeStyle = 'hsla(' + hue + ',90%,60%,0.20)';
+    ctx.lineWidth = Math.max(2, 4 * dpr);
+    ctx.stroke();
+    ctx.strokeStyle = 'hsla(' + hue + ',92%,70%,0.95)';
+    ctx.lineWidth = Math.max(1, 1.4 * dpr);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+
+  // 声场：还是这 32 条，中缝左右分别走右/左声道（低频靠中缝，蝶形对称）
+  function drawSpecField(frame) {
+    if (!npSpecBarEls.length) return;
+    var half = npSpecBarEls.length >> 1;
+    if (!half) return;
+    var L = CM.viz.barsFor(frame, half, 'left');
+    var R = CM.viz.barsFor(frame, half, 'right');
+    var vals = new Array(npSpecBarEls.length);
+    for (var i = 0; i < half; i++) {
+      vals[half - 1 - i] = L[i];   // 左半：从中心往左，低频在中心
+      vals[half + i] = R[i];       // 右半：从中心往右，低频在中心
+    }
+    CM.updateSpectrumBars(npSpecBarEls, vals, vals.length, 36, 28);
+  }
+
+  /* ---------- 模式切换 ---------- */
+  function specModeTip() {
+    return '点击切换频谱显示：频谱条 / 声场 / 瀑布图 / 示波器 / 矢量示波器（当前：' + SPEC_LABEL[specMode] + '）';
+  }
+  function applySpecMode(mode, silent) {
+    if (!SPEC_LABEL[mode] || !canUseSpecMode(mode)) mode = 'bars';
+    specMode = mode;
+    // 只在档位真的变了才落盘：renderNpOverlay 每次打开沉浸页都会 set() 同一个值，
+    // 无条件 saveSettings 等于每次开窗写一遍 localStorage
+    if (CM.settings.spectrumMode !== mode) {
+      CM.settings.spectrumMode = mode;
+      if (typeof CM.saveSettings === 'function') CM.saveSettings();
+    }
+    var box = els.npSpectrum;
+    if (box) {
+      box.classList.toggle('field', mode === 'field');
+      box.classList.toggle('mode-canvas', isCanvasMode(mode));
+      box.title = specModeTip();
+    }
+    // 右上角那个按钮：显示当前模式；非"频谱条"时点亮，一眼能看出正处在别的显示上
+    if (els.npVizBtn) {
+      els.npVizBtn.title = '频谱显示：' + SPEC_LABEL[specMode] + '（点击切换）';
+      els.npVizBtn.classList.toggle('non-bars', mode !== 'bars');
+    }
+    if (isCanvasMode(mode)) {
+      var c = ensureSpecCanvas();
+      if (c) c.classList.remove('hide');
+      watchSpecSize();
+      if (sizeSpecCanvas(true)) clearSpecCanvas(true);
+    } else if (specCanvas) {
+      specCanvas.classList.add('hide');
+    }
+    // 换波形类模式时清掉上一模式的缓冲（mix 与 stereo 的数据形状不同，不能混用），
+    // 再按"是否开着沉浸页"决定注册/退订波形消费方
+    if (needsWave(mode)) { wave.buf = null; wave.lr = null; wave.ok = false; wave.fails = 0; }
+    syncWave();
+    if ((mode === 'bars' || mode === 'field') && CM.viz && CM.viz.frame) {
+      CM.updateNpSpectrum(CM.viz.frame);   // 切回来立刻画一帧，不留空白
+    } else if (mode === 'waterfall') {
+      prefillSpecWaterfall(CM.viz && CM.viz.frame);   // 整幅填满，不留半张黑
+    }
+    if (!silent && CM.showToast) {
+      CM.showToast('频谱显示：' + SPEC_LABEL[mode], '点击频谱可继续切换', null);
+    }
+  }
+
+  CM.spectrumMode = {
+    cycle: function() {
+      var i = SPEC_MODES.indexOf(specMode);
+      for (var k = 1; k <= SPEC_MODES.length; k++) {
+        var m = SPEC_MODES[(i + k) % SPEC_MODES.length];
+        if (canUseSpecMode(m)) { applySpecMode(m); return; }
+      }
+    },
+    set: function(m) { applySpecMode(m, true); },
+    current: function() { return specMode; },
+    // 布局变化（打开沉浸页 / 窗口缩放）后重新量一次画布
+    refresh: function() {
+      if (els.npSpectrum) els.npSpectrum.title = specModeTip();
+      if (isCanvasMode(specMode)) {
+        if (ensureSpecCanvas()) specCanvas.classList.remove('hide');
+        watchSpecSize();
+        if (sizeSpecCanvas(true)) clearSpecCanvas(true);
+        if (specMode === 'waterfall') prefillSpecWaterfall(CM.viz && CM.viz.frame);
+      }
+    },
+    // 关闭沉浸页 / 关掉可视化：停掉实时波形与画布轮询，画布回到空态
+    suspend: function() {
+      stopWave();
+      if (isCanvasMode(specMode)) clearSpecCanvas(true);
+    }
+  };
+
+  CM.updateNpSpectrum = function(frame) {
+    if (!state.npOpen || !CM.viz) return;
+    if (specMode === 'bars') {
+      if (!npSpecBarEls.length) return;
+      // 频点按对数轴合并成这条频谱的确切条数（每条取频段内最大值）
+      CM.updateSpectrumBars(npSpecBarEls, CM.viz.barsFor(frame, NP_SPEC_BARS), NP_SPEC_BARS, 36, 28);
+    } else if (specMode === 'field') {
+      drawSpecField(frame);
+    } else if (specMode === 'waterfall') {
+      drawSpecWaterfall(frame);
+    }
+    // oscillo / vector：由 CM.sched 拉取波形后回调 onWaveData 自绘
+  };
+
+  CM.showSpectrumMenu = function(x, y) {
+    var items = [{ label: '频谱显示方式', isLabel: true }];
+    SPEC_MODES.forEach(function(m) {
+      if (!canUseSpecMode(m)) return;
+      items.push({ label: SPEC_LABEL[m], checked: specMode === m, action: function() { applySpecMode(m); } });
+    });
+    items.push({ divider: true });
+    items.push({ label: '显示在沉浸页那条频谱上', isLabel: true });
+    CM.showCtxMenu(x, y, items);
+  };
+
+  // 初值：设置里记住的模式（没有 PCM 时自动回落 bars）
+  specMode = canUseSpecMode(CM.settings.spectrumMode) ? CM.settings.spectrumMode : 'bars';
+  if (!SPEC_LABEL[specMode]) specMode = 'bars';
+
+  /* 切换入口（只有沉浸页那条频谱）：
+       · 左键点一下 = 循环切换到下一种
+       · 右键 = 列出各种显示让人直接挑（与主题其它右键菜单同一套语言）
+     底栏那条迷你频谱**始终是频谱条**，点它不切显示（它是底栏的一格状态指示，
+     不是显示切换开关 —— 想换显示去沉浸页）。
+     用文档级事件委托：频谱条的 innerHTML 每次初始化都会重建，挂在容器上容易失效。 */
+  CM.runOnce('spectrumModeBind', function() {
+    function hit(e) {
+      var t = e.target;
+      // 只认沉浸页那条：底栏迷你频谱固定为频谱条（点它不切显示）
+      return (t && t.closest) ? t.closest('#npSpectrum') : null;
+    }
+    document.addEventListener('click', function(e) {
+      if (!hit(e)) return;
+      CM.spectrumMode.cycle();
+    });
+    document.addEventListener('contextmenu', function(e) {
+      if (!hit(e)) return;
+      e.preventDefault();
+      CM.showSpectrumMenu(e.clientX, e.clientY);
+    });
+  });
 
   CM.npActiveLyricIndex = -1;
 })();

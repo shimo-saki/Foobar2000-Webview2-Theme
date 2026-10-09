@@ -297,6 +297,10 @@
     (tracks || []).forEach(function (t) {
       if (t && t.mediaMid && t.albummid) mediaCoverMap()[t.mediaMid] = t.albummid;
     });
+    // 歌名/歌手映射与封面映射是同一时机记的，必须放在下面的提前 return 之前 ——
+    // 传入的曲目若都没带 albummid（例如只走联想通道的搜索结果），_mediaCover 仍是
+    // null，提前 return 会把 rememberNames 一起跳过，在线曲目的歌名就退回 URL 碎片
+    rememberNames(tracks);
     var map = _mediaCover;
     if (!map) return;
     var keys = Object.keys(map);
@@ -304,7 +308,6 @@
       for (var i = 0; i < keys.length - MEDIA_COVER_MAX; i++) delete map[keys[i]];
     }
     try { localStorage.setItem(LS_MEDIA_COVER, JSON.stringify(map)); } catch (e) {}
-    rememberNames(tracks);          // 同一时机记下歌名/歌手，供主题取名用
   }
 
   /* mediaMid → {title, artist, album}
@@ -766,7 +769,7 @@
     return _t2sMap;
   }
   function toSimplified(s) {
-    if (!T2S || T2S.charAt(0) === '_') return s;
+    if (!T2S) return s;
     var m = t2sMap();
     var out = '';
     for (var i = 0; i < s.length;) {
@@ -781,7 +784,9 @@
   function normKey(s) {
     s = toSimplified(String(s == null ? '' : s).toLowerCase());
     s = s.replace(/[\(\[（【{].*?[\)\]）】}]/g, '');
-    s = s.replace(/[^0-9a-z\u3400-\u9fff\u3040-\u30ff]/g, '');
+    // 字符类必须含谚文（韩语标题/艺人在缺了它的情况下会被整串清空 → 相似度恒为 0，
+    // 韩语曲目永远匹配不上；编码检测本身是支持 euc-kr 的）
+    s = s.replace(/[^0-9a-z\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u1100-\u11ff]/g, '');
     return s;
   }
 
@@ -1187,6 +1192,8 @@
     resolveStream: resolveStream,
     resolveMany: resolveMany,
     lyric: lyric, lyricCacheClear: lyricCacheClear,
+    /* 按 songmid 精确取词：候选列表点选时用（已知 mid 就别再靠"标题+歌手"模糊匹配） */
+    lyricById: qqLyric,
     matchSong: matchSong,
     coverUrl: coverUrl,
     coverDataUrl: coverDataUrl, coverCacheClear: coverCacheClear,

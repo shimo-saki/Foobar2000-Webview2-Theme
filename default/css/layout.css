@@ -178,8 +178,8 @@ body.is-playing .deco-item{animation-play-state:running}
    免 JS、随 .np-overlay 的 .open 类即时生效；特异性高于上面的 is-playing 规则，正在播放也照停 */
 body:has(.np-overlay.open) .deco-item{animation-play-state:paused}
 /* 主内容构图：自设计轮右上 / 齿环左下（两只随播放转） */
-.deco .d-gear1{width:430px;height:430px;top:-90px;right:-150px;opacity:0.045}
-.deco .d-gear2{width:353px;height:353px;bottom:-140px;left:-130px;opacity:0.055}
+.deco .d-gear1{width:430px;height:430px;top:-90px;right:-150px;opacity:0.065}
+.deco .d-gear2{width:353px;height:353px;bottom:-140px;left:-130px;opacity:0.085}
 /* 侧栏构图：左下音箱（随播放左右摇晃，支点在箱底）；低音炮圈独立一层做透明度呼吸 */
 /* 箱体与低音炮是两个叠加的 SVG：共用同一组几何与摆动动画保持对齐；
    低音炮额外叠加透明度呼吸（关键帧从静息值出发，暂停时静止不闪） */
@@ -201,7 +201,11 @@ body:has(.np-overlay.open) .deco-item{animation-play-state:paused}
 @keyframes speaker-sway{0%{transform:rotate(0deg)}25%{transform:rotate(5deg)}75%{transform:rotate(-5deg)}100%{transform:rotate(0deg)}}
 @keyframes gear-spin{to{transform:rotate(360deg)}}
 @keyframes gear-spin-rev{to{transform:rotate(-360deg)}}
-@media (prefers-reduced-motion:reduce){.deco-item{animation:none}}
+/* 系统的"减少动态效果"：原先只关了底部装饰层，主题里其余常驻无限动画
+   （均衡器柱、转圈、封面页波纹、唱片/唱臂旋转）也一并停掉 */
+@media (prefers-reduced-motion:reduce){
+  .deco-item,.eq-bars i,.spinner,.hero-wave-bg img,.np-vinyl-disc,.np-tonearm{animation:none}
+}
 .main-tabs{
   display:flex;align-items:center;gap:2px;padding:0 20px;height:46px;
   flex-shrink:0;position:relative;background:var(--bg-1);z-index:6;
@@ -226,7 +230,9 @@ body:has(.np-overlay.open) .deco-item{animation-play-state:paused}
 .tab-content{display:none;position:absolute;inset:0;overflow:hidden}
 .tab-content.active{display:flex;flex-direction:column;animation:tab-in 0.18s ease-out}
 @keyframes tab-in{from{opacity:0}to{opacity:1}}
-#tabDiscover.active{display:block;overflow-y:auto;overscroll-behavior:contain}
+/* 这两页是长文档流：滚动容器就是 tab 自己（.set-page 没有可滚的内层，
+   挂在 .tab-content.active 的 flex + overflow:hidden 上滚轮会完全没反应） */
+#tabDiscover.active,#tabSettings.active{display:block;overflow-y:auto;overscroll-behavior:contain}
 
 /* ============ Right Panel (Lyrics) ============ */
 .right-panel{
@@ -243,7 +249,10 @@ body:has(.np-overlay.open) .deco-item{animation-play-state:paused}
 }
 .right-panel::before{top:0;background:linear-gradient(to bottom,var(--bg-0),transparent)}
 .right-panel::after{bottom:0;background:linear-gradient(to top,var(--bg-0),transparent)}
-.lyrics-hidden .right-panel{visibility:hidden;border:none}
+/* 隐藏歌词面板：网格轨道 0↔320 是 260ms 动画，面板自身要等滑出后再 hidden ——
+   立刻 visibility:hidden 会让它"瞬间消失"、只剩一条空轨道在收窄（与其它五处开关不一致）。
+   延迟写在"隐藏态"上：显示方向用基础规则的 0 延迟，立刻出现 */
+.lyrics-hidden .right-panel{visibility:hidden;border:none;transition:visibility 0s linear 0.26s}
 .lyrics-blur-bg{
   position:absolute;inset:-30px;background-size:cover;background-position:center;
   filter:blur(20px) brightness(0.35) saturate(1.6);opacity:0.9;
@@ -290,6 +299,14 @@ body:has(.np-overlay.open) .deco-item{animation-play-state:paused}
 }
 .lyrics-empty svg{width:44px;height:44px;stroke:var(--text-4);fill:none;stroke-width:1.5}
 .lyrics-empty span{font-size:13px}
+/* 空态出口：给「点了没反应」一个可点的下一步（搜索歌词 / 重试） */
+.lyrics-empty-acts{display:flex;gap:10px;margin-top:2px}
+.lyrics-empty-act{
+  padding:6px 16px;border-radius:16px;font-size:12px;font-weight:600;
+  background:var(--bg-3);color:var(--text-2);border:1px solid var(--border);
+  transition:background var(--t-fast),color var(--t-fast);
+}
+.lyrics-empty-act:hover{background:var(--bg-4);color:var(--text)}
 
 /* ============ Bottom Bar ============ */
 .bottom-bar{

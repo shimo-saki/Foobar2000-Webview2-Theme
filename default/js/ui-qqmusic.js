@@ -400,8 +400,9 @@
    * 播放：解析音源 → 追加进固定的「QQ音乐」歌单并从新曲开播
    *   1) QQBridge.resolveMany() → { urls[] }（页内逐首解析 + 探测可用性）
    *   2) ensurePlaylist() → 找到 / 新建固定的「QQ音乐」歌单
-   *   3) playlist.addPaths 追加到歌单末尾（之前播的歌原地保留，听完
-   *      可以直接在歌单里接着选），playlist.playTrack 从新曲开播
+   *   3) playlist.addPathsSequential 追加到歌单末尾（保序 —— 之后按"追加前的
+   *      总数"起播才一定是这批的第一首；之前播的歌原地保留，听完可以直接在
+   *      歌单里接着选），playlist.playTrack 从新曲开播
    * ---------------------------------------------------------- */
   /* playlist.getAll 的回包归一：宿主直接返回**数组**
      [{index,name,trackCount,isActive,isPlaying,…}]（ui-playlist.js 同款判断），
@@ -420,12 +421,8 @@
     // 与 downloadTracks 同款并发守卫：批量解析进行中，行内「播放」/双击仍可点，
     // 不拦的话会并发跑第二条解析链、两批追加/开播互相竞态
     if (S.busy) { toast('正在处理上一批', '稍等一下再点', 'error'); return; }
-    // busy 先置位再等试听停止：否则"停试听"的那一次 IPC 往返期间还能再点进来一条链
     S.busy = true;
     updateToolbar();
-    // 试听（JIT 无痕试听）与正常播放是两路输出：先停掉，避免两首一起响
-    // （播放列表页的播放全部 / 双击与这里保持一致）
-    CM.stopPreviewIfActive().then(function() {
 
     // 记 mediaMid→专辑 映射：在线播放的封面兜底靠它（artwork-resolver 从直链反查）
     if (window.QQBridge) QQBridge.rememberMediaCovers(tracks);
@@ -461,7 +458,9 @@
           .then(function (cnt) {
             if (cnt.total == null) throw new Error('取不到歌单曲目数，无法定位新曲');
             var base = cnt.total;
-            return apiOr('playlist.addPaths', { playlist: idx, paths: r.urls })
+            // 必须用 addPathsSequential：playlist.addPaths 由 foobar 按"添加文件"的
+            // 方式解析，**行不保持给定顺序** —— 那样 index: base 播的未必是这批第一首
+            return apiOr('playlist.addPathsSequential', { playlist: idx, paths: r.urls })
               .then(function (res) {
                 if (res.success === false) {
                   throw new Error(res.error || '宿主拒绝写入歌单');
@@ -488,7 +487,6 @@
       S.busy = false;
       updateToolbar();
     });
-    });   // stopPreviewIfActive
   }
 
   /* 下载目录 / 文件名清洗 / 取流落盘（grabToFile）/ 保存位置条都搬进了
@@ -631,7 +629,7 @@
       return apiOr('playlist.getTracks', { playlist: idx, start: 0, count: 1 }).then(function (cnt) {
         if (cnt.total == null) throw new Error('取不到歌单曲目数，无法定位新曲');
         var base = cnt.total;
-        var ok = 0, failed = [], firstPlayed = false;
+        var ok = 0, failed = [], firstPlayed = false, coverMids = [];
         function step(i) {
           if (S.impCancel) {
             setStatus('导入已停止：完成 ' + ok + '/' + lines.length +
@@ -649,15 +647,16 @@
               failed.push({ raw: it.raw, why: netFail ? '搜索失败（网络）' : '未匹配到歌曲' });
               return;
             }
-            /* 记 mediaMid→专辑 映射：导入歌单的封面反查靠它（同 playTracks） */
-            if (m.mediaMid && m.albummid) QQBridge.rememberMediaCovers([m]);
+            /* 记 mediaMid→专辑 映射：导入歌单的封面反查靠它（同 playTracks）。
+               先攒起来、整批落盘 —— rememberMediaCovers 每次都把整张映射表
+               JSON.stringify 后同步写 localStorage（外加 rememberNames 再写一张），
+               逐行调用在几百首的导入里就是几百次全量序列化 */
+            if (m.mediaMid && m.albummid) coverMids.push(m);
             /* 流播固定 MP3（同 playTracks；无损请用下载） */
             return QQBridge.resolveStream(m.songmid, 'mp3').then(function (rv) {
-              return apiOr('playlist.addPaths', { playlist: idx, paths: [rv.url] }).then(function (res) {
-                if (res.success === false) {
-                  failed.push({ raw: it.raw, why: '写入歌单被宿主拒绝' });
-                  return;
-                }
+              // 与两页其余写入点统一用 addPathsSequential：addPaths 由 foobar 按"添加
+              // 文件"的方式解析、不保序（此处单路径侥幸正确，统一口径免得日后改批量踩坑）
+              return apiOr('playlist.addPathsSequential', { playlist: idx, paths: [rv.url] }).then(function () {
                 ok++;
                 if (!firstPlayed) {
                   firstPlayed = true;
@@ -677,6 +676,8 @@
           return step(i).then(function () { return run(i + 1); });
         }
         return run(0).then(function () {
+          // 封面/歌名映射整批落盘一次（取消导入也照落 —— 已经解析过的曲目以后会遇到）
+          if (coverMids.length) QQBridge.rememberMediaCovers(coverMids);
           if (S.impCancel) {
             // 最后一行处理期间取消：step 里的取消分支已过、汇总又被跳过 ——
             // 在这里补一条停止汇总，否则状态栏永远停在「导入中 N/N」

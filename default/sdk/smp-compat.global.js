@@ -1,6 +1,26 @@
 var __fbSmpCompat = (function (exports) {
   'use strict';
 
+  // src/utils/typedCall.ts
+  function typedCall(invoke) {
+    return (method, ...args) => args.length === 0 ? invoke(method) : invoke(method, args[0]);
+  }
+
+  // src/smp/smpLog.ts
+  var LOG_PREFIX = "[SMP-Compat]";
+  function smpError(...args) {
+    try {
+      console.error(LOG_PREFIX, ...args);
+    } catch {
+    }
+  }
+  function smpWarn(...args) {
+    try {
+      console.warn(LOG_PREFIX, ...args);
+    } catch {
+    }
+  }
+
   // src/smp/cache.ts
   function createInitialCache() {
     return {
@@ -29,9 +49,11 @@ var __fbSmpCompat = (function (exports) {
   }
   function createPlaylistRefresher(fb, cache) {
     let scheduled = false;
+    const inv = typedCall(fb.invoke.bind(fb));
     const refresh = async () => {
       try {
-        const all = await fb.invoke("playlist.getAll", {});
+        const response = await inv("playlist.getAll", {});
+        const all = response?.success !== false ? response?.playlists : void 0;
         if (!Array.isArray(all)) return;
         cache.playlists = all;
         cache.playlistCount = all.length;
@@ -152,25 +174,26 @@ var __fbSmpCompat = (function (exports) {
   }
   async function populateCache(fb, cache, opts = {}) {
     const includePaths = !!opts.includePaths;
+    const inv = typedCall(fb.invoke.bind(fb));
     const queries = [
-      fb.invoke("playback.getState", {}),
-      fb.invoke("playback.getVolume", {}),
-      fb.invoke("playback.getPosition", {}),
-      fb.invoke("playback.getCurrentTrack", {}),
-      fb.invoke("playlist.getAll", {}),
-      fb.invoke("playback.getPlaybackOrder", {}),
-      fb.invoke("playback.getStopAfterCurrent", {}).catch(() => ({ enabled: false })),
-      fb.invoke("window.getState", {}).catch(() => ({ alwaysOnTop: false })),
-      fb.invoke("config.getCursorFollowPlayback", {}).catch(() => ({ enabled: false })),
-      fb.invoke("config.getPlaybackFollowCursor", {}).catch(() => ({ enabled: false })),
-      fb.invoke("config.getReplaygainMode", {}).catch(() => ({ mode: 0 }))
+      inv("playback.getState", {}),
+      inv("playback.getVolume", {}),
+      inv("playback.getPosition", {}),
+      inv("playback.getCurrentTrack", {}),
+      inv("playlist.getAll", {}),
+      inv("playback.getPlaybackOrder", {}),
+      inv("playback.getStopAfterCurrent", {}).catch(() => ({ enabled: false })),
+      inv("window.getState", {}).catch(() => ({ alwaysOnTop: false })),
+      inv("config.getCursorFollowPlayback", {}).catch(() => ({ enabled: false })),
+      inv("config.getPlaybackFollowCursor", {}).catch(() => ({ enabled: false })),
+      inv("config.getReplaygainMode", {}).catch(() => ({ mode: 0 }))
     ];
     if (includePaths) {
       queries.push(
-        fb.invoke("misc.getComponentPath", {}).catch(() => ({})),
-        fb.invoke("misc.getFoobarPath", {}).catch(() => ({})),
-        fb.invoke("misc.getProfilePath", {}).catch(() => ({})),
-        fb.invoke("config.getVersionInfo", {}).catch(() => ({}))
+        inv("misc.getComponentPath", {}).catch(() => ({})),
+        inv("misc.getFoobarPath", {}).catch(() => ({})),
+        inv("misc.getProfilePath", {}).catch(() => ({})),
+        inv("config.getVersionInfo", {}).catch(() => ({}))
       );
     }
     const results = await Promise.all(queries);
@@ -191,7 +214,8 @@ var __fbSmpCompat = (function (exports) {
     const vol = rawVol;
     const pos = rawPos;
     const track = rawTrack;
-    const playlists = rawPlaylists;
+    const playlistsResponse = rawPlaylists;
+    const playlists = playlistsResponse?.success !== false ? playlistsResponse?.playlists : void 0;
     const order = rawOrder;
     const stopAfter = rawStopAfter;
     const winState = rawWin;
@@ -207,11 +231,11 @@ var __fbSmpCompat = (function (exports) {
     if (typeof vol?.muted === "boolean") cache.muted = vol.muted;
     if (typeof pos?.position === "number") cache.playbackTime = pos.position;
     if (typeof pos?.duration === "number") cache.playbackLength = pos.duration;
-    if (track && track.found === false) {
+    if (!track?.found || !track.track) {
       cache.currentTrack = null;
-    } else if (track && typeof track === "object") {
-      cache.currentTrack = track;
-      if (typeof track.duration === "number") cache.playbackLength = track.duration;
+    } else {
+      cache.currentTrack = track.track;
+      if (typeof track.track.duration === "number") cache.playbackLength = track.track.duration;
     }
     if (Array.isArray(playlists)) {
       cache.playlists = playlists;
@@ -291,6 +315,15 @@ var __fbSmpCompat = (function (exports) {
     const inv = smp?.invoke;
     return typeof inv === "function" ? inv : null;
   }
+  function successOf(res) {
+    return res?.success === false ? void 0 : res;
+  }
+  function getTypedInvoke() {
+    const inv = getInvoke();
+    return inv ? typedCall(
+      (...args) => inv(args[0], ...args.length > 1 ? [args[1]] : [])
+    ) : null;
+  }
   function toHandleId(handle) {
     if (!handle) return "";
     if (typeof handle === "string") return handle;
@@ -300,9 +333,10 @@ var __fbSmpCompat = (function (exports) {
       const sub = typeof h.SubSong === "number" ? h.SubSong : 0;
       return formatHandleId(h.Path, sub);
     }
-    if (typeof h.absolutePath === "string") return h.absolutePath;
-    if (typeof h.path === "string") return h.path;
-    return "";
+    const trackPath = typeof h.absolutePath === "string" ? h.absolutePath : typeof h.path === "string" ? h.path : void 0;
+    if (trackPath === void 0) return "";
+    if (trackPath.includes(HANDLE_TOKEN)) return trackPath;
+    return formatHandleId(trackPath, typeof h.subsong === "number" ? h.subsong : 0);
   }
   function normalizeHandleList(handleList) {
     if (!handleList) return [];
@@ -401,6 +435,13 @@ var __fbSmpCompat = (function (exports) {
       this._effectiveMode = "auto";
       this._handles = [];
       this._idMap = /* @__PURE__ */ new Map();
+      /**
+       * Ids the last `BuildMenu` handed out, `[first, end)`. An id in this range
+       * that `_idMap` lacks belongs to a row with no `commandId`; it must not be
+       * read as a raw host id, which would run whichever command happens to
+       * carry that number.
+       */
+      this._allocated = null;
     }
     /** Configure the menu against an explicit handle list. */
     InitContext(handles) {
@@ -425,12 +466,12 @@ var __fbSmpCompat = (function (exports) {
      * @returns Structured menu tree (sub-menus / separators preserved).
      */
     async BuildMenu(menu, base_id, max_id) {
-      const inv = getInvoke();
+      const inv = getTypedInvoke();
       if (!inv) return [];
-      const res = await inv("menu.getContextMenu", {
+      const res = successOf(await inv("menu.getContextMenu", {
         mode: this._mode,
         handles: this._handles
-      });
+      }));
       this._effectiveMode = res?.mode ?? this._mode;
       const items = Array.isArray(res?.items) ? res.items : [];
       const baseId = (typeof base_id === "number" ? base_id : 1) | 0;
@@ -443,6 +484,7 @@ var __fbSmpCompat = (function (exports) {
         family: "contextmenu"
       };
       const out = buildMenuItems(items, state);
+      this._allocated = { first: baseId, end: state.nextId };
       if (menu && typeof menu.SetItems === "function") {
         try {
           menu.SetItems(out);
@@ -453,23 +495,26 @@ var __fbSmpCompat = (function (exports) {
     }
     /**
      * Dispatch the previously-allocated menu id (or a raw numeric C++
-     * command id). Returns `false` when the command cannot be resolved.
+     * command id outside the ids the last `BuildMenu` allocated). Returns
+     * `false` when the command cannot be resolved, including an allocated id
+     * whose row carried no `commandId`.
      */
     async ExecuteByID(id) {
-      const inv = getInvoke();
+      const inv = getTypedInvoke();
       if (!inv) return false;
       let cmdId = null;
       if (typeof id === "number") cmdId = this._idMap.get(id) ?? null;
       else if (typeof id === "string" && /^[0-9]+$/.test(id)) {
         cmdId = this._idMap.get(Number(id)) ?? null;
       }
-      if (cmdId == null && typeof id === "number") cmdId = id;
-      if (cmdId == null) return false;
-      const res = await inv("menu.runContextCommandById", {
+      const allocated = this._allocated !== null && typeof id === "number" && id >= this._allocated.first && id < this._allocated.end;
+      if (cmdId == null && typeof id === "number" && !allocated) cmdId = id;
+      if (typeof cmdId !== "number") return false;
+      const res = successOf(await inv("menu.runContextCommandById", {
         id: cmdId,
         mode: this._effectiveMode || this._mode,
         handles: this._handles
-      });
+      }));
       return !!res?.success;
     }
   };
@@ -620,17 +665,18 @@ var __fbSmpCompat = (function (exports) {
       return this.Path === o.Path && this.SubSong === o.SubSong;
     }
     /**
-     * Resolve full file info via `metadata.read`. Returns `null` when
-     * the path is empty, the bridge is unavailable, or the read fails.
+     * Resolve full file info via `metadata.read`, sending the handle id so a
+     * subsong reads its own tags. Returns `null` when the path is empty, the
+     * bridge is unavailable, or the read fails.
      */
     async GetFileInfo() {
-      const inv = getInvoke();
+      const inv = getTypedInvoke();
       if (!inv) return null;
-      const path = stripSubsongSuffix(this.Path);
+      const path = this.HandleId;
       if (!path) return null;
       try {
-        const res = await inv("metadata.read", { path });
-        if (!res || res.success === false) return null;
+        const res = successOf(await inv("metadata.read", { path }));
+        if (!res) return null;
         return new FbFileInfo(res);
       } catch {
         return null;
@@ -792,13 +838,7 @@ var __fbSmpCompat = (function (exports) {
 
   // src/smp/classes/FbTitleFormat.ts
   function _getPathFromMetadb(handleLike) {
-    if (!handleLike) return "";
-    if (typeof handleLike === "string") return stripSubsongSuffix(handleLike);
-    const h = handleLike;
-    if (typeof h.Path === "string") return stripSubsongSuffix(h.Path);
-    if (typeof h.absolutePath === "string") return stripSubsongSuffix(h.absolutePath);
-    if (typeof h.path === "string") return stripSubsongSuffix(h.path);
-    return "";
+    return toHandleId(handleLike);
   }
   function _collectPaths(list) {
     const paths = [];
@@ -827,7 +867,7 @@ var __fbSmpCompat = (function (exports) {
     return paths;
   }
   function _requireInvoke() {
-    const inv = getInvoke();
+    const inv = getTypedInvoke();
     if (!inv) {
       throw new Error("[SMP] smp.invoke is not available. Load sdk/smp-compat.js first.");
     }
@@ -849,32 +889,32 @@ var __fbSmpCompat = (function (exports) {
       const path = _getPathFromMetadb(cache?.currentTrack ?? null);
       if (!path) return "";
       const inv = _requireInvoke();
-      const res = await inv("titleformat.eval", {
+      const res = successOf(await inv("titleformat.eval", {
         path,
         pattern: this._expr
-      });
-      return res && res.success === false ? "" : res?.result ?? "";
+      }));
+      return res?.result ?? "";
     }
     /** Evaluate against a single handle / track-info object. */
     async EvalWithMetadb(handleLike) {
       const path = _getPathFromMetadb(handleLike);
       if (!path) return "";
       const inv = _requireInvoke();
-      const res = await inv("titleformat.eval", {
+      const res = successOf(await inv("titleformat.eval", {
         path,
         pattern: this._expr
-      });
-      return res && res.success === false ? "" : res?.result ?? "";
+      }));
+      return res?.result ?? "";
     }
     /** Batch evaluate against a list of handles. */
     async EvalWithMetadbs(handleListLike) {
       const paths = _collectPaths(handleListLike);
       if (paths.length === 0) return [];
       const inv = _requireInvoke();
-      const res = await inv("titleformat.evalBatch", {
+      const res = successOf(await inv("titleformat.evalBatch", {
         paths,
         pattern: this._expr
-      });
+      }));
       const results = res?.results;
       if (!Array.isArray(results)) return [];
       return results.map((r) => {
@@ -895,34 +935,38 @@ var __fbSmpCompat = (function (exports) {
      * @param handleList Any value accepted by
      *                   {@link toHandleIdArray} (`FbMetadbHandleList`,
      *                   plain array, etc.).
-     * @param type       Selection-type integer (defaults to 0 — generic).
+     * @param _type      Accepted for SMP compatibility and ignored; the host
+     *                   has no selection types.
      */
-    async SetSelection(handleList, type) {
-      const inv = getInvoke();
+    async SetSelection(handleList, _type) {
+      const inv = getTypedInvoke();
       if (!inv) return false;
       const handles = toHandleIdArray(handleList);
-      const res = await inv("selection.set", {
-        handles,
-        type: typeof type === "number" ? type : 0
-      });
+      const res = successOf(await inv("selection.set", { handles }));
       return !!res?.success;
     }
-    /** Track current playlist's *selection* events. */
+    /**
+     * Set the selection to the active playlist's selected rows. Unlike SMP, the host takes them
+     * once and does not keep tracking after the call.
+     */
     async SetPlaylistSelectionTracking() {
-      const inv = getInvoke();
+      const inv = getTypedInvoke();
       if (!inv) return false;
-      const res = await inv("selection.setPlaylistTracking", {
+      const res = successOf(await inv("selection.setPlaylistTracking", {
         mode: "selection"
-      });
+      }));
       return !!res?.success;
     }
-    /** Track current playlist's *change* events. */
+    /**
+     * Set the selection to the whole active playlist. Unlike SMP, the host takes it once and does
+     * not keep tracking after the call.
+     */
     async SetPlaylistTracking() {
-      const inv = getInvoke();
+      const inv = getTypedInvoke();
       if (!inv) return false;
-      const res = await inv("selection.setPlaylistTracking", {
+      const res = successOf(await inv("selection.setPlaylistTracking", {
         mode: "playlist"
-      });
+      }));
       return !!res?.success;
     }
   };
@@ -939,11 +983,11 @@ var __fbSmpCompat = (function (exports) {
     }
     /** Fetch the main-menu structure under the configured root. */
     async BuildMenu(menu, base_id, max_id) {
-      const inv = getInvoke();
+      const inv = getTypedInvoke();
       if (!inv) return [];
-      const res = await inv("menu.getMainMenu", {
+      const res = successOf(await inv("menu.getMainMenu", {
         root: this._root
-      });
+      }));
       const items = Array.isArray(res?.items) ? res.items : [];
       const baseId = (typeof base_id === "number" ? base_id : 1) | 0;
       const limit = typeof max_id === "number" && max_id > 0 ? baseId + (max_id | 0) : null;
@@ -968,7 +1012,7 @@ var __fbSmpCompat = (function (exports) {
      * string. Returns `false` if the id cannot be mapped.
      */
     async ExecuteByID(id) {
-      const inv = getInvoke();
+      const inv = getTypedInvoke();
       if (!inv) return false;
       let mapped = null;
       if (typeof id === "number") mapped = this._idMap.get(id) ?? null;
@@ -979,28 +1023,15 @@ var __fbSmpCompat = (function (exports) {
       }
       if (typeof mapped !== "string" || mapped.length === 0) return false;
       const { command, subGuid } = splitMenuAddress(mapped);
-      const res = await inv("menu.runMainMenuCommand", {
+      const res = successOf(await inv("menu.runMainMenuCommand", {
         command,
         ...subGuid ? { subGuid } : {}
-      });
+      }));
       return !!res?.success;
     }
   };
 
   // src/smp/eventMap.ts
-  var LOG_PREFIX2 = "[SMP-Compat]";
-  function _error(...args) {
-    try {
-      console.error(LOG_PREFIX2, ...args);
-    } catch {
-    }
-  }
-  function _warn(...args) {
-    try {
-      console.warn(LOG_PREFIX2, ...args);
-    } catch {
-    }
-  }
   var SMP_EVENT_MAP = {
     // Playback
     on_playback_starting: "playback:starting",
@@ -1158,7 +1189,7 @@ var __fbSmpCompat = (function (exports) {
   function createOnSmp(fb) {
     return (smpEventName, callback) => {
       if (typeof callback !== "function") {
-        _warn("fb.onSMP callback must be a function:", smpEventName);
+        smpWarn("fb.onSMP callback must be a function:", smpEventName);
         return () => {
         };
       }
@@ -1167,14 +1198,14 @@ var __fbSmpCompat = (function (exports) {
           try {
             callback(true);
           } catch (e) {
-            _error("on_focus handler error:", e);
+            smpError("on_focus handler error:", e);
           }
         });
         const unsub2 = fb.on("panel:blur", () => {
           try {
             callback(false);
           } catch (e) {
-            _error("on_focus handler error:", e);
+            smpError("on_focus handler error:", e);
           }
         });
         return () => {
@@ -1193,7 +1224,7 @@ var __fbSmpCompat = (function (exports) {
           try {
             callback();
           } catch (e) {
-            _error("on_playlists_changed handler error:", e);
+            smpError("on_playlists_changed handler error:", e);
           }
         };
         const events = [
@@ -1214,8 +1245,8 @@ var __fbSmpCompat = (function (exports) {
         };
       }
       const fb2kEvent = SMP_EVENT_MAP[smpEventName];
-      if (!fb2kEvent || fb2kEvent.startsWith("__special_")) {
-        _warn("Unknown SMP event:", smpEventName);
+      if (!fb2kEvent || fb2kEvent === "__special_focus__" || fb2kEvent === "__special_playlists__") {
+        smpWarn("Unknown SMP event:", smpEventName);
         return () => {
         };
       }
@@ -1235,7 +1266,7 @@ var __fbSmpCompat = (function (exports) {
             callback();
           }
         } catch (e) {
-          _error(`Error in ${smpEventName}:`, e);
+          smpError(`Error in ${smpEventName}:`, e);
         }
       };
       const unsub = fb.on(fb2kEvent, wrapped);
@@ -1249,7 +1280,6 @@ var __fbSmpCompat = (function (exports) {
   }
 
   // src/smp/fbExtensions.ts
-  var LOG_PREFIX3 = "[SMP-Compat]";
   var QUERY_ITEM_FIELDS = [
     "absolutePath",
     "path",
@@ -1257,12 +1287,6 @@ var __fbSmpCompat = (function (exports) {
     "duration",
     "fileSize"
   ];
-  function _warn2(...args) {
-    try {
-      console.warn(LOG_PREFIX3, ...args);
-    } catch {
-    }
-  }
   function _defineIfMissing(target, prop, desc) {
     if (Object.prototype.hasOwnProperty.call(target, prop)) return false;
     Object.defineProperty(target, prop, { configurable: true, ...desc });
@@ -1284,8 +1308,28 @@ var __fbSmpCompat = (function (exports) {
     if (typeof obj.path === "string") return stripSubsongSuffix(obj.path);
     return "";
   }
+  function _toHandleIds(handleOrList) {
+    if (!handleOrList) return [];
+    const entries = typeof handleOrList === "string" ? [] : normalizeHandleList(handleOrList);
+    return (entries.length > 0 ? entries : [handleOrList]).map(toHandleId).filter(Boolean);
+  }
+  function _findContextCommandId(items, command) {
+    const wanted = command.toLowerCase();
+    const walk = (nodes) => {
+      for (const node of nodes ?? []) {
+        if (node.type === "submenu") {
+          const id = walk(node.children);
+          if (id !== null) return id;
+        } else if (node.type === "command" && typeof node.commandId === "number" && typeof node.path === "string" && node.path.toLowerCase() === wanted) {
+          return node.commandId;
+        }
+      }
+      return null;
+    };
+    return walk(items);
+  }
   function attachFbExtensions(fb, plman, cache, schedulePlaylistRefresh) {
-    const _invoke2 = fb.invoke.bind(fb);
+    const _invoke2 = typedCall(fb.invoke.bind(fb));
     const fbExt = fb;
     function _setVolumeDb(db) {
       const nextDb = clamp(Number(db) || -100, -100, 0);
@@ -1294,7 +1338,7 @@ var __fbSmpCompat = (function (exports) {
       return _invoke2("playback.setVolume", {
         volume: _dbToPercent(nextDb)
       }).catch((e) => {
-        _warn2("setVolumeDb failed, rolling back:", e);
+        smpWarn("setVolumeDb failed, rolling back:", e);
         cache.volumeDb = oldDb;
         throw e;
       });
@@ -1321,10 +1365,10 @@ var __fbSmpCompat = (function (exports) {
       value: () => fb.player?.toggle ? fb.player.toggle() : _invoke2("playback.playOrPause", {})
     });
     _defineIfMissing(fbExt, "VolumeUp", {
-      value: () => _invoke2("playback.volumeUp", {}).catch(() => _setVolumeDb((cache.volumeDb ?? -100) + 1)).catch((e) => _warn2("VolumeUp failed:", e))
+      value: () => _invoke2("playback.volumeUp", {}).catch(() => _setVolumeDb((cache.volumeDb ?? -100) + 1)).catch((e) => smpWarn("VolumeUp failed:", e))
     });
     _defineIfMissing(fbExt, "VolumeDown", {
-      value: () => _invoke2("playback.volumeDown", {}).catch(() => _setVolumeDb((cache.volumeDb ?? -100) - 1)).catch((e) => _warn2("VolumeDown failed:", e))
+      value: () => _invoke2("playback.volumeDown", {}).catch(() => _setVolumeDb((cache.volumeDb ?? -100) - 1)).catch((e) => smpWarn("VolumeDown failed:", e))
     });
     _defineIfMissing(fbExt, "VolumeMute", {
       value: () => _invoke2("playback.toggleMute", {}).catch(
@@ -1353,7 +1397,7 @@ var __fbSmpCompat = (function (exports) {
         configurable: true,
         get: () => typeof cache.volumeDb === "number" ? cache.volumeDb : -100,
         set: (db) => {
-          _setVolumeDb(db).catch((e) => _warn2("set Volume failed:", e));
+          _setVolumeDb(db).catch((e) => smpWarn("set Volume failed:", e));
         }
       });
     }
@@ -1365,9 +1409,9 @@ var __fbSmpCompat = (function (exports) {
           const s = Number(seconds) || 0;
           const oldValue = cache.playbackTime;
           cache.playbackTime = s;
-          const seek = fb.player?.seek ? fb.player.seek(s) : _invoke2("playback.setPosition", { seconds: s });
+          const seek = fb.player?.seek ? fb.player.seek(s) : _invoke2("playback.setPosition", { position: s });
           Promise.resolve(seek).catch((e) => {
-            _warn2("set PlaybackTime failed, rolling back:", e);
+            smpWarn("set PlaybackTime failed, rolling back:", e);
             cache.playbackTime = oldValue;
           });
         }
@@ -1389,7 +1433,7 @@ var __fbSmpCompat = (function (exports) {
           cache.stopAfterCurrent = v;
           const p = fb.player?.setStopAfterCurrent ? fb.player.setStopAfterCurrent(v) : _invoke2("playback.setStopAfterCurrent", { enabled: v });
           Promise.resolve(p).catch((e) => {
-            _warn2("set StopAfterCurrent failed, rolling back:", e);
+            smpWarn("set StopAfterCurrent failed, rolling back:", e);
             cache.stopAfterCurrent = oldValue;
           });
         }
@@ -1405,7 +1449,7 @@ var __fbSmpCompat = (function (exports) {
           cache.alwaysOnTop = v;
           const p = fb.ui?.setAlwaysOnTop ? fb.ui.setAlwaysOnTop(v) : _invoke2("window.setAlwaysOnTop", { enabled: v });
           Promise.resolve(p).catch((e) => {
-            _warn2("set AlwaysOnTop failed, rolling back:", e);
+            smpWarn("set AlwaysOnTop failed, rolling back:", e);
             cache.alwaysOnTop = oldValue;
           });
         }
@@ -1422,7 +1466,7 @@ var __fbSmpCompat = (function (exports) {
     });
     _defineIfMissing(fbExt, "GetSelection", {
       value: async () => {
-        const res = await _invoke2("selection.get", { limit: 0 });
+        const res = successOf(await _invoke2("selection.get", { limit: 0 }));
         const handles = Array.isArray(res?.handles) ? res.handles : [];
         const list = new FbMetadbHandleList();
         for (const h of handles) {
@@ -1433,13 +1477,13 @@ var __fbSmpCompat = (function (exports) {
     });
     _defineIfMissing(fbExt, "GetSelectionType", {
       value: async () => {
-        const res = await _invoke2("selection.getType", {});
+        const res = successOf(await _invoke2("selection.getType", {}));
         return typeof res?.type === "number" ? res.type : 0;
       }
     });
     _defineIfMissing(fbExt, "IsLibraryEnabled", {
       value: async () => {
-        const res = await _invoke2("library.getStatus", {});
+        const res = successOf(await _invoke2("library.getStatus", {}));
         return !!(res?.enabled ?? res?.initialized);
       }
     });
@@ -1447,7 +1491,7 @@ var __fbSmpCompat = (function (exports) {
       value: async (handleLike) => {
         const path = _toPath(handleLike);
         if (!path) return false;
-        const res = await _invoke2("library.getByPath", { path });
+        const res = successOf(await _invoke2("library.getByPath", { path }));
         return !!res?.found;
       }
     });
@@ -1458,10 +1502,10 @@ var __fbSmpCompat = (function (exports) {
         let offset = 0;
         let total = null;
         while (total === null || offset < total) {
-          const res = await _invoke2("library.getAll", {
+          const res = successOf(await _invoke2("library.getAll", {
             offset,
             limit: chunk
-          });
+          }));
           const tracks = Array.isArray(res?.tracks) ? res.tracks : Array.isArray(res?.items) ? res.items : [];
           if (!Array.isArray(tracks) || tracks.length === 0) break;
           for (const t of tracks) {
@@ -1478,21 +1522,21 @@ var __fbSmpCompat = (function (exports) {
       value: async (_handlesLike, query) => {
         const q = String(query ?? "");
         if (!q) return new FbMetadbHandleList();
-        const probe = await _invoke2("library.search", {
+        const probe = successOf(await _invoke2("library.search", {
           query: q,
           offset: 0,
           limit: 1
-        });
+        }));
         const probed = probe?.total;
         const total = typeof probed === "number" && probed > 0 ? probed : 0;
         if (total === 0) return new FbMetadbHandleList();
-        const res = await _invoke2("library.search", {
+        const res = successOf(await _invoke2("library.search", {
           query: q,
           offset: 0,
           limit: total,
           fields: QUERY_ITEM_FIELDS
-        });
-        const tracks = Array.isArray(res?.tracks) ? res.tracks : Array.isArray(res?.items) ? res.items : [];
+        }));
+        const tracks = Array.isArray(res?.tracks) ? res.tracks : [];
         const list = new FbMetadbHandleList();
         for (const t of tracks) {
           list.Add(new FbMetadbHandle(t));
@@ -1502,25 +1546,21 @@ var __fbSmpCompat = (function (exports) {
     });
     _defineIfMissing(fbExt, "GetNowPlaying", {
       value: async () => {
-        const res = await _invoke2("playback.getCurrentTrack", {});
-        if (res && res.found === false) return null;
-        if (!res || typeof res !== "object") return null;
-        return new FbMetadbHandle(res);
+        const res = successOf(await _invoke2("playback.getCurrentTrack", {}));
+        if (!res?.found || !res.track) return null;
+        return new FbMetadbHandle(res.track);
       }
     });
     _defineIfMissing(fbExt, "GetFocusItem", {
       value: async (_force) => {
-        const pl = cache.activePlaylist | 0;
-        const focus = await _invoke2("playlist.getFocusedTrack", {
-          playlist: pl
-        });
+        const focus = successOf(await _invoke2("playlist.getFocusedTrack", {}));
         const idx = typeof focus?.index === "number" ? focus.index | 0 : -1;
-        if (idx < 0) return null;
-        const res = await _invoke2("playlist.getTracks", {
-          playlist: pl,
+        if (idx < 0 || !focus?.playlistGuid) return null;
+        const res = successOf(await _invoke2("playlist.getTracks", {
+          playlistGuid: focus.playlistGuid,
           start: idx,
           count: 1
-        });
+        }));
         const t = Array.isArray(res?.tracks) && res.tracks.length > 0 ? res.tracks[0] : null;
         if (!t) return null;
         return new FbMetadbHandle(t);
@@ -1580,7 +1620,7 @@ var __fbSmpCompat = (function (exports) {
           const oldValue = cache.cursorFollowPlayback;
           cache.cursorFollowPlayback = v;
           _invoke2("config.setCursorFollowPlayback", { enabled: v }).catch((e) => {
-            _warn2("set CursorFollowPlayback failed, rolling back:", e);
+            smpWarn("set CursorFollowPlayback failed, rolling back:", e);
             cache.cursorFollowPlayback = oldValue;
           });
         }
@@ -1595,7 +1635,7 @@ var __fbSmpCompat = (function (exports) {
           const oldValue = cache.playbackFollowCursor;
           cache.playbackFollowCursor = v;
           _invoke2("config.setPlaybackFollowCursor", { enabled: v }).catch((e) => {
-            _warn2("set PlaybackFollowCursor failed, rolling back:", e);
+            smpWarn("set PlaybackFollowCursor failed, rolling back:", e);
             cache.playbackFollowCursor = oldValue;
           });
         }
@@ -1610,7 +1650,7 @@ var __fbSmpCompat = (function (exports) {
           const oldValue = cache.replaygainMode;
           cache.replaygainMode = n;
           _invoke2("config.setReplaygainMode", { mode: n }).catch((e) => {
-            _warn2("set ReplaygainMode failed, rolling back:", e);
+            smpWarn("set ReplaygainMode failed, rolling back:", e);
             cache.replaygainMode = oldValue;
           });
         }
@@ -1624,13 +1664,13 @@ var __fbSmpCompat = (function (exports) {
     });
     _defineIfMissing(fbExt, "CheckClipboardContents", {
       value: async () => {
-        const res = await _invoke2("clipboard.read", {});
+        const res = successOf(await _invoke2("clipboard.read", {}));
         return !!res?.hasFiles;
       }
     });
     _defineIfMissing(fbExt, "GetClipboardContents", {
       value: async () => {
-        const res = await _invoke2("clipboard.read", {});
+        const res = successOf(await _invoke2("clipboard.read", {}));
         const files = Array.isArray(res?.files) ? res.files : [];
         const list = new FbMetadbHandleList();
         for (const f of files) {
@@ -1649,14 +1689,15 @@ var __fbSmpCompat = (function (exports) {
           if (p) paths.push(p);
         }
         if (paths.length === 0) return false;
-        const res = await _invoke2("clipboard.writeFiles", { paths });
+        const res = successOf(await _invoke2("clipboard.writeFiles", { paths }));
         return !!res?.success;
       }
     });
     _defineIfMissing(fbExt, "GetDSPPresets", {
       value: async () => {
-        const res = await _invoke2("config.getDspPresets", {});
-        const presets = Array.isArray(res) ? res : [];
+        const res = successOf(await _invoke2("config.getDspPresets", {}));
+        const list = res?.presets;
+        const presets = Array.isArray(list) ? list : [];
         return JSON.stringify(presets);
       }
     });
@@ -1667,7 +1708,7 @@ var __fbSmpCompat = (function (exports) {
     });
     _defineIfMissing(fbExt, "GetOutputDevices", {
       value: async () => {
-        const res = await _invoke2("config.getOutputDevices", {});
+        const res = successOf(await _invoke2("config.getOutputDevices", {}));
         const devices = Array.isArray(res) ? res : Array.isArray(res?.devices) ? res.devices : [];
         return JSON.stringify(devices);
       }
@@ -1687,18 +1728,27 @@ var __fbSmpCompat = (function (exports) {
       });
     }
     _defineIfMissing(fbExt, "RunContextCommandWithMetadb", {
-      value: async (command, handleLike, _flags) => {
-        const res = await _invoke2("menu.runContextCommand", {
-          command: String(command ?? ""),
-          handles: handleLike ? [_toPath(handleLike)] : []
-        });
+      value: async (command, handleOrList, _flags) => {
+        const name = String(command ?? "");
+        const handles = _toHandleIds(handleOrList);
+        if (!name || handles.length === 0) return false;
+        const menu = successOf(await _invoke2("menu.getContextMenu", {
+          mode: "handles",
+          handles
+        }));
+        const id = _findContextCommandId(menu?.items, name);
+        if (id === null) return false;
+        const res = successOf(await _invoke2("menu.runContextCommandById", {
+          id,
+          mode: "handles",
+          handles
+        }));
         return !!res?.success;
       }
     });
     _defineIfMissing(fbExt, "ClearPlaylist", {
       value: async () => {
-        const pl = cache.activePlaylist | 0;
-        const res = await _invoke2("playlist.clear", { playlist: pl });
+        const res = successOf(await _invoke2("playlist.clear", {}));
         schedulePlaylistRefresh();
         return !!res?.success;
       }
@@ -1720,13 +1770,6 @@ var __fbSmpCompat = (function (exports) {
   }
 
   // src/smp/plman.ts
-  var LOG_PREFIX4 = "[SMP-Compat]";
-  function _warn3(...args) {
-    try {
-      console.warn(LOG_PREFIX4, ...args);
-    } catch {
-    }
-  }
   function _toIndexArray(listLike) {
     if (!listLike) return [];
     if (Array.isArray(listLike)) {
@@ -1744,7 +1787,7 @@ var __fbSmpCompat = (function (exports) {
     return [];
   }
   function buildPlman(fb, cache, schedulePlaylistRefresh) {
-    const _invoke2 = fb.invoke.bind(fb);
+    const _invoke2 = typedCall(fb.invoke.bind(fb));
     const plman = {};
     Object.defineProperties(plman, {
       ActivePlaylist: {
@@ -1755,7 +1798,7 @@ var __fbSmpCompat = (function (exports) {
           const oldValue = cache.activePlaylist;
           cache.activePlaylist = n;
           _invoke2("playlist.setActive", { playlist: n }).catch((e) => {
-            _warn3("plman.ActivePlaylist set failed, rolling back cache:", e);
+            smpWarn("plman.ActivePlaylist set failed, rolling back cache:", e);
             cache.activePlaylist = oldValue;
             schedulePlaylistRefresh();
           });
@@ -1777,7 +1820,7 @@ var __fbSmpCompat = (function (exports) {
           const oldValue = cache.playbackOrder;
           cache.playbackOrder = n;
           _invoke2("playback.setPlaybackOrder", { order: n }).catch((e) => {
-            _warn3("plman.PlaybackOrder set failed, rolling back cache:", e);
+            smpWarn("plman.PlaybackOrder set failed, rolling back cache:", e);
             cache.playbackOrder = oldValue;
           });
         }
@@ -1822,21 +1865,21 @@ var __fbSmpCompat = (function (exports) {
     };
     plman.CreateAutoPlaylist = async (_playlistIdx, name, query, sort, flags) => {
       const keepSorted = !!((flags ?? 0) & 1);
-      const res = await _invoke2("playlist.createAutoplaylist", {
+      const res = successOf(await _invoke2("playlist.createAutoplaylist", {
         name: String(name ?? "New Autoplaylist"),
         query: String(query ?? ""),
         sort: String(sort ?? ""),
         keepSorted
-      });
+      }));
       schedulePlaylistRefresh();
       return typeof res?.index === "number" ? res.index | 0 : -1;
     };
     plman.RenamePlaylist = async (playlistIdx, name) => {
       const idx = playlistIdx | 0;
-      const res = await _invoke2("playlist.rename", {
+      const res = successOf(await _invoke2("playlist.rename", {
         playlist: idx,
         name: String(name ?? "")
-      });
+      }));
       schedulePlaylistRefresh();
       return !!res?.success;
     };
@@ -1846,40 +1889,40 @@ var __fbSmpCompat = (function (exports) {
         name: String(name ?? "New Playlist")
       };
       if (pos >= 0) params.position = pos;
-      const res = await _invoke2("playlist.create", params);
+      const res = successOf(await _invoke2("playlist.create", params));
       schedulePlaylistRefresh();
       return typeof res?.index === "number" ? res.index | 0 : -1;
     };
     plman.RemovePlaylist = async (playlistIdx) => {
       const idx = playlistIdx | 0;
-      const res = await _invoke2("playlist.remove", {
+      const res = successOf(await _invoke2("playlist.remove", {
         playlist: idx
-      });
+      }));
       schedulePlaylistRefresh();
       return !!res?.success;
     };
     plman.ClearPlaylist = async (playlistIdx) => {
       const idx = playlistIdx | 0;
-      const res = await _invoke2("playlist.clear", {
+      const res = successOf(await _invoke2("playlist.clear", {
         playlist: idx
-      });
+      }));
       schedulePlaylistRefresh();
       return !!res?.success;
     };
     plman.GetPlaylistFocusItemIndex = async (playlistIdx) => {
       const idx = playlistIdx | 0;
-      const res = await _invoke2("playlist.getFocusedTrack", {
+      const res = successOf(await _invoke2("playlist.getFocusedTrack", {
         playlist: idx
-      });
+      }));
       return typeof res?.index === "number" ? res.index | 0 : -1;
     };
     plman.SetPlaylistFocusItem = async (playlistIdx, itemIdx) => {
       const idx = playlistIdx | 0;
       const item = itemIdx | 0;
-      const res = await _invoke2("playlist.setFocusedTrack", {
+      const res = successOf(await _invoke2("playlist.setFocusedTrack", {
         playlist: idx,
         index: item
-      });
+      }));
       return !!res?.success;
     };
     plman.SetPlaylistSelection = async (playlistIdx, items, state) => {
@@ -1887,68 +1930,69 @@ var __fbSmpCompat = (function (exports) {
       const indices = _toIndexArray(items);
       if (indices.length === 0) return true;
       if (state) {
-        const res2 = await _invoke2("playlist.setSelection", {
+        const res2 = successOf(await _invoke2("playlist.setSelection", {
           playlist: idx,
           indices,
           clearOthers: false
-        });
+        }));
         return !!res2?.success;
       }
-      const cur = await _invoke2("playlist.getSelection", { playlist: idx }).catch(
-        () => null
+      const cur = successOf(
+        await _invoke2("playlist.getSelection", { playlist: idx }).catch(() => null)
       );
-      const curItems = Array.isArray(cur?.items) ? cur.items : [];
+      if (!cur?.playlistGuid) return false;
       const toRemove = new Set(indices);
-      const toKeep = curItems.filter((i) => !toRemove.has(i));
-      const res = await _invoke2("playlist.setSelection", {
-        playlist: idx,
+      const toKeep = cur.items.filter((i) => !toRemove.has(i));
+      const res = successOf(await _invoke2("playlist.setSelection", {
+        playlistGuid: cur.playlistGuid,
         indices: toKeep,
         clearOthers: true
-      });
+      }));
       return !!res?.success;
     };
     plman.ClearPlaylistSelection = async (playlistIdx) => {
       const idx = playlistIdx | 0;
-      const res = await _invoke2("playlist.deselectAll", {
+      const res = successOf(await _invoke2("playlist.deselectAll", {
         playlist: idx
-      });
+      }));
       return !!res?.success;
     };
     plman.RemovePlaylistSelection = async (playlistIdx, crop) => {
       const idx = playlistIdx | 0;
       const doCrop = !!crop;
       if (!doCrop) {
-        const res = await _invoke2("playlist.removeSelectedTracks", {
+        const res = successOf(await _invoke2("playlist.removeSelectedTracks", {
           playlist: idx
-        });
+        }));
         schedulePlaylistRefresh();
         return !!res?.success;
       }
-      const sel = await _invoke2("playlist.getSelection", { playlist: idx }).catch(
-        () => null
+      const sel = successOf(
+        await _invoke2("playlist.getSelection", { playlist: idx }).catch(() => null)
       );
-      const selected = Array.isArray(sel?.items) ? sel.items : [];
+      if (!sel?.playlistGuid) return false;
+      const target = { playlistGuid: sel.playlistGuid };
+      const selected = sel.items;
       if (selected.length === 0) {
-        const res = await _invoke2("playlist.clear", {
-          playlist: idx
-        });
+        const res = successOf(await _invoke2("playlist.clear", target));
         schedulePlaylistRefresh();
         return !!res?.success;
       }
-      const cnt = await _invoke2("playlist.getTrackCount", { playlist: idx }).catch(
-        () => ({ count: 0 })
+      const cnt = successOf(
+        await _invoke2("playlist.getTrackCount", target).catch(() => null)
       );
-      const total = typeof cnt?.count === "number" ? cnt.count | 0 : 0;
+      if (typeof cnt?.count !== "number") return false;
+      const total = cnt.count | 0;
       const keep = new Set(selected.map((n) => n | 0));
       const remove = [];
       for (let i = 0; i < total; i++) {
         if (!keep.has(i)) remove.push(i);
       }
       if (remove.length > 0) {
-        const res = await _invoke2("playlist.removeTracks", {
-          playlist: idx,
+        const res = successOf(await _invoke2("playlist.removeTracks", {
+          ...target,
           items: remove
-        });
+        }));
         schedulePlaylistRefresh();
         return !!res?.success;
       }
@@ -1956,12 +2000,12 @@ var __fbSmpCompat = (function (exports) {
     };
     plman.SortByFormat = async (playlistIdx, pattern, selectedOnly) => {
       const idx = playlistIdx | 0;
-      const res = await _invoke2("playlist.sort", {
+      const res = successOf(await _invoke2("playlist.sort", {
         playlist: idx,
         pattern: String(pattern ?? "%title%"),
         selectedOnly: !!selectedOnly,
         descending: false
-      });
+      }));
       return !!res?.success;
     };
     plman.UndoBackup = (_playlistIdx) => {
@@ -1970,11 +2014,11 @@ var __fbSmpCompat = (function (exports) {
     plman.MovePlaylistSelection = async (playlistIdx, delta) => {
       const idx = playlistIdx | 0;
       const d = delta | 0;
-      const res = await _invoke2("playlist.moveTracks", {
+      const res = successOf(await _invoke2("playlist.moveTracks", {
         playlist: idx,
         items: [],
         delta: d
-      });
+      }));
       return !!res?.success;
     };
     plman.DuplicatePlaylist = async (from, name) => {
@@ -1982,25 +2026,25 @@ var __fbSmpCompat = (function (exports) {
       const params = { playlist: idx };
       const newName = String(name ?? "");
       if (newName) params.name = newName;
-      const res = await _invoke2("playlist.duplicate", params);
+      const res = successOf(await _invoke2("playlist.duplicate", params));
       schedulePlaylistRefresh();
       return typeof res?.index === "number" ? res.index | 0 : -1;
     };
     plman.AddLocations = async (playlistIdx, locations, select) => {
       const idx = playlistIdx | 0;
       const locs = Array.isArray(locations) ? locations.map((s) => String(s)) : typeof locations?.[Symbol.iterator] === "function" ? Array.from(locations, (s) => String(s)) : [];
-      const res = await _invoke2("playlist.addPaths", {
+      const res = successOf(await _invoke2("playlist.addPaths", {
         playlist: idx,
         paths: locs
-      });
+      }));
       schedulePlaylistRefresh();
       const added = typeof res?.addedCount === "number" ? res.addedCount | 0 : 0;
-      if (select && added > 0 && typeof res?.countBefore === "number") {
+      if (select && added > 0 && res?.playlistGuid) {
         const start = res.countBefore | 0;
         const indices = [];
         for (let i = 0; i < added; i++) indices.push(start + i);
         await _invoke2("playlist.setSelection", {
-          playlist: idx,
+          playlistGuid: res.playlistGuid,
           indices,
           clearOthers: true
         }).catch(() => null);
@@ -2009,9 +2053,9 @@ var __fbSmpCompat = (function (exports) {
     };
     plman.GetPlaylistSelectedItems = async (playlistIdx) => {
       const idx = playlistIdx | 0;
-      const res = await _invoke2("playlist.getSelectedTracks", {
+      const res = successOf(await _invoke2("playlist.getSelectedTracks", {
         playlist: idx
-      });
+      }));
       const tracks = Array.isArray(res?.tracks) ? res.tracks : [];
       const list = new FbMetadbHandleList();
       for (const t of tracks) {
@@ -2025,13 +2069,14 @@ var __fbSmpCompat = (function (exports) {
       const chunk = 500;
       let start = 0;
       let total = null;
+      let target = { playlist: idx };
       while (total === null || start < total) {
-        const res = await _invoke2("playlist.getTracks", {
-          playlist: idx,
-          start,
-          count: chunk
-        });
-        const tracks = res?.tracks ?? [];
+        const res = successOf(
+          await _invoke2("playlist.getTracks", { ...target, start, count: chunk })
+        );
+        if (!res?.playlistGuid) break;
+        target = { playlistGuid: res.playlistGuid };
+        const tracks = res.tracks ?? [];
         if (!Array.isArray(tracks) || tracks.length === 0) break;
         for (const t of tracks) {
           list.Add(new FbMetadbHandle(t));
@@ -2056,19 +2101,19 @@ var __fbSmpCompat = (function (exports) {
         for (const h of handlesLike) collect(h);
       }
       if (handles.length === 0) return 0;
-      const res = await _invoke2("playlist.insertTracks", {
+      const res = successOf(await _invoke2("playlist.insertTracks", {
         playlist: idx,
         position: pos,
         handles
-      });
+      }));
       schedulePlaylistRefresh();
       const added = typeof res?.addedCount === "number" ? res.addedCount | 0 : 0;
-      if (select && added > 0) {
-        const start = typeof res?.insertIndex === "number" ? res.insertIndex | 0 : pos;
+      if (select && added > 0 && res?.playlistGuid) {
+        const start = typeof res.insertIndex === "number" ? res.insertIndex | 0 : pos;
         const indices = [];
         for (let i = 0; i < added; i++) indices.push(start + i);
         await _invoke2("playlist.setSelection", {
-          playlist: idx,
+          playlistGuid: res.playlistGuid,
           indices,
           clearOthers: true
         }).catch(() => null);
@@ -2078,15 +2123,14 @@ var __fbSmpCompat = (function (exports) {
     plman.AddItemToPlaybackQueue = async (handleLike) => {
       const id = toHandleId(handleLike);
       if (!id) return 0;
-      const path = id.split("|subsong:")[0];
-      const res = await _invoke2("queue.addPaths", {
-        paths: [path],
+      const res = successOf(await _invoke2("queue.addPaths", {
+        paths: [id],
         useQueuePlaylist: true
-      });
+      }));
       return typeof res?.addedCount === "number" ? res.addedCount | 0 : res?.success ? 1 : 0;
     };
     plman.GetPlaybackQueueContents = async () => {
-      const res = await _invoke2("queue.get", {});
+      const res = successOf(await _invoke2("queue.get", {}));
       const items = Array.isArray(res?.items) ? res.items : [];
       return items.map((rawItem) => {
         const it = rawItem;
@@ -2105,14 +2149,14 @@ var __fbSmpCompat = (function (exports) {
     plman.AddPlaylistItemToPlaybackQueue = async (playlistIdx, playlistItemIdx) => {
       const pl = playlistIdx | 0;
       const item = playlistItemIdx | 0;
-      const res = await _invoke2("queue.add", {
+      const res = successOf(await _invoke2("queue.add", {
         playlist: pl,
         track: item
-      });
+      }));
       return !!res?.success;
     };
     plman.GetPlaybackQueueHandles = async () => {
-      const res = await _invoke2("queue.get", {});
+      const res = successOf(await _invoke2("queue.get", {}));
       const items = Array.isArray(res?.items) ? res.items : [];
       const list = new FbMetadbHandleList();
       for (const it of items) {
@@ -2123,9 +2167,9 @@ var __fbSmpCompat = (function (exports) {
     plman.IsPlaylistItemSelected = async (playlistIdx, itemIdx) => {
       const pl = playlistIdx | 0;
       const item = itemIdx | 0;
-      const res = await _invoke2("playlist.getSelection", {
+      const res = successOf(await _invoke2("playlist.getSelection", {
         playlist: pl
-      });
+      }));
       const selected = Array.isArray(res?.items) ? res.items : [];
       return selected.includes(item);
     };
@@ -2134,7 +2178,7 @@ var __fbSmpCompat = (function (exports) {
       const findFn = plman.FindPlaylist;
       const idx = findFn(n);
       if (idx >= 0) return idx;
-      const res = await _invoke2("playlist.create", { name: n });
+      const res = successOf(await _invoke2("playlist.create", { name: n }));
       schedulePlaylistRefresh();
       return typeof res?.index === "number" ? res.index | 0 : -1;
     };
@@ -2143,13 +2187,13 @@ var __fbSmpCompat = (function (exports) {
       const f = from | 0;
       const t = to | 0;
       if (f < 0 || f >= count || t < 0 || t >= count || f === t) return false;
-      const order = [];
-      for (let i = 0; i < count; i++) order.push(i);
-      order.splice(f, 1);
-      order.splice(t, 0, f);
-      const res = await _invoke2("playlist.reorderPlaylists", {
-        newOrder: order
-      });
+      const guids = cache.playlists.map((p) => p.guid);
+      if (guids.length !== count) return false;
+      const [moved] = guids.splice(f, 1);
+      guids.splice(t, 0, moved);
+      const res = successOf(await _invoke2("playlist.reorderPlaylists", {
+        newOrderGuids: guids
+      }));
       schedulePlaylistRefresh();
       return !!res?.success;
     };
@@ -2157,13 +2201,13 @@ var __fbSmpCompat = (function (exports) {
   }
 
   // src/smp/utilsCompat.ts
-  async function _invoke(method, params) {
+  var _invoke = typedCall(async (method, params) => {
     const inv = getInvoke();
     if (!inv) {
       throw new Error("[SMP-Utils] smp.invoke not available");
     }
-    return await inv(method, params ?? {});
-  }
+    return inv(method, params ?? {});
+  });
   function FormatDuration(seconds) {
     const s = Math.max(0, Math.round(Number(seconds) || 0));
     const h = Math.floor(s / 3600);
@@ -2214,33 +2258,33 @@ var __fbSmpCompat = (function (exports) {
     }
   }
   async function FileExists(path) {
-    const res = await _invoke("file.exists", {
+    const res = successOf(await _invoke("file.exists", {
       path: String(path ?? "")
-    });
+    }));
     return !!res?.exists;
   }
   async function IsFile(path) {
-    const res = await _invoke("file.getInfo", {
+    const res = successOf(await _invoke("file.getInfo", {
       path: String(path ?? "")
-    });
+    }));
     return !!res?.isFile;
   }
   async function IsDirectory(path) {
-    const res = await _invoke("file.getInfo", {
+    const res = successOf(await _invoke("file.getInfo", {
       path: String(path ?? "")
-    });
+    }));
     return !!res?.isDirectory;
   }
   async function GetFileSize(path) {
-    const res = await _invoke("file.getInfo", {
+    const res = successOf(await _invoke("file.getInfo", {
       path: String(path ?? "")
-    });
+    }));
     return typeof res?.size === "number" ? res.size : 0;
   }
   async function ReadTextFile(path, _codepage) {
-    const res = await _invoke("file.read", {
+    const res = successOf(await _invoke("file.read", {
       path: String(path ?? "")
-    });
+    }));
     if (typeof res === "string") return res;
     return typeof res?.content === "string" ? res.content : "";
   }
@@ -2260,20 +2304,13 @@ var __fbSmpCompat = (function (exports) {
     const lastSep = norm.lastIndexOf("\\");
     const dir = lastSep >= 0 ? norm.slice(0, lastSep) : ".";
     const globPart = lastSep >= 0 ? norm.slice(lastSep + 1) : norm;
-    const res = await _invoke("file.list", {
+    const res = successOf(await _invoke("file.list", {
       path: dir,
       recursive: false
-    });
+    }));
     const rawItems = Array.isArray(res?.items) ? res.items : [];
     const prefix = dir.endsWith("\\") ? dir : `${dir}\\`;
-    const candidates = rawItems.map((item) => {
-      if (typeof item === "string") {
-        return item.includes("\\") || item.includes("/") ? item : prefix + item;
-      }
-      if (typeof item.path === "string") return item.path;
-      if (typeof item.name === "string") return prefix + item.name;
-      return "";
-    }).filter(Boolean);
+    const candidates = rawItems.map((item) => item.includes("\\") || item.includes("/") ? item : prefix + item).filter(Boolean);
     return candidates.filter((f) => {
       if (!globPart || globPart === "*" || globPart === "*.*") return true;
       const name = f.split("\\").pop() ?? "";
@@ -2283,10 +2320,10 @@ var __fbSmpCompat = (function (exports) {
   async function ListFiles(folder, recursion) {
     const folderStr = String(folder ?? "");
     const isRecursive = !!recursion;
-    const res = await _invoke("file.list", {
+    const res = successOf(await _invoke("file.list", {
       path: folderStr,
       recursive: isRecursive
-    });
+    }));
     const items = Array.isArray(res?.items) ? res.items : [];
     const prefix = !isRecursive && folderStr ? folderStr.endsWith("\\") || folderStr.endsWith("/") ? folderStr : `${folderStr}\\` : "";
     return items.filter((item) => {
@@ -2307,10 +2344,10 @@ var __fbSmpCompat = (function (exports) {
   async function ListFolders(folder, recursion) {
     const folderStr = String(folder ?? "");
     const isRecursive = !!recursion;
-    const res = await _invoke("file.list", {
+    const res = successOf(await _invoke("file.list", {
       path: folderStr,
       recursive: isRecursive
-    });
+    }));
     const dirs = Array.isArray(res?.directories) ? res.directories : [];
     const prefix = !isRecursive && folderStr ? folderStr.endsWith("\\") || folderStr.endsWith("/") ? folderStr : `${folderStr}\\` : "";
     return dirs.map((item) => {
@@ -2324,7 +2361,7 @@ var __fbSmpCompat = (function (exports) {
     }).filter(Boolean);
   }
   async function GetClipboardText() {
-    const res = await _invoke("clipboard.read", {});
+    const res = successOf(await _invoke("clipboard.read", {}));
     return typeof res?.text === "string" ? res.text : "";
   }
   async function SetClipboardText(text) {
@@ -2333,8 +2370,8 @@ var __fbSmpCompat = (function (exports) {
   async function CheckComponent(name, isDll) {
     const n = String(name ?? "").toLowerCase();
     if (!n) return false;
-    const res = await _invoke("config.getComponents", {});
-    const components = Array.isArray(res) ? res : Array.isArray(res?.components) ? res.components : [];
+    const res = successOf(await _invoke("config.getComponents", {}));
+    const components = Array.isArray(res?.components) ? res.components : [];
     return components.some((c) => {
       if (!c || typeof c !== "object") return false;
       const cName = String(c.name ?? "").toLowerCase();
@@ -2348,9 +2385,9 @@ var __fbSmpCompat = (function (exports) {
   async function ReadINI(path, section, key, defaultVal) {
     const def = defaultVal ?? "";
     try {
-      const res = await _invoke("file.read", {
+      const res = successOf(await _invoke("file.read", {
         path: String(path ?? "")
-      });
+      }));
       const content = typeof res === "string" ? res : typeof res?.content === "string" ? res.content : "";
       if (!content) return def;
       const sec = String(section ?? "").toLowerCase();
@@ -2384,9 +2421,9 @@ var __fbSmpCompat = (function (exports) {
     try {
       let content = "";
       try {
-        const res = await _invoke("file.read", {
+        const res = successOf(await _invoke("file.read", {
           path: filePath
-        });
+        }));
         content = typeof res === "string" ? res : typeof res?.content === "string" ? res.content : "";
       } catch {
       }
@@ -2509,14 +2546,14 @@ var __fbSmpCompat = (function (exports) {
   }
   function attachWindowProperties(fb) {
     if (typeof window === "undefined") return;
-    const _invoke2 = fb.invoke.bind(fb);
+    const _invoke2 = typedCall(fb.invoke.bind(fb));
     if (typeof window.GetProperty !== "function") {
       window.GetProperty = async (name, defaultVal) => {
         const key = PROP_PREFIX + String(name ?? "");
-        const res = await _invoke2("config.get", {
+        const res = successOf(await _invoke2("config.get", {
           key,
           default: defaultVal ?? null
-        });
+        }));
         const value = res?.value;
         if (value !== void 0) return value;
         return defaultVal ?? null;
@@ -2552,7 +2589,6 @@ var __fbSmpCompat = (function (exports) {
   }
 
   // src/smp/bootstrap.ts
-  var LOG_PREFIX5 = "[SMP-Compat]";
   function bootstrapSmpCompat(fb) {
     const cache = createInitialCache();
     const { schedule: schedulePlaylistRefresh} = createPlaylistRefresher(fb, cache);
@@ -2580,14 +2616,14 @@ var __fbSmpCompat = (function (exports) {
       }
       eventUnsubscribers.length = 0;
       try {
-        console.log(LOG_PREFIX5, "disposed - all event listeners removed");
+        console.log(LOG_PREFIX, "disposed - all event listeners removed");
       } catch {
       }
     };
     const refreshCache = async () => {
       await populateCache(fb, cache);
       try {
-        console.log(LOG_PREFIX5, "cache refreshed (full)");
+        console.log(LOG_PREFIX, "cache refreshed (full)");
       } catch {
       }
     };
@@ -2655,7 +2691,6 @@ var __fbSmpCompat = (function (exports) {
   }
 
   // src/smp/iife.ts
-  var LOG_PREFIX6 = "[SMP-Compat]";
   (function autoBootstrap() {
     if (typeof globalThis === "undefined") return;
     const g = globalThis;
@@ -2663,7 +2698,7 @@ var __fbSmpCompat = (function (exports) {
     if (!fb || typeof fb.on !== "function" || typeof fb.invoke !== "function") {
       try {
         console.warn(
-          LOG_PREFIX6,
+          LOG_PREFIX,
           "Bridge bundle not detected (fb.on / fb.invoke missing); SMP compatibility layer disabled."
         );
       } catch {
@@ -2675,7 +2710,7 @@ var __fbSmpCompat = (function (exports) {
       installSmpGlobals(result);
     } catch (e) {
       try {
-        console.error(LOG_PREFIX6, "bootstrap failed:", e);
+        console.error(LOG_PREFIX, "bootstrap failed:", e);
       } catch {
       }
     }

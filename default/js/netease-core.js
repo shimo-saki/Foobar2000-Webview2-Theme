@@ -692,7 +692,8 @@
   function normKey(s) {
     s = toSimplified(String(s == null ? '' : s).toLowerCase());
     s = s.replace(/[\(\[（【{].*?[\)\]）】}]/g, '');
-    s = s.replace(/[^0-9a-z\u3400-\u9fff\u3040-\u30ff]/g, '');
+    // 与 qqmusic-core 同一口径（含谚文：缺了它韩语标题/艺人会被整串清空，相似度恒 0）
+    s = s.replace(/[^0-9a-z\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u1100-\u11ff]/g, '');
     return s;
   }
 

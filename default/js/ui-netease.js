@@ -381,10 +381,11 @@
   function playTracks(tracks) {
     if (!tracks.length) { toast('先勾选几首', null, 'error'); return; }
     if (!S.online) { toast('桥接未就绪', '稍等片刻再试，或刷新页面', 'error'); reconnect(); return; }
-    if (S.busy || S.dlRun) { toast('正在处理上一批', '稍等一下再点', 'error'); return; }
+    // 与下载、导入互斥：三条链各自 ensurePlaylist / 追加 / 定位播放，并发时
+    // "追加前总数"会互踩，playTrack 的 index 可能落到别的曲目上
+    if (S.busy || S.dlRun || S.impRun) { toast('正在处理上一批', '稍等一下再点', 'error'); return; }
     S.busy = true;
     updateToolbar();
-    CM.stopPreviewIfActive().then(function () {
 
     var usedLabel = '';
     setStatus('正在解析 ' + tracks.length + ' 首曲目的音源…');
@@ -407,7 +408,9 @@
           .then(function (cnt) {
             if (cnt.total == null) throw new Error('取不到歌单曲目数，无法定位新曲');
             var base = cnt.total;
-            return apiOr('playlist.addPaths', { playlist: idx, paths: r.urls })
+            // 必须用 addPathsSequential：playlist.addPaths 由 foobar 按"添加文件"的
+            // 方式解析，**行不保持给定顺序** —— 那样 index: base 播的未必是这批第一首
+            return apiOr('playlist.addPathsSequential', { playlist: idx, paths: r.urls })
               .then(function (res) {
                 if (res.success === false) throw new Error(res.error || '宿主拒绝写入歌单');
                 return apiOr('playlist.playTrack', { playlist: idx, index: base })
@@ -429,7 +432,6 @@
       S.busy = false;
       updateToolbar();
     });
-    });   // stopPreviewIfActive
   }
 
   /* 下载的取流落盘（grabToFile）/ 保存位置条 / 歌词写入都搬进了
@@ -499,6 +501,8 @@
 
   function startImport() {
     if (!S.online) { toast('桥接未就绪', '稍等片刻再试', 'error'); return; }
+    // 与播放 / 下载互斥（导入不置 S.busy，所以必须在这里显式拦这两条）
+    if (S.busy || S.dlRun) { toast('正在处理上一批', '稍等一下再点', 'error'); return; }
     if (S.impRun) return;
     var raw = ($('nemImportInput') || {}).value || '';
     var id = NeteaseBridge.parsePlaylistId(raw);
@@ -539,7 +543,9 @@
             .then(function (cnt) {
               if (cnt.total == null) throw new Error('取不到歌单曲目数，无法定位新曲');
               var base = cnt.total;
-              return apiOr('playlist.addPaths', { playlist: idx, paths: urls })
+              // addPathsSequential：导入整个歌单时行顺序必须与原歌单一致，
+              // addPaths 由 foobar 按"添加文件"的方式解析、不保序（导入后顺序会乱）
+              return apiOr('playlist.addPathsSequential', { playlist: idx, paths: urls })
                 .then(function (res) {
                   if (res.success === false) throw new Error(res.error || '宿主拒绝写入歌单');
                   if (base === 0) {

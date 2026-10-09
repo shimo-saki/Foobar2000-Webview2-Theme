@@ -114,10 +114,8 @@
   CM.bindPlaylistView = function() {
     els.btnPlayAll.addEventListener('click', function() {
       if (state.currentPlaylistIndex < 0) return;
-      // 与双击行 / 库页"播放全部"一致：先停掉 JIT 无痕试听，避免两路同时出声
-      CM.stopPreviewIfActive().then(function() {
-        CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: 0 });
-      });
+      // 播放全部 = 切播放上下文：该歌单成为活动歌单并从第一首开播，插队队列清空
+      CM.playRow({ playlist: state.currentPlaylistIndex, index: 0 });
     });
     els.btnPlaylistMore.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -130,6 +128,12 @@
       var items = [
         { isLabel: true, label: '添加到歌单' }
       ];
+      // 歌单结构类写操作（随机 / 排序）：成功报一句、失败按错误码归因
+      function plWrite(failTitle, okMsg, method, params) {
+        CM.apiOr(method, params).then(function() {
+          CM.showToast(okMsg, null, 'success');
+        }, function(e) { CM.failToast(e, failTitle); });
+      }
       if (editable) {
         items.push({ label: '添加本地文件', icon: CM.icons.folder, action: function() {
           CM.addFilesToPlaylist(idx);
@@ -141,14 +145,17 @@
           CM.addUrlToPlaylist(idx);
         } });
         items.push({ divider: true });
+        // 歌单结构类写操作统一走 apiOr + 失败归因提示：用了 CM.api 的话，
+        // 被宿主拒（锁定 / 索引失效）时只是"点了没反应"，界面上查不出原因
         items.push({ label: '随机排列', icon: CM.icons.refresh, action: function() {
-          CM.api('playlist.shuffle', { playlist: idx });
+          plWrite('无法随机排列', '已随机排列', 'playlist.shuffle', { playlist: idx });
         } });
         items.push({ label: '按标题排序', action: function() {
-          CM.api('playlist.sort', { playlist: idx, pattern: '%title%' });
+          plWrite('无法排序', '已按标题排序', 'playlist.sort', { playlist: idx, pattern: '%title%' });
         } });
         items.push({ label: '按艺术家排序', action: function() {
-          CM.api('playlist.sort', { playlist: idx, pattern: '%artist% | %album% | %tracknumber%' });
+          plWrite('无法排序', '已按艺术家排序', 'playlist.sort',
+            { playlist: idx, pattern: '%artist% | %album% | %tracknumber%' });
         } });
         items.push({ label: '反转列表', icon: CM.icons.reverse, action: function() {
           CM.api('playlist.reverse', { playlist: idx }).then(function(r) {
@@ -157,7 +164,15 @@
         } });
         items.push({ divider: true });
         items.push({ label: '撤销上一步', action: function() {
-          CM.api('playlist.undo', { playlist: idx });
+          // NOT_FOUND = 没有可撤销的历史：如实提示，别装作成功（写操作走 apiOr）
+          CM.apiOr('playlist.undo', { playlist: idx }).then(function() {
+            CM.showToast('已撤销', null, 'success');
+          }, function(e) { CM.failToast(e, '无法撤销'); });
+        } });
+        items.push({ label: '重做', action: function() {
+          CM.apiOr('playlist.redo', { playlist: idx }).then(function() {
+            CM.showToast('已重做', null, 'success');
+          }, function(e) { CM.failToast(e, '无法重做'); });
         } });
       }
       CM.showCtxMenu(rect.left, rect.bottom + 6, items);
@@ -178,22 +193,79 @@
   };
 
   /* ============================================
+   * 位置驱动（事件 + 播放时钟两条来源共用）
+   * ============================================ */
+  var _lastAppliedPos = -1;
+  CM.applyPosition = function(pos, force) {
+    if (typeof pos !== 'number' || !isFinite(pos)) return;
+    _lastAppliedPos = pos;
+    if (!state.seeking) { state.position = pos; CM.updateSeekUI(); }
+    CM.updateLyricHighlight(force);
+    CM.updateTaskbarProgress();
+    if (state.npOpen) {
+      if (!state.npSeeking) CM.updateNpSeekUI();
+      CM.updateNpLyricHighlight(force);
+    }
+  };
+
+  // 播放时钟插值循环：只在"正在播放 + 页面可见"时跑，位置变化不足 1/20 秒就跳过。
+  // 宿主 ~30fps 的事件路径仍然照常更新，这里补的是两次事件之间的平滑
+  //（负载高时事件会抖/掉，进度条与歌词高亮就会一跳一跳）。
+  CM.startPlayhead = function() {
+    if (CM._playheadRaf || !CM.clock) return;
+    var step = function() {
+      CM._playheadRaf = requestAnimationFrame(step);
+      if (!CM.clock || document.hidden) return;
+      if (!CM.clockPlaying()) return;
+      var p = CM.nowPosition();
+      if (p < 0) return;
+      if (Math.abs(p - _lastAppliedPos) < 0.05) return;
+      CM.applyPosition(p);
+    };
+    CM._playheadRaf = requestAnimationFrame(step);
+  };
+  CM.stopPlayhead = function() {
+    if (CM._playheadRaf) { cancelAnimationFrame(CM._playheadRaf); CM._playheadRaf = 0; }
+  };
+
+  /* ============================================
    * 通用 seekbar 绑定（主进度条 + 沉浸式进度条共用）
    * ============================================ */
+  // v2：playback.getState / playback:stateChanged 会带 canSeek（电台等网络流为 false）。
+  // false 时把两条进度条一起禁用，避免拖了没有任何反应的"假交互"。
+  CM._seekBars = [];
+  CM.setSeekable = function(canSeek) {
+    state.canSeek = canSeek !== false;
+    CM._seekBars.forEach(function(bar) {
+      if (!bar) return;
+      bar.disabled = !state.canSeek;
+      // 类名要与标记一致：主进度条外层是 .seek-bar-wrap、沉浸页是 .np-seek-rail
+      // （此前写的 .seekbar-wrap/.np-seekbar-wrap 两个都不存在 → 禁用态没有视觉反馈）
+      var wrap = bar.closest ? bar.closest('.seek-bar-wrap, .np-seek-rail') : null;
+      if (wrap) wrap.classList.toggle('seek-disabled', !state.canSeek);
+      bar.title = state.canSeek ? '' : '当前曲目不可跳转（网络流 / 直播）';
+    });
+  };
+
   CM.bindSeekBar = function(bar, timeLabel, cssVar, seekingKey, updateFn) {
+    CM._seekBars.push(bar);
     bar.addEventListener('input', function() {
+      if (!state.canSeek) return;
       state[seekingKey] = true;
       var pct = bar.value / 1000;
       bar.style.setProperty(cssVar, (pct * 100).toFixed(2) + '%');
       timeLabel.textContent = CM.formatTime(pct * state.duration);
     });
     bar.addEventListener('change', function() {
+      if (!state.canSeek) { state[seekingKey] = false; updateFn(); return; }
       var pct = bar.value / 1000;
       var target = pct * state.duration;
       // 不在此处更新 state.position，交给 playback:seeked / timeHighRes 事件统一处理，
       // 避免因 API 返回 undefined/null 时误把旧位置覆盖掉 seeked 事件已写入的正确位置。
-      CM.api('playback.setPosition', { seconds: target }).then(function(r) {
+      // v2 起参数名是 position：旧的 seconds 属于未声明键，会被严格校验整个拒掉（INVALID_PARAMS）
+      CM.api('playback.setPosition', { position: target }).then(function(r) {
         state[seekingKey] = false;
+        if (r && r.success === false) CM.showToast('跳转失败', r.error || null, 'error');
         updateFn();
       });
     });
@@ -204,17 +276,20 @@
    * ============================================ */
   CM.bindPlaybackControls = function() {
     els.btnPlayPause.addEventListener('click', function() { CM.api('playback.playOrPause'); });
-    els.btnPrev.addEventListener('click', function() { CM.api('playback.previous'); });
-    els.btnNext.addEventListener('click', function() { CM.api('playback.next'); });
+    // 上一首/下一首走双轨制（playback-model.js）：下一首优先播插队队首，
+    // 上一首优先回溯播放历史，历史没有才交回宿主
+    els.btnPrev.addEventListener('click', function() { CM.prevTrack(); });
+    els.btnNext.addEventListener('click', function() { CM.nextTrack(); });
 
     // 播放顺序：单按钮循环 顺序→列表循环→单曲循环→随机
     els.btnOrder.addEventListener('click', function() {
-      var next = CM.ORDERS[(CM.orderIndexOf(state.order) + 1) % CM.ORDERS.length];
-      CM.api('playback.setPlaybackOrder', { order: next.id }).then(function(r) {
+      var next = CM.ORDERS[(state.order + 1) % CM.ORDERS.length];
+      // 用 name 下发（宿主的 order 是序号 0..6，不是 foobar 标志位；名字不随序号表变）
+      CM.api('playback.setPlaybackOrder', { name: next.host }).then(function(r) {
         // SDK v1.13 错误信封是正常 resolve 的 {success:false}（真值）：只判 !r
         // 会把失败当成功 —— 图标翻转、提示成功，实际顺序没变
         if (!r || r.success === false) { CM.showToast('切换失败', (r && r.error) || null, 'error'); return; }
-        state.order = next.id;
+        state.order = CM.orderIndexOf(next.host);
         CM.updateOrderIcon();
         CM.showToast(next.name, null);
       });
@@ -278,9 +353,10 @@
         if (!r || r.success === false) { CM.showToast('清空失败', (r && r.error) || null, 'error'); return; }
         CM.renderQueue();
         CM.refreshQueueBadge();
-        CM.showToast('已清空播放队列', null);
+        CM.showToast('已清空插队队列', null);
       });
     });
+    // 播放历史面板的展开按钮 / 清空按钮由 playback-model.js 的 CM.history.init() 绑定（随启动执行）
 
     // 歌词面板开关
     els.btnLyricsToggle.addEventListener('click', function() {
@@ -332,10 +408,14 @@
     if (popoverBuilt) return;
     popoverBuilt = true;
     var pop = els.morePopover;
+    // 分区顺序沿用旧版菜单（歌词 → 窗口 → 音频 → foobar2000），新项落进各自的区：
+    // 小窗是窗口形态、放「窗口」，低频项搬进「设置与工具」页后「foobar2000」只剩主菜单与它。
+    // 长内容一律折叠：桌面歌词、小窗、音频三组各收成一个可展开的组（点标题展开/收起），
+    // 默认收起，菜单打开时只看到分区骨架。
     pop.innerHTML =
       '<div class="popover-section">' +
       '<div class="popover-label">歌词</div>' +
-      // 桌面歌词
+      // 桌面歌词：ESLyric 的四个命令收进折叠组（状态由 syncEslyricStates 回填）
       '<button class="pop-sub-header" id="popSubDesktop">' + CM.icons.desktopLyric + '<span>桌面歌词</span><span class="pop-sub-arrow">▶</span></button>' +
       '<div class="pop-sub-body" id="popSubDesktopBody">' +
         '<button class="pop-sub-item" id="popDesktopLyricShow">' + CM.icons.desktopLyric + '<span>显示</span><span class="pop-item-note" id="popDesktopLyricNote"></span></button>' +
@@ -343,37 +423,34 @@
         '<button class="pop-sub-item" id="popDesktopLyricLock" disabled>' + CM.icons.lock + '<span>锁定</span><span class="pop-item-note" id="popDesktopLyricLockNote"></span></button>' +
         '<button class="pop-sub-item" id="popDesktopLyricReset">' + CM.icons.refresh + '<span>重置位置</span></button>' +
       '</div>' +
-      // ESLyric
-      '<button class="pop-sub-header" id="popSubEslyric">' + CM.icons.console + '<span>ESLyric</span><span class="pop-sub-arrow">▶</span></button>' +
-      '<div class="pop-sub-body" id="popSubEslyricBody">' +
-        '<button class="pop-sub-item" id="popEslyricSearch">' + CM.icons.info + '<span>搜索歌词</span></button>' +
-        '<button class="pop-sub-item" id="popEslyricReload">' + CM.icons.refresh + '<span>重载歌词</span></button>' +
-        '<button class="pop-sub-item" id="popEslyricScript">' + CM.icons.console + '<span>脚本测试</span></button>' +
-      '</div>' +
       '</div>' +
       '<div class="popover-section">' +
       '<div class="popover-label">窗口</div>' +
+      // 小窗：两种形态收进折叠组
+      '<button class="pop-sub-header" id="popSubPopup">' + CM.icons.desktopLyric + '<span>小窗</span><span class="pop-sub-arrow">▶</span></button>' +
+      '<div class="pop-sub-body" id="popSubPopupBody">' +
+        '<button class="pop-sub-item" id="popPopupMini">' + CM.icons.desktopLyric + '<span>迷你播放器</span><span class="pop-item-note">胶囊</span></button>' +
+        '<button class="pop-sub-item" id="popPopupLyrics">' + CM.icons.note + '<span>歌词窗（竖版）</span><span class="pop-item-note">竖版</span></button>' +
+      '</div>' +
       '<button class="pop-item" id="popRefresh">' + CM.icons.refresh + '<span>刷新界面</span></button>' +
       '</div>' +
       '<div class="popover-section">' +
-      '<div class="popover-label">音频</div>' +
-      '<button class="pop-item" id="popEQ">' + CM.icons.eq + '<span>均衡器</span><span class="pop-item-note" id="popEQNote"></span></button>' +
-      '<button class="pop-item" id="popOutput">' + CM.icons.output + '<span>输出设备</span><span class="pop-item-note" id="popOutputNote"></span></button>' +
-      '<button class="pop-item" id="popRG">' + CM.icons.eq + '<span>播放增益</span><span class="pop-item-note" id="popRGNote"></span></button>' +
+      // 音频没有分区小标签：折叠组的标题就是分区名，再挂一个「音频」标签是重复的
+      '<button class="pop-sub-header" id="popSubAudio">' + CM.icons.eq + '<span>音频</span><span class="pop-sub-arrow">▶</span></button>' +
+      '<div class="pop-sub-body" id="popSubAudioBody">' +
+        '<button class="pop-sub-item" id="popEQ">' + CM.icons.eq + '<span>均衡器</span><span class="pop-item-note" id="popEQNote"></span></button>' +
+        '<button class="pop-sub-item" id="popOutput">' + CM.icons.output + '<span>输出设备</span><span class="pop-item-note" id="popOutputNote"></span></button>' +
+        '<button class="pop-sub-item" id="popRG">' + CM.icons.eq + '<span>播放增益</span><span class="pop-item-note" id="popRGNote"></span></button>' +
+      '</div>' +
       '</div>' +
       '<div class="popover-section">' +
       '<div class="popover-label">foobar2000</div>' +
-      '<button class="pop-item" id="popConsole">' + CM.icons.console + '<span>打开控制台</span></button>' +
-      '<button class="pop-item" id="popPrefs">' + CM.icons.preferences + '<span>首选项</span></button>' +
-      '<button class="pop-item" id="popRescan">' + CM.icons.folder + '<span>刷新媒体库缓存</span></button>' +
-      '</div>' +
-      '<div class="popover-section">' +
-      '<div class="popover-label">关于</div>' +
-      '<button class="pop-item" id="popAbout">' + CM.icons.info + '<span>CloudMusic 主题</span><span class="pop-item-note">v2.5.3</span></button>' +
-      '<button class="pop-item" id="popHelp">' + CM.icons.info + '<span>使用帮助</span><span class="pop-item-note">功能指南</span></button>' +
+      '<button class="pop-item" id="popMainMenu">' + CM.icons.menu + '<span>主菜单</span><span class="pop-item-note">全部命令</span></button>' +
+      '<button class="pop-item" id="popSettings">' + CM.icons.gear + '<span>设置与工具</span><span class="pop-item-note">›</span></button>' +
       '</div>';
     // 绑定一次，永久有效
-    // 子菜单折叠/展开
+    function closePop() { pop.classList.remove('open'); }
+    // 折叠组：点标题展开/收起（沿用旧版那套 class，箭头随之旋转）
     function toggleSubMenu(headerId, bodyId) {
       var header = CM.$(headerId);
       var body = CM.$(bodyId);
@@ -381,71 +458,27 @@
       var isOpen = header.classList.toggle('open');
       body.classList.toggle('open', isOpen);
     }
+    CM.$('popSubPopup').addEventListener('click', function() { toggleSubMenu('popSubPopup', 'popSubPopupBody'); });
     CM.$('popSubDesktop').addEventListener('click', function() { toggleSubMenu('popSubDesktop', 'popSubDesktopBody'); });
-    CM.$('popSubEslyric').addEventListener('click', function() { toggleSubMenu('popSubEslyric', 'popSubEslyricBody'); });
-
-    // 桌面歌词子项
-    CM.$('popDesktopLyricShow').addEventListener('click', function() {
-      CM.toggleDesktopLyric();
-    });
-    CM.$('popDesktopLyricPin').addEventListener('click', function() {
-      CM.toggleDesktopLyricPin();
-    });
-    CM.$('popDesktopLyricLock').addEventListener('click', function() {
-      CM.toggleDesktopLyricLock();
-    });
-    CM.$('popDesktopLyricReset').addEventListener('click', function() {
-      CM.execDesktopLyricReset();
-    });
-
-    // ESLyric 子项
-    CM.$('popEslyricSearch').addEventListener('click', function() {
-      CM.execEslyricSearch();
-    });
-    CM.$('popEslyricReload').addEventListener('click', function() {
-      CM.execEslyricReload();
-    });
-    CM.$('popEslyricScript').addEventListener('click', function() {
-      CM.execEslyricScript();
-    });
-    CM.$('popEQ').addEventListener('click', function() {
-      CM.toggleEQ();
-      pop.classList.remove('open');
-    });
-    CM.$('popOutput').addEventListener('click', function() {
-      CM.showOutputDevices();
-      pop.classList.remove('open');
-    });
-    CM.$('popRG').addEventListener('click', function() {
-      pop.classList.remove('open');
-      CM.toggleRgPopover();
-    });
+    CM.$('popSubAudio').addEventListener('click', function() { toggleSubMenu('popSubAudio', 'popSubAudioBody'); });
+    // 小窗
+    CM.$('popPopupMini').addEventListener('click', function() { CM.openPopupWindow('mini'); closePop(); });
+    CM.$('popPopupLyrics').addEventListener('click', function() { CM.openPopupWindow('lyrics'); closePop(); });
+    // 桌面歌词（ESLyric）：显示 / 置顶 / 锁定 / 重置位置；勾选状态由 syncEslyricStates 异步回填
+    CM.$('popDesktopLyricShow').addEventListener('click', function() { CM.toggleDesktopLyric(); });
+    CM.$('popDesktopLyricPin').addEventListener('click', function() { CM.toggleDesktopLyricPin(); });
+    CM.$('popDesktopLyricLock').addEventListener('click', function() { CM.toggleDesktopLyricLock(); });
+    CM.$('popDesktopLyricReset').addEventListener('click', function() { CM.execDesktopLyricReset(); });
+    // 音频
+    CM.$('popEQ').addEventListener('click', function() { CM.toggleEQ(); closePop(); });
+    CM.$('popOutput').addEventListener('click', function() { CM.showOutputDevices(); closePop(); });
+    CM.$('popRG').addEventListener('click', function() { closePop(); CM.toggleRgPopover(); });
+    // 主题
+    CM.$('popMainMenu').addEventListener('click', function() { closePop(); CM.showMainMenu(); });
+    CM.$('popSettings').addEventListener('click', function() { closePop(); CM.switchTab('settings'); });
     CM.$('popRefresh').addEventListener('click', function() { location.reload(); });
-    CM.$('popConsole').addEventListener('click', function() {
-      CM.api('misc.showConsole');
-      pop.classList.remove('open');
-    });
-    CM.$('popPrefs').addEventListener('click', function() {
-      CM.api('misc.showPreferences');
-      pop.classList.remove('open');
-    });
-    CM.$('popRescan').addEventListener('click', function() {
-      CM.api('library.refresh').then(function(r) {
-        if (!r || r.success === false) { CM.showToast('刷新失败', (r && r.error) || null, 'error'); return; }
-        CM.showToast('媒体库缓存已刷新', null, 'success');
-        pop.classList.remove('open');
-        if (state.currentTab === 'discover') CM.renderDiscover();
-      });
-    });
-    CM.$('popAbout').addEventListener('click', function() {
-      CM.showAbout();
-      pop.classList.remove('open');
-    });
-    CM.$('popHelp').addEventListener('click', function() {
-      pop.classList.remove('open');
-      window.open('guide.html', '_blank');
-    });
   }
+
   /* ============================================
    * 主菜单命令开关的统一实现（桌面歌词 / 置顶 / 锁定）
    * --------------------------------------------
@@ -566,6 +599,8 @@
       dlLockItem.classList.toggle('checked', dlLock.isOn());
       dlLockItem.disabled = !showOn;
     }
+    // 常驻托盘开关已搬进「设置与工具」页（菜单里不再有这一行）——
+    // 不要再在这里读写 popTray/popTrayNote（那两个 id 已不存在）
     // 均衡器状态
     CM.syncEQState();
     // 输出设备名称
@@ -599,8 +634,10 @@
   /* ============================================
    * 同步 ESLyric 命令的实际勾选状态
    * ============================================ */
+  // 读 ESLyric「桌面歌词」相关命令的真实勾选状态，并同步到界面（更多菜单 + 设置页都用）。
+  // 返回 Promise<{show,pin,lock}>：设置页要按它渲染开关，所以不能只是内部同步完就结束。
   function syncEslyricStates() {
-    CM.api('discovery.searchCommands', { query: '桌面歌词', includeHidden: true }).then(function(r) {
+    return CM.api('discovery.searchCommands', { query: '桌面歌词', includeHidden: true }).then(function(r) {
       if (r && r.results) {
         for (var i = 0; i < r.results.length; i++) {
           var c = r.results[i];
@@ -621,8 +658,14 @@
         }
       }
       updateMorePopoverState();
+      return { show: dlShow.isOn(), pin: dlPin.isOn(), lock: dlLock.isOn() };
+    }, function() {
+      // 命令搜索失败（宿主不支持 / ESLyric 未装）：保持原状态，但也要把界面同步一次
+      updateMorePopoverState();
+      return { show: dlShow.isOn(), pin: dlPin.isOn(), lock: dlLock.isOn() };
     });
   }
+  CM.syncEslyricStates = syncEslyricStates;
 
   /* ============================================
    * 播放增益（ReplayGain）面板
@@ -660,6 +703,8 @@
       '</div>' +
       '<div class="popover-label">前置增益 <span class="rg-val" id="rgPreampVal">--</span></div>' +
       '<input type="range" class="rg-slider" id="rgPreamp" min="-12" max="12" step="0.5" value="0" />' +
+      // 扫描增益：replaygain.scan 走宿主右键菜单管线（track = 逐文件扫描）
+      '<div class="rg-seg" id="rgScanRow"><button id="rgScan">扫描当前曲目增益</button></div>' +
       '</div>';
     CM.$('rgSource').addEventListener('click', function(e) {
       var b = e.target.closest('button'); if (!b) return;
@@ -676,7 +721,10 @@
       CM.$('rgPreampVal').textContent = (v >= 0 ? '+' : '') + v.toFixed(1) + ' dB';
     });
     CM.$('rgPreamp').addEventListener('change', function() {
-      CM.api('replaygain.setPreamp', { withRg: parseFloat(CM.$('rgPreamp').value) });
+      // 写操作走 apiOr：被宿主拒时滑杆上已经显示新值，必须如实报错，
+      // 否则用户以为前置增益已经生效
+      CM.apiOr('replaygain.setPreamp', { withRg: parseFloat(CM.$('rgPreamp').value) })
+        .then(null, function(e) { CM.failToast(e, '前置增益设置失败'); });
     });
   }
   CM.toggleRgPopover = function() {
@@ -703,7 +751,6 @@
    * 迷你频谱
    * ============================================ */
   var SPEC_BARS = 16;
-  var spectrumUnsub = null;
   var specBarEls = [];
 
   // 通用频谱条生成器（迷你频谱 + 沉浸式频谱共用）
@@ -728,17 +775,20 @@
     else CM.stopSpectrum();
   };
 
+  // 频谱订阅统一交给 js/audio-viz.js：v2 起用 bins（原始 FFT 频点）+ 立体声，
+  // 失败自动回退频带输出；顺带把 fftSize 从 8192 降到 2048（宿主侧 FFT 计算量 1/4）。
+  // 这里只把算好的条数喂给主题自己的频谱条 —— 不再新增任何可视化元件。
+  // 帧分发统一走 CM.sched：这里的 'mini' 只管底栏那条迷你频谱，沉浸页自己注册
+  // 一份（'np'）—— 关掉底栏频谱开关不会连带把沉浸页那条频谱也停掉，反之亦然。
   CM.startSpectrum = function() {
-    if (spectrumUnsub || !fb.isAvailable()) return;
-    spectrumUnsub = fb.audio.subscribeSpectrum(function(data) {
-      CM.updateSpectrumBars(specBarEls, data && data.spectrum, SPEC_BARS, 18, 20);
-      // 同步更新沉浸式频谱
-      CM.updateNpSpectrum(data);
-    }, { fftSize: 8192, fps: 30, bands: 64 });
+    if (!fb.isAvailable() || !CM.sched) return;
+    CM.sched.want('mini', { fps: 30, onFrame: function(frame) {
+      CM.updateSpectrumBars(specBarEls, CM.viz.barsFor(frame, SPEC_BARS), SPEC_BARS, 18, 20);
+    }});
   };
 
   CM.stopSpectrum = function() {
-    if (spectrumUnsub) { spectrumUnsub(); spectrumUnsub = null; }
+    if (CM.sched) CM.sched.release('mini');
     specBarEls.forEach(function(el) { el.style.transform = 'scaleY(0.1)'; });
   };
 
@@ -797,10 +847,23 @@
       lastDropAt = now;
       return true;
     }
-    fb.on('dnd:enter', function() { els.dropOverlay.classList.add('active'); });
+    fb.on('dnd:enter', function(data) {
+      // v2 的 dnd 事件带 source：本页面 / 同一 foobar2000 的其他窗口 / 外部拖动
+      var src = data && data.source;
+      if (els.dropOverlay) {
+        var sub = els.dropOverlay.querySelector('.drop-overlay-sub');
+        if (sub) {
+          sub.textContent = src === 'other-window' ? '来自其他 foobar2000 窗口'
+                          : src === 'self' ? '来自本页面'
+                          : '支持音频文件与文件夹';
+        }
+      }
+      els.dropOverlay.classList.add('active');
+    });
     fb.on('dnd:leave', function() { els.dropOverlay.classList.remove('active'); });
     fb.on('dnd:drop', function(data) {
       els.dropOverlay.classList.remove('active');
+      if (data && data.source === 'self') return;   // 页面内部拖动：不当作"从外部添加"
       if (!claimDrop()) return;
       var sessionId = data && data.sessionId;
       CM.api('dnd.getPathsAsync', sessionId ? { sessionId: sessionId } : {}).then(function(r) {
@@ -865,12 +928,12 @@
           CM.api('playback.playOrPause');
           break;
         case 'ArrowLeft':
-          if (e.ctrlKey) { CM.api('playback.previous'); }
-          else { CM.api('playback.setPosition', { seconds: Math.max(0, state.position - 5) }); }
+          if (e.ctrlKey) { CM.prevTrack(); }
+          else if (state.canSeek) { CM.api('playback.setPosition', { position: Math.max(0, state.position - 5) }); }
           break;
         case 'ArrowRight':
-          if (e.ctrlKey) { CM.api('playback.next'); }
-          else { CM.api('playback.setPosition', { seconds: Math.min(state.duration, state.position + 5) }); }
+          if (e.ctrlKey) { CM.nextTrack(); }
+          else if (state.canSeek) { CM.api('playback.setPosition', { position: Math.min(state.duration, state.position + 5) }); }
           break;
         case 'ArrowUp':
           e.preventDefault();
@@ -938,7 +1001,9 @@
       }
       return;
     }
-    var stateName = fb.state.isPlaying ? 'normal' : 'paused';
+    // 播放态统一读 CM.state.playing：SDK 那份 fb.state 镜像只由 stateChanged /
+    // trackChanged / stopped 更新，走 playback:paused 恢复时不跟着变（会显示成暂停）
+    var stateName = CM.state.playing ? 'normal' : 'paused';
     var v = Math.max(0, Math.min(1, state.position / state.duration));
     var pct = Math.round(v * 100);
     if (pct === CM._lastTaskbarVal && stateName === CM._lastTaskbarState) return;
@@ -978,14 +1043,19 @@
     if (els.npTiltBtn) els.npTiltBtn.addEventListener('click', function() { CM.toggleNpTilt(); });
     CM.applyNpTilt();
 
+    // 频谱显示开关（频谱条 → 声场 → 瀑布图 → 示波器 → 矢量示波器，点击循环；五种都画在那条频谱的位置上）
+    if (els.npVizBtn) els.npVizBtn.addEventListener('click', function() {
+      if (CM.spectrumMode) CM.spectrumMode.cycle();
+    });
+
     // 播放控制
     els.npBtnPlay.addEventListener('click', function() { CM.api('playback.playOrPause'); });
-    els.npBtnPrev.addEventListener('click', function() { CM.api('playback.previous'); });
-    els.npBtnNext.addEventListener('click', function() { CM.api('playback.next'); });
+    els.npBtnPrev.addEventListener('click', function() { CM.prevTrack(); });
+    els.npBtnNext.addEventListener('click', function() { CM.nextTrack(); });
     // 歌词侧控制（纯歌词模式）
     els.npLcPlay.addEventListener('click', function() { CM.api('playback.playOrPause'); });
-    els.npLcPrev.addEventListener('click', function() { CM.api('playback.previous'); });
-    els.npLcNext.addEventListener('click', function() { CM.api('playback.next'); });
+    els.npLcPrev.addEventListener('click', function() { CM.prevTrack(); });
+    els.npLcNext.addEventListener('click', function() { CM.nextTrack(); });
 
     // 沉浸式进度条
     CM.bindSeekBar(els.npSeekBar, els.npTimeCurrent, '--np-seek-pct', 'npSeeking', CM.updateNpSeekUI);
@@ -1043,15 +1113,8 @@
   CM.execDesktopLyricReset = function() {
     execEslyricCmd('重置位置', '桌面歌词位置已重置', '未找到重置位置命令');
   };
-  CM.execEslyricSearch = function() {
-    execEslyricCmd('搜索歌词', '搜索歌词已触发', '未找到搜索歌词命令');
-  };
-  CM.execEslyricReload = function() {
-    execEslyricCmd('重载歌词', '重载歌词已触发', '未找到重载歌词命令');
-  };
-  CM.execEslyricScript = function() {
-    execEslyricCmd('脚本测试', '脚本测试已触发', '未找到脚本测试命令');
-  };
+  // 注：ESLyric 的「搜索歌词 / 重载歌词 / 脚本测试」已去掉（搜索走多源候选面板、
+  // 重载走「刷新歌词」），对应的 CM.execEslyric* 导出一并删除 —— 不要再加回来。
 
   /* ============================================
    * 均衡器 — 通过 DSP API 切换 EQ
@@ -1103,13 +1166,110 @@
   };
 
   /* ============================================
+   * 原生主菜单 — 拉取 foobar2000 主菜单树，用主题自己的菜单渲染
+   * --------------------------------------------
+   * 一次接入即可触达宿主全部命令与组件菜单。命令优先用 GUID 执行（唯一不受宿主
+   * 语言影响的形式），没有 GUID 的项退回路径（仅在标签语言与宿主一致时可用）；
+   * 禁用的项灰显不可点。
+   *
+   * 主题菜单渲染器只支持两级（二级菜单复用同一渲染器，第三级会把二级覆盖掉），
+   * 而 foobar 主菜单存在三级（如 播放 → 顺序 → 随机），故把二级以下展平到第二级，
+   * 用「父 › 子」前缀保留层级信息，保证所有命令都能到达。
+   * ============================================ */
+  function runMainMenuNode(node) {
+    var fail = function(e) { CM.showToast('命令未执行', CM.errText(e && e.code), 'error'); };
+    if (node.guid) {
+      var params = { command: node.guid };
+      if (node.subGuid) params.subGuid = node.subGuid;   // 动态子命令必须与父 GUID 一起传
+      CM.apiOr('menu.runMainMenuCommand', params).then(null, fail);
+      return;
+    }
+    var path = node.displayPath || node.path;
+    if (!path) { CM.showToast('该命令无法执行', '宿主未提供稳定地址', 'error'); return; }
+    CM.apiOr('menu.runMainMenuCommand', { command: path }).then(null, fail);
+  }
+
+  // 节点列表 → 菜单项。submenu 就地展平，prefix 累积「父 › 子」层级
+  function menuNodesToItems(nodes, prefix) {
+    var out = [];
+    prefix = prefix || '';
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (!n) continue;
+      if (n.type === 'separator') {
+        if (out.length && !out[out.length - 1].divider) out.push({ divider: true });
+        continue;
+      }
+      var label = n.displayLabel || n.label || '';
+      if (n.type === 'submenu') {
+        out = out.concat(menuNodesToItems(n.children || [], prefix + label + ' › '));
+      } else {
+        if (n.hidden) continue;
+        out.push({
+          label: prefix + label,
+          checked: !!n.checked,
+          disabled: n.enabled === false,
+          action: (function(node) { return function() { runMainMenuNode(node); }; })(n)
+        });
+      }
+    }
+    while (out.length && out[out.length - 1].divider) out.pop();  // 去掉悬挂分隔符
+    return out;
+  }
+
+  CM.showMainMenu = function() {
+    // 能力探测：旧宿主没有主菜单 API 时直接说明，而不是点了没反应
+    if (CM.caps && CM.caps.set && !CM.caps.has('menu.getMainMenu')) {
+      CM.showToast('宿主不支持主菜单', '需要 foo_ui_webview2 1.2.0+', 'error');
+      return;
+    }
+    CM.api('menu.getMainMenu').then(function(r) {
+      if (!r || r.success === false) {
+        CM.showToast('无法获取主菜单', CM.errText(r && r.code), 'error');
+        return;
+      }
+      var nodes = Array.isArray(r.items) ? r.items : [];
+      var items = [];
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (!n) continue;
+        if (n.type === 'separator') {
+          if (items.length && !items[items.length - 1].divider) items.push({ divider: true });
+          continue;
+        }
+        var label = n.displayLabel || n.label || '';
+        if (n.type === 'submenu') {
+          var kids = menuNodesToItems(n.children || [], '');
+          if (kids.length) items.push({ label: label, submenu: kids });
+        } else if (!n.hidden) {
+          items.push({
+            label: label,
+            checked: !!n.checked,
+            disabled: n.enabled === false,
+            action: (function(node) { return function() { runMainMenuNode(node); }; })(n)
+          });
+        }
+      }
+      while (items.length && items[items.length - 1].divider) items.pop();
+      if (!items.length) { CM.showToast('主菜单为空', '宿主未返回任何命令', 'error'); return; }
+      var rect = els.btnMore.getBoundingClientRect();
+      CM.showCtxMenu(rect.left, rect.bottom + 6, items);
+    });
+  };
+
+  /* ============================================
    * 输出设备 — 列出设备并切换
    * ============================================ */
   CM.showOutputDevices = function() {
+    // 能力显隐：旧宿主没有这个 API 时直接说明，而不是"点了没反应"
+    if (CM.caps && CM.caps.set && !CM.caps.has('config.getOutputDevices')) {
+      CM.showToast('宿主不支持输出设备切换', '需要较新的 foo_ui_webview2', 'error');
+      return;
+    }
     CM.api('config.getOutputDevices').then(function(resp) {
       var devices = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.devices) ? resp.devices : []);
       if (!devices.length) {
-        CM.showToast('无法获取输出设备', null, 'error');
+        CM.showToast('无法获取输出设备', '宿主未返回设备列表', 'error');
         return;
       }
       var items = [{ label: '输出设备', isLabel: true }];
@@ -1118,12 +1278,11 @@
           label: d.name,
           checked: !!d.isCurrent,
           action: function() {
-            CM.api('config.setOutputDevice', { outputId: d.outputId, deviceId: d.deviceId }).then(function(r) {
-              if (r && r.success !== false) {
-                CM.showToast('已切换', d.name, 'success');
-              } else {
-                CM.showToast('切换失败', null, 'error');
-              }
+            // 写操作走 apiOr：失败必须如实提示（带错误码归因），不能静默
+            CM.apiOr('config.setOutputDevice', { outputId: d.outputId, deviceId: d.deviceId }).then(function() {
+              CM.showToast('已切换输出设备', d.name, 'success');
+            }, function(e) {
+              CM.failToast(e, '切换输出设备失败');
             });
           }
         });
@@ -1134,15 +1293,40 @@
   };
 
   /* ============================================
-   * 关于 — 并行查询多 API，展示完整系统信息
+   * 诊断面板 — 关于 + 排障信息（迭代 1.3）
+   * ------------------------------------------------------------
+   * 把"排障第一站"从控制台搬到界面上：宿主版本 / 组件路径 / 页面来源（安全限制看这里）/
+   * 能力清单（哪些新 API 可用）/ 最近失败的宿主调用（CM.lastApiError + 环形缓冲）。
+   * 「复制诊断报告」把 CM.diagReport() 写进剪贴板，用户贴到反馈里就够定位。
    * ============================================ */
+  // 关键能力清单：宿主方法名 → 界面上的人话（决定这些功能在当前宿主是否可用）
+  var KEY_CAPS = [
+    ['menu.getMainMenu', '原生主菜单'],
+    ['playlist.undo', '播放列表撤销/重做'],
+    ['playlist.createAutoplaylist', '筛选存自动歌单'],
+    ['replaygain.scan', 'ReplayGain 扫描'],
+    ['config.getOutputDevices', '输出设备切换'],
+    ['keyboard.registerHotkey', '全局热键'],
+    ['taskbar.setThumbnailButtons', '任务栏缩略图按钮'],
+    ['tray.create', '系统托盘'],
+    ['titleformat.evalFieldsBatch', '批量字段求值']
+  ];
+  function infoRow(label, value) {
+    return '<span class="ctx-info-label">' + CM.escHtml(label) + '</span>' +
+      '<span class="ctx-info-value">' + CM.escHtml(value == null ? '' : String(value)) + '</span>';
+  }
+
   CM.showAbout = function() {
+    // 宿主信息（组件清单 / 来源 / 路径）在启动后才完整：打开面板时顺手刷一次（失败沿用缓存）
+    if (CM.caps && CM.caps.loadHostInfo) CM.caps.loadHostInfo();
     Promise.all([
       CM.api('config.getVersionInfo'),
       CM.api('playcount.getStats'),
       CM.api('config.getOutputConfig'),
       CM.api('config.getComponents'),
-      CM.api('audio.getStreamInfo')
+      CM.api('audio.getStreamInfo'),
+      CM.api('webview.getSource'),
+      CM.api('misc.getComponentPath')
     ]).then(function(results) {
       var ver = results[0] || {};
       var stats = results[1] || {};
@@ -1150,43 +1334,103 @@
       var compsRaw = results[3];
       var comps = Array.isArray(compsRaw) ? compsRaw : (compsRaw && Array.isArray(compsRaw.components) ? compsRaw.components : []);
       var stream = results[4] || {};
+      var src = results[5] || {};
+      var pathRaw = results[6];
+      // 缓存给「复制诊断报告」用（diagReport 读 CM._* 三个字段）
+      if (comps.length) CM._componentList = comps;
+      if (src) CM._sourceText = CM.sourceText(src);
+      var compPath = pathRaw && (pathRaw.path || pathRaw.componentPath || pathRaw.directory);
+      if (typeof pathRaw === 'string') compPath = pathRaw;
+      if (compPath) CM._componentPath = compPath;
 
-      // plugin 可能是字符串或 {name,version} 对象
       var pluginVer = ver.plugin;
       if (pluginVer && typeof pluginVer === 'object') pluginVer = pluginVer.version || pluginVer.name;
 
+      var caps = CM.caps || {};
+      var last = CM.lastApiError;
+      var capCount = caps.ready ? (caps.set ? caps.set.size : 0) + ' 个方法' : '未获取';
+
+      // 可视化调度器现状（谁在拉数据、是否后台降帧）——排障"频谱不动"的第一站
+      var sch = (CM.sched && CM.sched.stats) ? CM.sched.stats() : null;
+      var schText = sch
+        ? (sch.subscribed
+            ? sch.subCount + ' 视图' + (sch.waveCount ? ' + ' + sch.waveCount + ' 波形' : '') + (sch.hidden ? '（后台降帧）' : '')
+            : '未订阅')
+        : '--';
+
       var items = [
         { label: 'CloudMusic 主题', isLabel: true },
-        { html: '<span class="ctx-info-label">版本</span><span class="ctx-info-value">v2.5.3</span>' },
-        { html: '<span class="ctx-info-label">作者</span><span class="ctx-info-value">灵芝含</span>' },
-        { html: '<span class="ctx-info-label">foobar2000</span><span class="ctx-info-value">' + CM.escHtml(ver.foobar2000 || '--') + '</span>' },
-        { html: '<span class="ctx-info-label">WebView2 组件</span><span class="ctx-info-value">v' + CM.escHtml(pluginVer || '--') + '</span>' },
+        { html: infoRow('版本', 'v' + CM.VERSION) },
+        { html: infoRow('作者', '灵芝含') },
+        { html: infoRow('主题 SDK', 'v2.0.0') },
         { divider: true },
-        { label: '媒体库', isLabel: true },
-        { html: '<span class="ctx-info-label">总曲目</span><span class="ctx-info-value">' + (stats.totalTracks || 0) + '</span>' },
-        { html: '<span class="ctx-info-label">已播放</span><span class="ctx-info-value">' + (stats.playedTracks || 0) + '</span>' },
-        { html: '<span class="ctx-info-label">未播放</span><span class="ctx-info-value">' + (stats.unplayedTracks || 0) + '</span>' },
-        { html: '<span class="ctx-info-label">总播放次数</span><span class="ctx-info-value">' + (stats.totalPlayCount || 0) + '</span>' },
-        { html: '<span class="ctx-info-label">平均播放</span><span class="ctx-info-value">' + (parseFloat(stats.averagePlayCount) || 0).toFixed(1) + ' 次</span>' },
+        { label: '宿主', isLabel: true },
+        { html: infoRow('foobar2000', ver.foobar2000 || '--') },
+        { html: infoRow('WebView2 组件', 'v' + (pluginVer || '--')) },
+        { html: infoRow('组件路径', compPath || '--') },
+        { html: infoRow('页面来源', CM.sourceText(src)) },
+        { html: infoRow('DPR / 缩放', CM.dpr() + 'x') },
+        { html: infoRow('频谱数据', (CM.viz && CM.viz.binsMode) ? '原始频点 (bins)' : '频带 (bands)') },
+        { html: infoRow('可视化调度', schText) },
         { divider: true },
-        { label: '输出', isLabel: true },
-        { html: '<span class="ctx-info-label">输出模式</span><span class="ctx-info-value">' + CM.escHtml(out.outputName || '--') + '</span>' },
-        { html: '<span class="ctx-info-label">设备</span><span class="ctx-info-value">' + CM.escHtml(out.deviceName || '--') + '</span>' },
-        { html: '<span class="ctx-info-label">位深</span><span class="ctx-info-value">' + (out.bitDepth || '--') + ' bit</span>' },
-        { html: '<span class="ctx-info-label">缓冲</span><span class="ctx-info-value">' + (out.bufferLength || '--') + ' s</span>' }
+        { label: '能力（' + capCount + '）', isLabel: true }
       ];
+      for (var ci = 0; ci < KEY_CAPS.length; ci++) {
+        var ok = caps.ready ? caps.has(KEY_CAPS[ci][0]) : null;
+        items.push({ html: infoRow(KEY_CAPS[ci][1], ok === null ? '未知' : (ok ? '✓ 可用' : '✗ 不可用')) });
+      }
+      items.push({ divider: true });
+      items.push({ label: '媒体库', isLabel: true });
+      items.push({ html: infoRow('总曲目', stats.totalTracks || 0) });
+      items.push({ html: infoRow('已播放', stats.playedTracks || 0) });
+      items.push({ html: infoRow('未播放', stats.unplayedTracks || 0) });
+      items.push({ html: infoRow('总播放次数', stats.totalPlayCount || 0) });
+      items.push({ html: infoRow('平均播放', (parseFloat(stats.averagePlayCount) || 0).toFixed(1) + ' 次') });
+      items.push({ divider: true });
+      items.push({ label: '输出', isLabel: true });
+      items.push({ html: infoRow('输出模式', out.outputName || '--') });
+      items.push({ html: infoRow('设备', out.deviceName || '--') });
+      items.push({ html: infoRow('位深', (out.bitDepth || '--') + ' bit') });
+      items.push({ html: infoRow('缓冲', (out.bufferLength || '--') + ' s') });
 
       if (stream.playing) {
         items.push({ divider: true });
         items.push({ label: '当前播放', isLabel: true });
-        items.push({ html: '<span class="ctx-info-label">编码</span><span class="ctx-info-value">' + CM.escHtml(stream.codec || '--') + '</span>' });
-        items.push({ html: '<span class="ctx-info-label">采样率</span><span class="ctx-info-value">' + (stream.sampleRate ? (stream.sampleRate / 1000).toFixed(1) + ' kHz' : '--') + '</span>' });
-        items.push({ html: '<span class="ctx-info-label">比特率</span><span class="ctx-info-value">' + (stream.bitrate || '--') + ' kbps</span>' });
-        items.push({ html: '<span class="ctx-info-label">声道</span><span class="ctx-info-value">' + (stream.channels || '--') + ' ch</span>' });
+        items.push({ html: infoRow('编码', stream.codec || '--') });
+        items.push({ html: infoRow('采样率', stream.sampleRate ? (stream.sampleRate / 1000).toFixed(1) + ' kHz' : '--') });
+        items.push({ html: infoRow('比特率', (stream.bitrate || '--') + ' kbps') });
+        items.push({ html: infoRow('声道', (stream.channels || '--') + ' ch') });
       }
 
       items.push({ divider: true });
-      items.push({ html: '<span class="ctx-info-label">已安装组件</span><span class="ctx-info-value">' + (comps.length || 0) + ' 个</span>' });
+      items.push({ label: '已安装组件（' + (comps.length || 0) + ' 个）', isLabel: true });
+      // 只列前 24 个：菜单受 max-height 限制可滚动，但几十条组件会把"最近失败"
+      // 压到很远；完整清单在「复制诊断报告」里，这里给个概览即可。
+      var COMP_LIST_MAX = 24;
+      for (var ci2 = 0; ci2 < Math.min(comps.length, COMP_LIST_MAX); ci2++) {
+        var comp = comps[ci2] || {};
+        items.push({ html: infoRow(comp.name || comp.filename || comp.fileName || '?', comp.version || '') });
+      }
+      if (comps.length > COMP_LIST_MAX) {
+        items.push({ label: '…另有 ' + (comps.length - COMP_LIST_MAX) + ' 个（见诊断报告）', isLabel: true });
+      }
+      items.push({ divider: true });
+      items.push({ label: '最近失败', isLabel: true });
+      if (last) {
+        items.push({ html: infoRow(last.method, (last.code || '?') + ' · ' + CM.errKindLabel(last.code)) });
+        items.push({ label: CM.errAdvice(last.code), isLabel: true });
+      } else {
+        items.push({ html: infoRow('无', '本次会话没有失败调用') });
+      }
+
+      items.push({ divider: true });
+      items.push({ label: '复制诊断报告', icon: CM.icons.copy, action: function() {
+        CM.copyText(CM.diagReport()).then(function(ok) {
+          CM.showToast(ok ? '诊断报告已复制' : '复制失败',
+            ok ? '贴到反馈里即可定位' : '请从控制台手动复制', ok ? 'success' : 'error');
+        });
+      } });
+      items.push({ label: '打开控制台', icon: CM.icons.console, action: function() { CM.api('misc.showConsole'); } });
 
       var rect = els.btnMore.getBoundingClientRect();
       CM.showCtxMenu(rect.left, rect.bottom + 6, items);
@@ -1226,21 +1470,51 @@
    * 在线标签获取 — 通过 discovery API 调用 foo_freedb2
    * 首次搜索后缓存命令，后续直接执行
    * ============================================ */
-  var _freedbCmd = null; // 缓存：{ guid, name } 或 null（已确认不可用）
+  var _freedbCmd = null; // 缓存：{ guid, path, name } 或 null（已确认不可用）
+  var _freedbTarget = ''; // 本次要作用的目标曲目路径
+
+  // 命令名 → 标签路径：discovery.executeContextMenuByPath 按"父级/子级"标签路径匹配，
+  // 而 getContextMenuCommands 的行里只有 parentGuid，所以沿链条向上拼名字（最多 4 层，防环）
+  function contextMenuLabelPath(cmds, cmd) {
+    var parts = [cmd.name || ''];
+    var cur = cmd, depth = 0;
+    while (cur && cur.parentGuid && depth++ < 4) {
+      var parent = null;
+      for (var i = 0; i < cmds.length; i++) if (cmds[i].guid === cur.parentGuid) { parent = cmds[i]; break; }
+      if (!parent || !parent.name) break;
+      parts.unshift(parent.name);
+      cur = parent;
+    }
+    return parts.filter(Boolean).join('/');
+  }
 
   CM.fetchTagsOnline = function(path) {
     if (!path) return;
+    _freedbTarget = path;
 
-    var execCmd = function(cmd) {
-      // 通过右键菜单命令执行（作用于当前播放曲目或选中项）
-      var params = cmd.subGuid ? { guid: cmd.guid, subGuid: cmd.subGuid } : { guid: cmd.guid };
-      CM.api('discovery.executeContextMenuCommand', params).then(function(r) {
+    var fallbackByGuid = function(cmd) {
+      // v2：该方法的 subGuid 不是声明过的参数（mainmenu 才有），带上会被严格校验拒掉
+      CM.api('discovery.executeContextMenuCommand', { guid: cmd.guid }).then(function(r) {
         if (!r || r.success === false) {
           _freedbCmd = null; // 清除失效的缓存命令，下次重新探测
-          CM.showToast('获取失败', '命令执行失败，请尝试在 foobar2000 中手动操作', 'error');
+          CM.showToast('获取失败', (r && r.error) || '命令执行失败，请尝试在 foobar2000 中手动操作', 'error');
           return;
         }
         CM.showToast('已触发在线获取', '请在弹出的窗口中完成操作', null);
+      });
+    };
+
+    var execCmd = function(cmd) {
+      // v2 起 executeContextMenuCommand 不再回退到"正在播放曲目 / 选中项 / 播放列表"，
+      // 无选中项时会以 INVALID_PARAMS 失败 —— 要作用于指定曲目必须走
+      // discovery.executeContextMenuByPath 的 trackPath（标签路径匹配）。
+      if (!cmd.path) { fallbackByGuid(cmd); return; }
+      CM.api('discovery.executeContextMenuByPath', { path: cmd.path, trackPath: _freedbTarget }).then(function(r) {
+        if (r && r.success !== false) {
+          CM.showToast('已触发在线获取', '请在弹出的窗口中完成操作', null);
+          return;
+        }
+        fallbackByGuid(cmd);
       });
     };
 
@@ -1269,7 +1543,11 @@
         CM.showToast('未找到组件', '请确认已安装「在线标签获取器」(foo_freedb2) 组件', 'error');
         return;
       }
-      _freedbCmd = { guid: found.guid, subGuid: found.subGuid || null, name: found.name };
+      _freedbCmd = {
+        guid: found.guid,
+        path: contextMenuLabelPath(r.commands, found),
+        name: found.name
+      };
       execCmd(_freedbCmd);
     });
   };

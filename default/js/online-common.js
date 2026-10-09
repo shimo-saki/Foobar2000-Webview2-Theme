@@ -149,6 +149,15 @@
     function apiOr(method, params) {
       return fb.invoke(method, params || {}).then(function (r) {
         if (!r) throw new Error(method + '：宿主没有响应');
+        // 失败信封是正常 resolve 的 {success:false}（真值）：漏掉这一判就会把
+        // "宿主拒绝了这次写入"当成成功（与 core.js 的 CM.apiOr 保持同一判据）
+        if (r.success === false) {
+          var err = new Error(r.error || (method + '：宿主拒绝了这次调用'));
+          err.code = r.code || 'FAILED';
+          err.method = method;
+          err.details = r.details;
+          throw err;
+        }
         return r;
       });
     }
@@ -193,16 +202,36 @@
       return all.playlists || all.items || all.list || [];
     }
 
+    // 记忆固定歌单的 guid（v2 起 playlist.* 都返回 guid）：歌单被改名或移动后
+    // 索引会变、guid 不会，所以解析顺序是「记忆的 guid → 名字」。
+    var PL_GUID_KEY = 'cm-plguid-' + P;
+    function savedGuid() {
+      try { return localStorage.getItem(PL_GUID_KEY) || ''; } catch (e) { return ''; }
+    }
+    function saveGuid(g) {
+      try { if (g) localStorage.setItem(PL_GUID_KEY, g); } catch (e) {}
+    }
+
     function ensurePlaylist(name) {
       function fetchAll() {
         return api('playlist.getAll').then(function (all) { return listsOf(all); },
                                            function () { return []; });
       }
       function findIn(lists) {
-        for (var i = 0; i < lists.length; i++) {
-          var it = lists[i] || {};
+        var g = savedGuid();
+        if (g) {
+          for (var i = 0; i < lists.length; i++) {
+            var gi = lists[i] || {};
+            if (gi.guid === g && gi.index != null) return gi.index;
+          }
+        }
+        for (var j = 0; j < lists.length; j++) {
+          var it = lists[j] || {};
           var nm = it.name || it.title || '';
-          if (nm === name && it.index != null) return it.index;
+          if (nm === name && it.index != null) {
+            if (it.guid) saveGuid(it.guid);
+            return it.index;
+          }
         }
         return -1;
       }
@@ -217,6 +246,7 @@
       return tryFind(4).then(function (idx) {
         if (idx >= 0) return idx;
         return api('playlist.create', { name: name }).then(function (cr) {
+          if (cr && cr.guid) saveGuid(cr.guid);
           if (cr && cr.index != null) return cr.index;
           return tryFind(3).then(function (idx2) {
             if (idx2 >= 0) return idx2;
@@ -228,7 +258,9 @@
       });
     }
 
-    /* getAll 抖动可能攒下同名歌单：播放成功后顺手清一遍 */
+    /* getAll 抖动可能攒下同名歌单：播放成功后清理"空壳"
+       注意只删空歌单 —— 同名但**有曲目**的那张可能是用户自己建的（按名字删会连他的歌
+       一起删掉），也可能是上一次导入的内容；留着让用户自己看着办 */
     function dedupePlaylists(name) {
       return api('playlist.getAll').then(function (all) {
         var same = listsOf(all).filter(function (it) {
@@ -236,16 +268,25 @@
         });
         if (same.length <= 1) return 0;
         same.sort(function (a, b) { return a.index - b.index; });
-        var removes = same.slice(1).map(function (s) { return s.index; })
+        // 空壳判定与 ui-playlist.js 同口径：宿主可能回 trackCount 也可能回 itemCount
+        var removes = same.slice(1).filter(function (s) {
+                        return (s.trackCount != null ? s.trackCount : s.itemCount) === 0;
+                      })
+                          .map(function (s) { return s.index; })
                           .sort(function (a, b) { return b - a; });   // 从大到小删，避开索引位移
+        if (!removes.length) return 0;
         var p = Promise.resolve();
         removes.forEach(function (ri) {
-          p = p.then(function () {
-            return api('playlist.remove', { playlist: ri }).catch(function () { return null; });
-          });
+          // api 失败返回 null（不 reject），这里不必再挂 catch
+          p = p.then(function () { return api('playlist.remove', { playlist: ri }); });
         });
         return p.then(function () { return removes.length; });
-      }).catch(function () { return 0; });
+      }).catch(function () {
+        // api 失败回 null（不 reject），所以这里兜的不是"宿主拒绝"，而是链上万一
+        // 出现的意外异常：本函数是 fire-and-forget 调的（各页 dedupePlaylists(...)
+        // 不带 then），返回一个会 reject 的 Promise 就是一条未处理的拒绝
+        return 0;
+      });
     }
 
     /* ---------- 下载：路径与落盘 ---------- */
@@ -397,29 +438,9 @@
     }
 
     /* ---------- 下载计划与执行 ---------- */
-    /* 解析结果 + 曲目 → 下载计划（文件名带歌手，同批重名自动加序号；
-       同时带出 .lrc 用的字段 —— 与音频同名同目录，宿主会当成同名歌词）。 */
-    function buildPlan(resolves, tracks, keyName, resolveKey) {
-      var byKey = {};
-      (tracks || []).forEach(function (t) { if (t && t[keyName]) byKey[t[keyName]] = t; });
-      var used = {};
-      return (resolves || []).map(function (rv) {
-        var t = byKey[rv[resolveKey]] || {};
-        var base = safeName((t.artist ? t.artist + ' - ' : '') + (t.title || rv[resolveKey]));
-        var name = base + extOfUrl(rv.url, rv.type);
-        var n = 1;
-        while (used[name]) { name = base + ' (' + (++n) + ')' + extOfUrl(rv.url, rv.type); }
-        used[name] = 1;
-        return {
-          url: rv.url, name: name,
-          lrcName: name.replace(/\.[a-z0-9]+$/i, '') + '.lrc',
-          key: rv[resolveKey],
-          title: t.title || '', artist: t.artist || '',
-          duration: (t.interval != null ? t.interval : t.duration) | 0,
-          level: rv.level
-        };
-      });
-    }
+    /* 下载计划的构造（文件名 + 同批重名序号 + .lrc 字段）由**各页自己**实现：
+       QQ 与网易云的字段名（songmid / id）与去重口径不同。这里曾导出一份"通用版"
+       buildPlan，两个页面都不用（各自有本地版），属死代码 —— 已删，避免三份实现漂移。 */
 
     /* 歌词：各页自己给 getLyric(it) → Promise<{ok,lrc}>（QQ 走标题+歌手匹配，
        网易云能拿到 id 就按 id 精确取词；都不是本模块的事）。 */
@@ -430,7 +451,9 @@
         if (!text) return 'none';
         // 统一成 CRLF + UTF-8 BOM：Windows 上的播放器认这个，主题自己的检测也吃得下
         var body = '\ufeff' + text.replace(/\r\n|\r|\n/g, '\r\n');
-        return api('file.write', { path: joinPath(dir, it.lrcName), content: body }).then(function (w) {
+        // v2：file.write 支持 atomic（临时文件 + 改名）。歌词是"顺手写"的附属文件，
+        // 写一半被打断（退出 / 停止下载）会留下半截 .lrc —— 加原子写避免。
+        return api('file.write', { path: joinPath(dir, it.lrcName), content: body, atomic: true }).then(function (w) {
           if (!w) return 'fail';
           return (w.success === false) ? 'fail' : 'ok';
         }, function () { return 'fail'; });
@@ -524,7 +547,7 @@
       joinPath: joinPath, safeName: safeName, extOfUrl: extOfUrl, hostErr: hostErr,
       dlSubscribe: dlSubscribe, grabToFile: grabToFile, downloadDir: downloadDir,
       showDlRow: showDlRow, dlRowPath: dlRowPath, openDlFolder: openDlFolder, copyDlPath: copyDlPath,
-      buildPlan: buildPlan, saveLyric: saveLyric, runDownloads: runDownloads,
+      saveLyric: saveLyric, runDownloads: runDownloads,
       showSetup: showSetup, toggleSetup: toggleSetup, togglePanel: togglePanel,
       dirName: dirName, prefix: P
     };

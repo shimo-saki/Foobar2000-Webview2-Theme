@@ -1,7 +1,7 @@
 /* ============================================
  * CloudMusic ui-playlist.js — 播放列表
  * 侧栏歌单列表 / 歌单详情曲目表格（差量渲染/排序/元数据预加载）
- * 曲目右键菜单 / JIT 无痕试听 / 添加到歌单 / 批量多选
+ * 曲目右键菜单（插队 / 添加到歌单 / 评分） / 批量多选
  * ============================================ */
 
 (function() {
@@ -33,10 +33,13 @@
     return CM.api('playlist.getAll').then(function(r) {
       // 宿主直接返回数组 [{index,name,trackCount,isActive,isPlaying,...}]
       var lists = Array.isArray(r) ? r : ((r && r.playlists) || []);
-      CM.playlists = lists;
+      CM.playlists = lists;   // 缓存保留全量（索引/guid 查找需要用到上下文歌单）
+      // 主题自己/宿主的内部歌单不显示（见 playback-model.js 的 isInternalPlaylist）：
+      //   `_MediaLibraryContext_` = 当前视图容器；`[WebView Queue]` = queue.addPaths 的落点
+      var visible = lists.filter(function(pl) { return !CM.isInternalPlaylist(pl); });
       // 预计算所有歌单项的 HTML 片段，避免循环内重复条件判断
-      var parts = lists.map(function(pl, i) {
-        var idx = pl.index !== undefined ? pl.index : i;
+      var parts = visible.map(function(pl) {
+        var idx = pl.index !== undefined ? pl.index : lists.indexOf(pl);
         var cls = 'pl-item';
         if (idx === state.currentPlaylistIndex) cls += ' active';
         if (idx === state.playingPlaylistIndex) cls += ' playing';
@@ -113,7 +116,8 @@
     var editable = !pl.isAutoplaylist && !pl.isLocked;
     var items = [
       { label: '播放', icon: CM.icons.play, action: function() {
-        CM.api('playlist.playTrack', { playlist: idx, index: 0 });
+        // 歌单即播放上下文：切活动歌单 + 定位播放 + 清空插队队列（双轨制，见 playback-model.js）
+        CM.playRow({ playlist: idx, index: 0 });
       } }
     ];
     if (editable) {
@@ -130,20 +134,27 @@
       items.push({ label: '重命名', icon: CM.icons.edit, action: function() {
         CM.showModal({ title: '重命名歌单', input: pl.name || '', okText: '重命名' }).then(function(name) {
           if (!name) return;
-          CM.api('playlist.rename', { playlist: idx, name: name }).then(function(r) {
-            if (r && r.success) CM.showToast('已重命名', name, 'success');
-          });
+          // 写操作走 apiOr：宿主拒（锁定 / 索引失效）时不能静默，否则只是"点了没反应"
+          CM.apiOr('playlist.rename', { playlist: idx, name: name }).then(function() {
+            CM.showToast('已重命名', name, 'success');
+          }, function(e) { CM.failToast(e, '重命名失败'); });
         });
       } });
       items.push({ divider: true });
       items.push({ label: '清空歌单', icon: CM.icons.trash, action: function() {
         CM.showModal({ title: '清空歌单', desc: '将移除「' + (pl.name || '') + '」中的全部曲目，此操作不可撤销。', okText: '清空', danger: true }).then(function(ok) {
-          if (ok) CM.api('playlist.clear', { playlist: idx });
+          if (!ok) return;
+          CM.apiOr('playlist.clear', { playlist: idx }).then(function() {
+            CM.showToast('已清空歌单', pl.name || null, 'success');
+          }, function(e) { CM.failToast(e, '清空失败'); });
         });
       } });
       items.push({ label: '删除歌单', icon: CM.icons.trash, danger: true, action: function() {
         CM.showModal({ title: '删除歌单', desc: '确定删除「' + (pl.name || '') + '」吗？此操作不可撤销。', okText: '删除', danger: true }).then(function(ok) {
-          if (ok) CM.api('playlist.remove', { playlist: idx });
+          if (!ok) return;
+          CM.apiOr('playlist.remove', { playlist: idx }).then(function() {
+            CM.showToast('已删除歌单', pl.name || null, 'success');
+          }, function(e) { CM.failToast(e, '删除失败'); });
         });
       } });
     } else {
@@ -158,11 +169,152 @@
   CM.openPlaylist = function(idx) {
     state.currentPlaylistIndex = idx;
     state.sortKey = null;
+    // 切歌单时清掉筛选：查询是按歌单求值的，跨歌单留着会显示另一个歌单的命中行
+    CM.clearPlaylistFilter(idx);
     // 表格还显示着上一个歌单的行：立即清掉多选，防止批量栏带着旧索引
     // 在新歌单上执行删除/编辑
     if (state.batchSelected.size > 0) CM.clearBatchSelection();
     CM.switchTab('playlist'); // 进入播放列表标签会自行渲染该歌单
     CM.loadPlaylists();
+  };
+
+  /* ============================================
+   * 歌单内筛选（插件 v2：playlist.getMatchingRows / getTracksAt）
+   *
+   * 查询串交给宿主的 foobar2000 查询引擎求值（与 foobar 搜索框同一套语法：
+   *   %title% HAS 晴天、artist IS 周杰伦、rating GREATER 3 …），返回的是
+   * **歌单真实行号**：页面只按行号取回需要的那几首（getTracksAt），
+   * 不必把整张歌单拉下来在客户端过滤 —— 几万首的歌单也一样快。
+   * ============================================ */
+  CM._filterLoadId = 0;
+  CM.setPlFilterMeta = function(matched, total) {
+    var meta = els.plFilterMeta;
+    var clear = els.plFilterClear;
+    if (clear) clear.hidden = !state.plFilter;
+    // 「存为自动歌单」只在有查询条件时有意义
+    if (els.plFilterSave) els.plFilterSave.hidden = !state.plFilter;
+    if (!meta) return;
+    if (!state.plFilter) { meta.hidden = true; meta.textContent = ''; return; }
+    meta.hidden = false;
+    meta.textContent = (matched == null ? '' : matched + ' 首命中') +
+      (total ? ' / 共 ' + total + ' 首' : '');
+  };
+
+  CM.clearPlaylistFilter = function() {
+    state.plFilter = '';
+    state.filterRows = null;
+    state.filterTracks = null;
+    CM._filterLoadId++;
+    if (els.plFilter && els.plFilter.value) els.plFilter.value = '';
+    CM.setPlFilterMeta(null, null);
+  };
+
+  // 应用筛选：空串 = 退回完整视图
+  CM.applyPlaylistFilter = function(query) {
+    var idx = state.currentPlaylistIndex;
+    state.plFilter = query == null ? '' : String(query);
+    if (els.plFilter && els.plFilter.value !== state.plFilter) els.plFilter.value = state.plFilter;
+    if (idx == null || idx < 0) return;
+    if (!state.plFilter) {
+      state.filterRows = null;
+      state.filterTracks = null;
+      CM.setPlFilterMeta(null, null);
+      CM.renderPlaylistView(idx);
+      return;
+    }
+    var loadId = ++CM._filterLoadId;
+    CM.api('playlist.getMatchingRows', { playlist: idx, query: state.plFilter }).then(function(r) {
+      if (loadId !== CM._filterLoadId || idx !== state.currentPlaylistIndex) return;
+      if (!r || r.success === false) {
+        // 查询被解析器拒绝时宿主给 INVALID_PARAMS + details.param='query'：如实提示而不是空表
+        state.filterRows = [];
+        state.filterTracks = [];
+        CM.renderTrackTable();
+        CM.setPlFilterMeta(0, state.playlistTracksTotal);
+        CM.showToast('筛选失败', (r && r.error) || '查询语法可能有误', 'error');
+        return;
+      }
+      var rows = r.rows || r.matches || r.items || [];
+      if (!rows.length) {
+        state.filterRows = [];
+        state.filterTracks = [];
+        CM.renderTrackTable();
+        CM.setPlFilterMeta(0, state.playlistTracksTotal);
+        return;
+      }
+      var need = [];
+      for (var i = 0; i < rows.length; i++) {
+        if (!state.trackCache[rows[i]]) need.push(rows[i]);
+      }
+      var finish = function(extra) {
+        if (loadId !== CM._filterLoadId) return;
+        var byRow = null;
+        if (extra) {
+          byRow = {};
+          for (var j = 0; j < need.length; j++) if (extra[j]) byRow[need[j]] = extra[j];
+        }
+        var tracks = [];
+        for (var k = 0; k < rows.length; k++) {
+          tracks.push(state.trackCache[rows[k]] || (byRow && byRow[rows[k]]) || {});
+        }
+        state.filterRows = rows;
+        state.filterTracks = tracks;
+        CM.renderTrackTable();
+        CM.setPlFilterMeta(rows.length, state.playlistTracksTotal);
+      };
+      if (!need.length) { finish(null); return; }
+      CM.api('playlist.getTracksAt', { playlist: idx, rows: need }).then(function(tr) {
+        if (loadId !== CM._filterLoadId) return;
+        var got = CM.respTracks(tr);
+        var ordered = new Array(need.length);
+        got.forEach(function(t, gi) {
+          // 行回包里带 index（歌单行号）；没有就按请求顺序对齐
+          var pos = (t && t.index != null) ? need.indexOf(t.index) : gi;
+          if (pos >= 0 && pos < ordered.length) ordered[pos] = t;
+        });
+        finish(ordered);
+      }, function() { finish(null); });
+    });
+  };
+
+  CM.bindPlaylistFilter = function() {
+    if (!els.plFilter) return;
+    var deb = CM.debounce(function() {
+      CM.applyPlaylistFilter(els.plFilter.value.trim());
+    }, 260);
+    els.plFilter.addEventListener('input', deb);
+    els.plFilter.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); CM.applyPlaylistFilter(els.plFilter.value.trim()); }
+      else if (e.key === 'Escape') { CM.clearPlaylistFilter(); CM.applyPlaylistFilter(''); }
+    });
+    if (els.plFilterClear) els.plFilterClear.addEventListener('click', function() {
+      CM.clearPlaylistFilter();
+      CM.applyPlaylistFilter('');
+    });
+    if (els.plFilterSave) els.plFilterSave.addEventListener('click', function() {
+      CM.saveFilterAsAutoplaylist();
+    });
+  };
+
+  // 把当前筛选条件存成一个自动歌单（v2：playlist.createAutoplaylist）。
+  // 查询串原样交给宿主、不做任何改写 —— 存出来的自动歌单与眼前看到的命中集一致。
+  CM.saveFilterAsAutoplaylist = function() {
+    var query = state.plFilter;
+    if (!query) { CM.showToast('没有筛选条件', '先在筛选框里输入查询', 'error'); return; }
+    CM.showModal({
+      title: '存为自动歌单',
+      input: query.length > 40 ? query.slice(0, 40) : query,
+      desc: '新建的自动歌单按此条件实时求值：' + query,
+      okText: '创建'
+    }).then(function(name) {
+      if (!name) return;
+      CM.apiOr('playlist.createAutoplaylist', { name: name, query: query, keepSorted: false }).then(function() {
+        CM.showToast('已创建自动歌单', name, 'success');
+        CM.loadPlaylists();
+      }, function(e) {
+        CM.failToast(e, '无法创建自动歌单');
+      });
+    });
   };
 
   CM._playlistViewLoadId = 0;
@@ -173,14 +325,22 @@
     var pl = (CM.playlists || []).find(function(p) { return p.index === idx; }) || {};
     els.playlistHeaderName.textContent = pl.name || '播放列表';
     els.playlistHeaderTag.textContent = pl.isAutoplaylist ? 'AUTOPLAYLIST' : 'PLAYLIST';
-    // 记忆最近打开的歌单（按名称持久化，启动时据此自动恢复上次听歌的歌单）
-    if (CM.settings.lastPlaylist !== (pl.name || '')) {
+    // 记忆最近打开的歌单（v2：优先记 guid —— 歌单改名/挪位后索引会变、guid 不会；
+    // 名字继续留着，作为 guid 失效时的回退）
+    if (pl.guid && CM.settings.rememberGuid !== pl.guid) {
+      CM.settings.rememberGuid = pl.guid;
+      CM.settings.lastPlaylist = pl.name || '';
+      CM.saveSettings();
+    } else if (CM.settings.lastPlaylist !== (pl.name || '')) {
       CM.settings.lastPlaylist = pl.name || '';
       CM.saveSettings();
     }
 
     var loadId = ++CM._playlistViewLoadId;
-    CM._tablePlaylist = null; // 请求在途：现有行属于旧歌单，行级操作一律拒绝
+    // 请求在途：现有行属于旧歌单，行级操作一律拒绝。但**同一歌单的重载**保留旧值 ——
+    // 行还是那些行（data-index 不变），而置空会让播放后的自动刷新期间出现几百毫秒的
+    // "双击/右键没反应"死窗口（_tablePlaylist 守卫见 dblclick / contextmenu）。
+    if (CM._tablePlaylist !== idx) CM._tablePlaylist = null;
     // 延迟加载指示器：API 快速返回（<150ms）时不闪烁，保留旧表格内容
     var cancelLoading = CM.delayedLoading(function() {
       if (loadId !== CM._playlistViewLoadId) return;
@@ -239,6 +399,8 @@
         els.plCover.style.display = '';
       }
       CM.renderTrackTable();
+      // 筛选视图在数据刷新后重新求值（命中行可能因增删而变化）
+      if (state.plFilter) CM.applyPlaylistFilter(state.plFilter);
       // 预加载缺失元数据（foobar2000 延迟加载机制：异步添加文件时不立即读取标签）
       CM.preloadTrackMetadata(tracks);
     });
@@ -440,10 +602,9 @@
       if (!tr) return;
       if (CM._tablePlaylist !== state.currentPlaylistIndex) return; // 表格仍是旧歌单的内容
       var idx = parseInt(tr.dataset.index, 10);
-      // 先停掉 JIT 无痕试听：试听与正常播放是两路输出，不停会两首一起响
-      CM.stopPreviewIfActive().then(function() {
-        CM.api('playlist.playTrack', { playlist: state.currentPlaylistIndex, index: idx });
-      });
+      // 双击 = 切换播放上下文：该歌单成为活动歌单并定位播放，插队队列清空
+      // （原生 Autoplaylist 无需任何同步 —— 它本身就是完整 Context）
+      CM.playRow({ playlist: state.currentPlaylistIndex, index: idx });
     });
     els.trackTbody.addEventListener('contextmenu', function(e) {
       var tr = e.target.closest('tr[data-index]');
@@ -563,18 +724,29 @@
       state.batchSelected.clear();
       CM._updateBatchBar();
     }
+    // 筛选视图（v2 的 playlist.getMatchingRows / getTracksAt）：只显示命中的行，
+    // 但行号仍是歌单真实行号 —— 播放 / 右键 / 删除 / 调序等行级操作一行都不用改
+    // 用 != null 判"处于筛选视图"：零命中时 filterRows 是**空数组**，用 length 判会
+    // 让表格退回渲染整张歌单（元信息却写着"0 首命中"），用户还会在"筛选视图"里
+    // 对全表行做批量操作
+    var isFiltered = state.filterRows != null;
     var tracks = state.trackCache.slice();
-    // 客户端排序视图（不改动实际播放列表顺序）
-    var viewIndex = tracks.map(function(_, i) { return i; });
-    if (state.sortKey) {
-      var key = state.sortKey, asc = state.sortAsc ? 1 : -1;
-      viewIndex.sort(function(a, b) {
-        var va = tracks[a][key], vb = tracks[b][key];
-        if (key === 'duration' || key === 'bitrate') {
-          return ((va || 0) - (vb || 0)) * asc;
-        }
-        return String(va || '').localeCompare(String(vb || ''), 'zh-CN') * asc;
-      });
+    var viewIndex;
+    if (isFiltered) {
+      viewIndex = state.filterRows.slice();
+    } else {
+      // 客户端排序视图（不改动实际播放列表顺序）
+      viewIndex = tracks.map(function(_, i) { return i; });
+      if (state.sortKey) {
+        var key = state.sortKey, asc = state.sortAsc ? 1 : -1;
+        viewIndex.sort(function(a, b) {
+          var va = tracks[a][key], vb = tracks[b][key];
+          if (key === 'duration' || key === 'bitrate') {
+            return ((va || 0) - (vb || 0)) * asc;
+          }
+          return String(va || '').localeCompare(String(vb || ''), 'zh-CN') * asc;
+        });
+      }
     }
     // 排序箭头（缓存表头单元格，避免每次渲染都 querySelectorAll）
     if (!_sortHeaders) _sortHeaders = els.trackTable.querySelectorAll('thead th[data-sort]');
@@ -589,14 +761,20 @@
       }
     });
 
-    if (!tracks.length) {
-      els.trackTbody.innerHTML = '<tr><td colspan="6"><div class="table-empty">这个歌单还没有曲目<br><span style="font-size:11.5px;opacity:0.7">拖放音频文件到窗口即可添加</span></div></td></tr>';
+    if (!viewIndex.length) {
+      els.trackTbody.innerHTML = isFiltered
+        ? '<tr><td colspan="6"><div class="table-empty">没有匹配的曲目<br><span style="font-size:11.5px;opacity:0.7">清空筛选框即可回到整张歌单</span></div></td></tr>'
+        : '<tr><td colspan="6"><div class="table-empty">这个歌单还没有曲目<br><span style="font-size:11.5px;opacity:0.7">拖放音频文件到窗口即可添加</span></div></td></tr>';
       return;
     }
 
     var isPlayingList = state.currentPlaylistIndex === state.playingPlaylistIndex;
-    // 预转义曲目字段，避免循环内重复调用 esc()
-    var escTracks = tracks.map(function(t) {
+    // 预转义曲目字段，避免循环内重复调用 esc()；顺序与 viewIndex 一一对应
+    // （筛选视图的曲目来自 getTracksAt，可能不在已加载的 trackCache 里）
+    var escTracks = viewIndex.map(function(realIdx, vi) {
+      var t = isFiltered
+        ? ((state.filterTracks && state.filterTracks[vi]) || tracks[realIdx] || {})
+        : tracks[realIdx];
       return {
         name: esc(CM.trackName(t)),
         artist: esc(CM.trackArtist(t)),
@@ -618,7 +796,7 @@
     }
     var frag = document.createDocumentFragment();
     viewIndex.forEach(function(realIdx, row) {
-      var t = escTracks[realIdx];
+      var t = escTracks[row];
       var playing = isPlayingList && realIdx === state.playingTrackIndex;
       // 行签名 = 除行号外的全部渲染输入（行号在复用时单独更新；签名不含 refreshPlayingMarks
       // 命令式改动的 playing 态——该改动会使签名失配触发单行重建，结果自愈为正确状态）
@@ -708,45 +886,113 @@
     }
   };
 
+  /* 插队：把曲目放进右侧「插队队列」（foobar 原生播放队列）
+     ------------------------------------------------------------
+     mode = 'next'：插到队首（下一首就播）；mode = 'end'：追加到队尾。
+
+     **为什么尽量不用"歌单坐标"入队**：队列项有两种形态 ——
+       · 带坐标（`items:[{playlist,item}]` / `queue.add`）：文档明说坐标的意义是
+         "能从该歌单那条的位置继续播"，所以它被播放时**宿主会把播放上下文带到那张歌单**：
+         正在播歌单 A 的 x，去歌单 B 右键"下一首播放" b 之后，b 播完**下一首就是 B 的歌**，
+         不会回到 A（用户实测；指南《示例 1》要求的是回 A）。
+       · 不带坐标（裸路径 / handle 字符串）：`queue.insertNext({paths:[…]})` 的文档写明
+         "新入队的裸路径没有歌单坐标" —— 它只是"插播这一项"，上下文不动，播完回到原来的
+         歌单继续。作者版主题重建队列时也走这个形态（`insertNext([...handles], position)`）。
+     所以：**只有插队来源就是"当前正在播的那张歌单"时才用坐标**（此时上下文本来就不变，
+     还保留坐标的好处：宿主界面里的队列标记、CUE 子曲目身份最准）；来自别的歌单一律用
+     handle/路径，不把上下文带走。 */
+  function queueEntryFor(track) {
+    var h = track && track.handle;
+    if (typeof h === 'string' && h) return h;              // 宿主自己的 handle：精确指向该项
+    return CM.trackPath(track);                            // 普通文件用绝对路径即可
+  }
+  // 明显是 CUE 整轨的子曲目？（行上带 subsong，或路径本身已带 |subsong:N 后缀）
+  function isCueEntry(track) {
+    if (!track) return false;
+    if (track.subsong != null) return true;
+    return /\|subsong:/i.test(CM.trackPath(track));
+  }
+  function enqueueTrack(track, ctx, mode) {
+    var hasCoord = ctx && ctx.playlist != null && ctx.index != null;
+    var hasHandle = !!(track && typeof track.handle === 'string' && track.handle);
+    var sameAsContext = hasCoord && state.playingPlaylistIndex === ctx.playlist;
+    // 跨歌单时**不用坐标**（见上面的长注释：坐标会把播放上下文带到那张歌单）。
+    // 唯一的例外：拿不到 handle、又明显是 CUE 子曲目 —— 这时裸路径指不准是哪一轨，
+    // 宁可让上下文跟过去（退回坐标）也不能播错曲目。
+    var useCoord = sameAsContext || (hasCoord && !hasHandle && isCueEntry(track));
+    var entry = useCoord ? '' : queueEntryFor(track);
+    var atTail = mode === 'end';
+    var p;
+    if (useCoord) {
+      p = atTail ? CM.api('queue.add', { playlist: ctx.playlist, tracks: [ctx.index] })
+                 : CM.api('queue.insertNext', { items: [{ playlist: ctx.playlist, item: ctx.index }], position: 0 });
+    } else {
+      if (!entry) { CM.showToast('无法插队', '未找到文件路径', 'error'); return; }
+      if (!atTail) {
+        p = CM.api('queue.insertNext', { paths: [entry], position: 0 });
+      } else {
+        // 追加到队尾：insertNext 的 position 是"插到这个下标之前"，当前长度 = 队尾。
+        // 长度用 CM._queueCount（queueChanged 载荷 / queue.get 回包给的真值，不是估算）——
+        // 这样"跨歌单追加"和改前的 queue.add 一样只发 1 次调用；拿不到才查一次
+        var cached = CM._queueCount;
+        if (typeof cached === 'number') {
+          p = CM.api('queue.insertNext', { paths: [entry], position: cached });
+        } else {
+          p = CM.api('queue.getCount').then(function (r) {
+            return CM.api('queue.insertNext', { paths: [entry], position: CM.respCount(r) });
+          });
+        }
+      }
+    }
+    p.then(function(r) {
+      // 静默跳过（超长 URL 只计入 invalidCount）与失败都要如实说，不能装作加上了
+      if (!r || r.success === false) {
+        CM.showToast('插队失败', (r && (r.error || CM.errText(r.code))) || '宿主拒绝了这次操作', 'error');
+        return;
+      }
+      if (r.invalidCount) {
+        CM.showToast('插队失败', '这条路径超长或不合法，宿主没有接受', 'error');
+        return;
+      }
+      CM.showToast(mode === 'next' ? '已在下一首播放' : '已加入插队队列', CM.trackName(track), 'success');
+      CM.refreshQueueBadge();
+      if (state.queueOpen) CM.renderQueue();
+    });
+  }
+
   /* ============================================
    * 曲目右键菜单（通用）
    * track: 曲目对象；ctx: {playlist?, index?} 在播放列表内时可删除
+   *      ctx 还可能是视图列表上下文 {tracks, index, title}（媒体库/发现/搜索结果行）
    * ============================================ */
   CM.showTrackCtxMenu = function(x, y, track, ctx) {
     if (!track) return;
     var path = CM.trackPath(track);
+    var inPlaylist = !!(ctx && ctx.playlist != null);
     var items = [
       { label: '播放', icon: CM.icons.play, action: function() {
-        if (ctx && ctx.playlist != null) {
-          CM.stopPreviewIfActive().then(function() {
-            CM.api('playlist.playTrack', { playlist: ctx.playlist, index: ctx.index });
-          });
-        } else {
-          CM.playNow(path);
-        }
+        // 列表行：切播放上下文再定位播放；无列表归属的裸曲目：立即播放（游离曲）
+        if (inPlaylist) CM.playRow({ playlist: ctx.playlist, index: ctx.index });
+        else if (ctx && ctx.tracks && ctx.tracks.length) CM.playRow({ tracks: ctx.tracks, index: ctx.index, title: ctx.title });
+        else CM.playRow({ path: path });
       } },
-      { label: '试听（不加入歌单）', action: function() {
-        CM.previewTrack(track, path);
+      { label: '添加到插入队列', icon: CM.icons.queue, action: function() {
+        enqueueTrack(track, ctx, 'end');
       } },
       { label: '下一首播放', icon: CM.icons.queue, action: function() {
-        // queue.add 接受 tracks 数组（不是 index）
-        var p = (ctx && ctx.playlist != null)
-          ? CM.api('queue.add', { playlist: ctx.playlist, tracks: [ctx.index] })
-          : CM.api('queue.addPaths', { paths: [path] });
-        p.then(function(r) {
-          if (r && r.success !== false) { CM.showToast('已加入播放队列', CM.trackName(track), 'success'); CM.refreshQueueBadge(); }
-        });
+        enqueueTrack(track, ctx, 'next');
       } },
       { label: '添加到歌单', icon: CM.icons.plus, action: function() {
         CM.showAddToPlaylistMenu(x, y, [path]);
       } },
-      { divider: true },
-      { isLabel: true, label: '评分' }
+      { divider: true }
     ];
-    // 星级评分行
+    // 评分收成一个二级菜单（与歌词右键的「小窗 / 歌词工具」同一种悬停展开方式）：
+    // 5 个星级 + 清除评分共 6 行，平铺在主菜单里会把"编辑标签 / 从歌单删除"一直往下挤
+    var ratingItems = [];
     for (var s = 5; s >= 1; s--) {
       (function(stars) {
-        items.push({
+        ratingItems.push({
           html: '<span class="ctx-stars">' + '★'.repeat(stars) + '<span style="opacity:0.25">' + '★'.repeat(5 - stars) + '</span></span>',
           action: function() {
             CM.api('rating.set', { path: path, rating: stars }).then(function(r) {
@@ -761,7 +1007,7 @@
         });
       })(s);
     }
-    items.push({ label: '清除评分', action: function() {
+    ratingItems.push({ label: '清除评分', action: function() {
       CM.api('rating.set', { path: path, rating: 0 }).then(function(r) {
         if (r && r.success !== false) {
           CM.showToast('已清除评分', CM.trackName(track));
@@ -772,12 +1018,7 @@
         }
       });
     } });
-    if (CM.state.previewActive) {
-      items.push({ divider: true });
-      items.push({ label: '停止试听', danger: true, action: function() {
-        CM.stopPreview();
-      } });
-    }
+    items.push({ label: '评分', icon: CM.icons.star, submenu: ratingItems });
     items.push({ divider: true });
     // 在线曲目（QQ 音乐直链）没有本地文件：这两项点了必然失败（或静默无操作），
     // 直接置灰并写明原因，别让用户对着"没反应 / 写入失败"猜
@@ -845,35 +1086,6 @@
   };
 
   /* ============================================
-   * JIT 无痕试听（不改变播放列表）
-   * ============================================ */
-  CM.previewTrack = function(track, path) {
-    if (!path) { CM.showToast('无法试听', '未找到文件路径', 'error'); return; }
-    if (!CM._previewBound) {
-      CM._previewBound = true;
-      fb.on('jitQueue:listExhausted', function() { CM.state.previewActive = false; });
-      fb.on('jitQueue:error', function() { CM.state.previewActive = false; });
-    }
-    var title = CM.trackName(track);
-    CM.api('jitQueue.playNow', { title: title, trackId: path, url: path }).then(function(r) {
-      if (r && r.success !== false) {
-        CM.state.previewActive = true;
-        CM.showToast('正在试听', title, 'success');
-      } else {
-        CM.showToast('试听失败', r && r.error ? r.error : '当前曲目可能无法试听', 'error');
-      }
-    });
-  };
-  CM.stopPreview = function() {
-    CM.api('jitQueue.stop').then(function(r) {
-      if (r && r.success !== false) {
-        CM.state.previewActive = false;
-        CM.showToast('已停止试听');
-      }
-    });
-  };
-
-  /* ============================================
    * 添加到歌单 — 弹出歌单选择菜单
    * paths: 要添加的文件路径数组
    * ============================================ */
@@ -886,7 +1098,9 @@
       if (lists.length) {
         lists.forEach(function(pl) {
           var idx = pl.index !== undefined ? pl.index : null;
-          if (idx === null || pl.isLocked || pl.isAutoplaylist) return;
+          // 内部歌单（上下文容器 / 宿主的 [WebView Queue]）不列进"添加到歌单"：
+          // 前者内容会被下一次视图同步整体重建，后者只是队列的落脚点
+          if (idx === null || pl.isLocked || pl.isAutoplaylist || CM.isInternalPlaylist(pl)) return;
           var name = pl.name || '未命名';
           var count = pl.trackCount != null ? pl.trackCount : (pl.itemCount != null ? pl.itemCount : '');
           items.push({
@@ -894,7 +1108,8 @@
             action: function() {
               CM.api('playlist.addPathsAsync', { playlist: idx, paths: paths }).then(function(res) {
                 if (res && res.success !== false) {
-                  CM.showToast('已添加', paths.length + ' 首到「' + name + '」', 'success');
+                  // addPathsAsync 是"已在后台开始添加"的投递回执 —— 提示语照这个口径写
+                  CM.showToast('正在添加', paths.length + ' 首到「' + name + '」', 'success');
                 } else {
                   CM.showToast('添加失败', res && res.error ? res.error : '歌单可能被锁定', 'error');
                 }
@@ -907,15 +1122,15 @@
       items.push({ label: '新建歌单并添加', icon: CM.icons.plus, action: function() {
         CM.showModal({ title: '新建歌单', input: '', okText: '创建并添加' }).then(function(name) {
           if (!name) return;
-          CM.api('playlist.create', { name: name }).then(function(cr) {
-            if (cr && cr.success !== false && cr.index != null) {
-              CM.api('playlist.addPathsAsync', { playlist: cr.index, paths: paths }).then(function() {
-                CM.showToast('已创建并添加', name + ' · ' + paths.length + ' 首', 'success');
-              });
-            } else {
-              CM.showToast('创建失败', '无法创建歌单', 'error');
-            }
-          });
+          // create + addPathsAsync 两步都要看回执：addPathsAsync 是"已在后台开始添加"
+          // 的投递回执，所以提示语也照这个口径写，不写成"已完成添加"
+          CM.apiOr('playlist.create', { name: name }).then(function(cr) {
+            var newIdx = cr && (cr.index != null ? cr.index : cr.playlist);
+            if (newIdx == null || newIdx < 0) throw new Error('宿主未返回新歌单索引');
+            return CM.apiOr('playlist.addPathsAsync', { playlist: newIdx, paths: paths }).then(function() {
+              CM.showToast('已创建歌单', name + ' · 正在添加 ' + paths.length + ' 首', 'success');
+            });
+          }).catch(function(e) { CM.failToast(e, '无法创建并添加'); });
         });
       } });
       CM.showCtxMenu(x, y, items);

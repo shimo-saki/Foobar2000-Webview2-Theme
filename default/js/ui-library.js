@@ -149,7 +149,8 @@
             if (!total) { resetAddAllBtn(); CM.showToast('媒体库为空', null, 'error'); return; }
             var pageSize = 2000, collected = [], pos = 0;
             function fetchPage() {
-              CM.api('library.getAll', { start: pos, count: Math.min(pageSize, total - pos) }).then(function(pr) {
+              // v2：分页参数名是 offset / limit（旧名 start / count 属未声明键，会被整个拒绝）
+              CM.api('library.getAll', { offset: pos, limit: Math.min(pageSize, total - pos) }).then(function(pr) {
                 if (!pr) { resetAddAllBtn(); CM.showToast('加载失败', null, 'error'); return; }
                 var batch = CM.respTracks(pr);
                 collected = collected.concat(batch);
@@ -168,7 +169,10 @@
       CM.api('library.getRecentlyAdded', { limit: 10 }).then(function(rr) {
         if (!isCurrent()) return;
         var box = CM.$('libRecentRows');
-        if (box) CM.renderTrackRows(box, CM.respTracks(rr), '暂无曲目');
+        if (box) {
+          var recent = CM.respTracks(rr);
+          CM.renderTrackRows(box, recent, '暂无曲目', 0, { tracks: recent, title: '最近添加' });
+        }
       });
     });
   };
@@ -252,7 +256,8 @@
       var all = [];
       var offset = 0;
       var loadPage = function() {
-        CM.api('library.getAll', { start: offset, count: Math.min(PAGE, total - offset) }).then(function(r) {
+        // v2：分页参数名是 offset / limit（旧名 start / count 会被严格校验整体拒绝）
+        CM.api('library.getAll', { offset: offset, limit: Math.min(PAGE, total - offset) }).then(function(r) {
           if (!isCurrent()) { cancelLoading(); return; }
           if (!r || r.success === false) {
             cancelLoading();
@@ -393,7 +398,9 @@
 
   CM.renderLibraryGenres = function() {
     ensureLibDetailDelegation();
-    CM._renderLibraryGrid('library.getGenres', { limit: 1000000 }, '全部流派', '暂无流派信息',
+    // library.getGenres 是**零参数**方法（SDK: getGenres: () => call("library.getGenres")）：
+    // 多传 limit 属未声明键，v2 严格校验会整单拒绝 → 流派页一直错误态
+    CM._renderLibraryGrid('library.getGenres', null, '全部流派', '暂无流派信息',
       function(name, count) {
         return '<div class="artist-card" data-genre="' + esc(name) + '">' +
           '<div class="artist-avatar">♪</div>' +
@@ -665,10 +672,12 @@
     });
     if (paged) {
       CM._bindPager('libDrill', tracks.length, opts.pageKey || 'drill', function(start, size) {
-        CM.renderTrackRows(CM.$('libDrillRows'), tracks.slice(start, start + size), '未找到曲目', start);
+        // 上下文传的是**完整列表**：data-i 用的是完整列表下标，双击/右键播放按它定位
+        CM.renderTrackRows(CM.$('libDrillRows'), tracks.slice(start, start + size), '未找到曲目', start,
+          { tracks: tracks, title: typeof title === 'string' ? title : '' });
       });
     } else {
-      CM.renderTrackRows(CM.$('libDrillRows'), tracks, '未找到曲目');
+      CM.renderTrackRows(CM.$('libDrillRows'), tracks, '未找到曲目', 0, { tracks: tracks, title: typeof title === 'string' ? title : '' });
     }
   };
 
@@ -716,25 +725,27 @@
 
   CM.renderLibraryAlbumDetail = function(arg) {
     if (!arg) { state.libraryView = 'albums'; CM.renderLibrary(); return; }
-    var sub = function(tracks) { return (arg.artist ? arg.artist + ' · ' : '') + tracks.length + ' 首曲目'; };
+    // 专辑行的 albumArtist 才是 v2 library.getAlbumTracks 要的值（逐字节比较，不能用 artist 顶替）
+    var albumArtist = arg.albumArtist || arg.artist || '';
+    var sub = function(tracks) { return (albumArtist ? albumArtist + ' · ' : '') + tracks.length + ' 首曲目'; };
     var retry = function() { CM.renderLibraryAlbumDetail(arg); };
     // 专辑名或艺术家名含引号：宿主 getAlbumTracks 内部查询无法转义必然返回空，直接走 ? 通配查询
     var wild = arg.album.indexOf('"') >= 0 ? wildValue(arg.album) : null;
-    var wildArtist = (arg.artist || '').indexOf('"') >= 0 ? wildValue(arg.artist) : null;
+    var wildArtist = albumArtist.indexOf('"') >= 0 ? wildValue(albumArtist) : null;
     if (wild || wildArtist) {
       var q = wild ? 'album IS "' + wild + '"' : 'album HAS "' + arg.album + '"';
       if (wildArtist) q += ' AND (artist IS "' + wildArtist + '" OR albumartist IS "' + wildArtist + '")';
-      else if (arg.artist) q += ' AND (artist IS "' + arg.artist + '" OR albumartist IS "' + arg.artist + '")';
+      else if (albumArtist) q += ' AND (artist IS "' + albumArtist + '" OR albumartist IS "' + albumArtist + '")';
       CM._renderLibraryDetail('albums', 'library.search', { query: q, limit: 5000 },
         arg.album, sub, retry,
         // 通配 artist 子句可能过匹配（? 命中同形名），客户端一并按原值过滤
         function(t) {
           if (!tagMatch(t.album, arg.album)) return false;
-          return !arg.artist || tagMatch(t.artist, arg.artist) || tagMatch(t.albumArtist, arg.artist);
+          return !albumArtist || tagMatch(t.artist, albumArtist) || tagMatch(t.albumArtist, albumArtist);
         }, sortByDiscTrack);
       return;
     }
-    CM._renderLibraryDetail('albums', 'library.getAlbumTracks', { album: arg.album, artist: arg.artist || undefined },
+    CM._renderLibraryDetail('albums', 'library.getAlbumTracks', { album: arg.album, albumArtist: albumArtist },
       arg.album, sub, retry);
   };
 

@@ -1,6 +1,6 @@
 /* ============================================
- * CloudMusic ui-queue.js — 播放队列抽屉
- * 队列渲染（签名去重） / 指针拖拽调序 / 清空重建
+ * CloudMusic ui-queue.js — 插队队列抽屉
+ * 队列渲染（签名去重） / 指针拖拽调序 / 清空重建 / 播放历史列表
  * ============================================ */
 
 (function() {
@@ -9,16 +9,36 @@
   var els = CM.els, state = CM.state, esc = CM.escHtml;
 
   /* ============================================
-   * 播放队列抽屉
+   * 插队队列抽屉（UpNext）
+   * 队列 = foobar 原生播放队列：全局、优先级最高、播完一首移除一首、
+   * 播完回到 Context 当前游标继续（宿主的消费模型即如此，这里只负责显示与编辑）
    * ============================================ */
-  CM.refreshQueueBadge = function() {
+  /* 队列徽标 / 条数
+     ------------------------------------------------------------
+     `playback:queueChanged` 的载荷本来就带 `count`（队列长度）—— 事件驱动路径直接采信它，
+     就不必每次队列变化（含播完一首自动出队）再打一次 `queue.getCount`。
+     但载荷语义只以官方文档一句话为准，所以**先校准一次**：首次收到带 count 的事件时，
+     拿同一次查询回来的条数对一遍；对不上（或宿主没带 count）就永远走查询，不做猜测。 */
+  function applyQueueCount(n) {
+    CM._queueCount = n;      // 供"追加到队尾"用：insertNext 的 position = 当前长度
+    els.queueBadge.textContent = n > 99 ? '99+' : n;
+    els.queueBadge.classList.toggle('hidden', n <= 0);
+    els.queueCount.textContent = n ? n + ' 首' : '';
+  }
+  // 最后一次已知的队列长度（count 来自 queueChanged 载荷 / queue.get(Count) 回包，
+  // 两条来源都是宿主自己给的，不是估算）—— 插件/托盘/在线桥接改了队列都会有事件，
+  // 所以它足够新；拿不到（null）时调用方自己查一次
+  CM._queueCount = null;
+  CM._queueCountTrust = null;   // null = 未校准 / true = 采信事件里的 count / false = 只信队列查询
+  CM.refreshQueueBadge = function(ev) {
     if (CM._queueRebuilding) return; // 排序重建期间跳过，完成后统一刷新
+    var evCount = (ev && typeof ev.count === 'number') ? ev.count : null;
+    if (evCount != null && CM._queueCountTrust === true) { applyQueueCount(evCount); return; }
     CM.api('queue.getCount').then(function(r) {
       if (CM._queueRebuilding) return;
       var n = CM.respCount(r);
-      els.queueBadge.textContent = n > 99 ? '99+' : n;
-      els.queueBadge.classList.toggle('hidden', n <= 0);
-      els.queueCount.textContent = n ? n + ' 首' : '';
+      if (evCount != null && CM._queueCountTrust === null) CM._queueCountTrust = (evCount === n);
+      applyQueueCount(n);
     });
   };
 
@@ -65,12 +85,14 @@
       if (_qDragIndex >= 0) { CM._queueRefreshPending = true; return; } // 取数期间用户又开始了拖拽
       var items = (r && (r.items || r.queue || r.tracks)) || [];
       CM._queueItems = items; // 缓存完整队列（拖拽排序时据此生成新顺序）
+      CM._queueCount = items.length;
       els.queueCount.textContent = items.length ? items.length + ' 首' : '';
       if (!items.length) {
         CM._queueSig = '';
+        // 空态必须回答"为什么播完插队歌没回到我现在的歌单"这个最常见的困惑
         els.queueList.innerHTML = '<div class="queue-empty">' + CM.icons.queue +
-          '<div class="queue-empty-title">播放队列为空</div>' +
-          '<div class="queue-empty-sub">右键曲目选择「下一首播放」加入队列</div></div>';
+          '<div class="queue-empty-title">插队队列为空</div>' +
+          '<div class="queue-empty-sub">当前无插队歌曲，将按中间列表顺序播放</div></div>';
         return;
       }
       // 队列即"待播列表"（正在播放的曲目出队即播，不会出现在列表中）
@@ -112,6 +134,7 @@
   var _qPointerDrag = null; // { index, startX, startY, active } 进行中的指针拖拽会话
   var _qDragIndex = -1;   // 拖拽激活项索引（用于抑制拖拽期间的队列重渲染）
   var _qDropTarget = null; // { el, before } 插入指示位置
+  var _qMoveAt = 0;       // 上一次落点判定的时间（pointermove 节流）
   function _qClearIndicator() {
     if (_qDropTarget) {
       _qDropTarget.el.classList.remove('drop-before', 'drop-after');
@@ -157,7 +180,12 @@
       if (CM._queueRebuilding) return;
       var idx = parseInt(btn.closest('.queue-item').dataset.i, 10);
       if (isNaN(idx)) return;
-      CM.api('queue.remove', { index: idx }).then(function() {
+      // 移除失败（索引越界 / 宿主忙）要如实提示，并把列表重画回真实状态
+      CM.apiOr('queue.remove', { index: idx }).then(function() {
+        CM.renderQueue();
+        CM.refreshQueueBadge();
+      }, function(e) {
+        CM.failToast(e, '移出队列失败');
         CM.renderQueue();
         CM.refreshQueueBadge();
       });
@@ -194,6 +222,11 @@
         document.body.classList.add('is-reordering');
       }
       if (!_qInList(e.clientX, e.clientY)) { _qClearIndicator(); return; }
+      // 节流：指针移动可达 60~120Hz，而落点判定要逐行 getBoundingClientRect ——
+      // 按约 60fps 处理已经跟手，松手时还会按最终坐标重算一次，不会漏最后一帧
+      var moveNow = Date.now();
+      if (moveNow - _qMoveAt < 16) return;
+      _qMoveAt = moveNow;
       // 指针靠近列表上下边缘时自动滚动
       var rect = els.queueList.getBoundingClientRect();
       if (e.clientY < rect.top + 24) els.queueList.scrollTop -= 8;
@@ -274,58 +307,85 @@
       }
       return null;
     }
-    var failCount = 0;
-    return CM.api('queue.clear').then(function(clearRes) {
-      // 回执为空（CM.api 吞掉的桥接级失败）也算失败：否则会跳过中止分支，
-      // 在没清掉的旧队列上重加一遍 —— 每首曲目都变成两份
-      if (!clearRes || clearRes.success === false) {
-        CM._queueRebuilding = false;
-        CM.showToast('调整失败', (clearRes && clearRes.error) || '无法清空队列', 'error');
-        CM.renderQueue();
-        return null;
-      }
-      // 逐项串行重新入队：保证顺序与重复项完全保真（队列通常很小，开销可忽略）
-      var chain = Promise.resolve();
-      reordered.forEach(function(it) {
-        chain = chain.then(function() {
-          var ref = playlistRef(it);
-          var p;
-          if (ref) {
-            p = CM.api('queue.add', { playlist: ref.playlist, tracks: [ref.playlistItem] });
-          } else {
-            var tt = it.track || it;
-            var pp = tt.absolutePath || tt.path || '';
-            p = pp ? CM.api('queue.addPaths', { paths: [pp] }) : Promise.resolve(null);
-          }
-          return p.then(function(res) {
-            if (!res || res.success === false) failCount++;
-          });
-        });
-      });
-      return chain;
-    }).then(function() {
+    function finish(err) {
       // 无论中途个别条目成败，必须复位重建标志，否则后续调序会被永久静默拦截
       CM._queueRebuilding = false;
       CM.renderQueue();
       CM.refreshQueueBadge();
-      if (failCount > 0) {
-        CM.showToast('队列顺序已调整', failCount + ' 首曲目重新入队失败', 'error');
-      } else {
-        CM.showToast('已调整队列顺序', null, 'success');
-      }
-      return true;
-    }, function() {
-      CM._queueRebuilding = false;
-      CM.renderQueue();
-      CM.refreshQueueBadge();
-      CM.showToast('调整失败', '队列重建中断，请重试', 'error');
-      return null;
-    });
+      if (err) CM.showToast('调整失败', err, 'error');
+      else CM.showToast('已调整队列顺序', null, 'success');
+    }
+    // 回退路径（旧宿主没有 queue.setContents 时）：clear + 逐项按来源重新入队
+    function legacyRebuild() {
+      var failCount = 0;
+      return CM.api('queue.clear').then(function(clearRes) {
+        // 回执为空（CM.api 吞掉的桥接级失败）也算失败：否则会跳过中止分支，
+        // 在没清掉的旧队列上重加一遍 —— 每首曲目都变成两份
+        if (!clearRes || clearRes.success === false) {
+          finish((clearRes && clearRes.error) || '无法清空队列');
+          return null;
+        }
+        // 逐项串行重新入队：保证顺序与重复项完全保真（队列通常很小，开销可忽略）
+        var chain = Promise.resolve();
+        reordered.forEach(function(it) {
+          chain = chain.then(function() {
+            var ref = playlistRef(it);
+            var p;
+            if (ref) {
+              p = CM.api('queue.add', { playlist: ref.playlist, tracks: [ref.playlistItem] });
+            } else {
+              var tt = it.track || it;
+              var pp = tt.absolutePath || tt.path || '';
+              p = pp ? CM.api('queue.addPaths', { paths: [pp] }) : Promise.resolve(null);
+            }
+            return p.then(function(res) {
+              if (!res || res.success === false) failCount++;
+            });
+          });
+        });
+        return chain.then(function() {
+          if (failCount > 0) {
+            CM._queueRebuilding = false;
+            CM.renderQueue();
+            CM.refreshQueueBadge();
+            CM.showToast('队列顺序已调整', failCount + ' 首曲目重新入队失败', 'error');
+          } else finish(null);
+          return true;
+        }, function() {
+          finish('队列重建中断，请重试');
+          return null;
+        });
+      });
+    }
+
+    // 快路径（插件 v2）：queue.setContents 用"队列槽位引用"一次性写完整个队列。
+    // 逐项 clear + add 在拖一次时要发 2N 次宿主调用，还会让 queueChanged
+    // 连发 N 次（列表反复重排）—— 队列项都带 queueIndex 时优先走这一条。
+    var slots = [];
+    var allSlots = true;
+    for (var k = 0; k < n; k++) {
+      var qi = reordered[k] && reordered[k].queueIndex;
+      if (typeof qi !== 'number' || qi < 0) { allSlots = false; break; }
+      slots.push({ queueIndex: qi });
+    }
+    if (allSlots) {
+      return CM.api('queue.setContents', { items: slots }).then(function(r) {
+        if (r && r.success !== false) { finish(null); return true; }
+        return legacyRebuild();
+      }, function() { return legacyRebuild(); });
+    }
+    return legacyRebuild();
   };
 
   CM.toggleQueue = function(open) {
     state.queueOpen = open !== undefined ? open : !state.queueOpen;
     els.queueDrawer.classList.toggle('open', state.queueOpen);
-    if (state.queueOpen) CM.renderQueue();
+    // 底栏按钮跟随开合亮起 —— 与歌词面板、迷你频谱两个开关同一套 .active 状态
+    // （抽屉只能从这里开合：底栏按钮 / 抽屉里的关闭 / Esc 都走本函数）
+    els.btnQueue.classList.toggle('active', state.queueOpen);
+    if (state.queueOpen) {
+      CM.renderQueue();
+      CM.renderHistory();   // 展开的播放历史面板（只读时间线）
+    }
   };
 })();

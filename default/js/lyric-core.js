@@ -917,6 +917,12 @@
    *     · 块内只有一行 → 它是原文。
    * 空槽信息由 parseLRC 在解析时就标好（_emptySlot），所以不需要看脚本族/语言。
    */
+  /* 纯重复行护栏（_shiftBack 的 skipFn）：同刻组的首行与末行文字完全相同，
+     说明那是"同一句写了两遍"（如副歌重复），不构成「上一句的译文 + 本句原文」。
+     自动识别与手动「兼容旧版」必须共用这一条 —— 两个入口的机械规则要一致
+     （曾经只有手动入口传了它，自动路径会把这类重复组的首行也回移挂靠）。 */
+  function _skipPureRepeat(a, b) { return lineText(a) === lineText(b); }
+
   function _shiftBack(body, from, skipFn) {
     var lastOrig = null, i = from;
     while (i < body.length) {
@@ -987,7 +993,9 @@
       !(pIdx + 1 < body.length && Math.abs(body[pIdx + 1].time - body[pIdx].time) <= _BI_TOL_MS);
     if (pLone && side(pIdx) >= 0) {
       var pSide = side(pIdx), aSide = side(runA), bSide = side(runA + 1);
-      if (pSide !== bSide) return pSide === aSide ? 'same' : 'unknown';
+      // aSide / bSide 是两个不同主族的两个侧（runA 已保证 s0 !== s1 且都 >= 0），
+      // pSide 也是其中之一 —— 所以 pSide !== bSide 必定 pSide === aSide，没有第三种可能
+      if (pSide !== bSide) return 'same';
       origSide = bSide;
     } else {
       var kanaOn = [false, false];
@@ -1023,7 +1031,7 @@
     // 绝大多数组都是"同刻形态"（首行不是译文）→ 确认同刻协议，不改写
     if (lagRatio <= 0.15) return 'same';
     if (lagRatio < _BI_MIN_MATCH_MAIN) return 'unknown';
-    _shiftBack(body, 0);
+    _shiftBack(body, 0, _skipPureRepeat);
     return 'delay';
   }
 
@@ -1084,9 +1092,8 @@
    */
   function _forceDelayShift(body) {
     var i;
-    _shiftBack(body, 0, function (a, b) {      // 与自动识别同一条机械规则，保证两种入口行为一致
-      return lineText(a) === lineText(b);      // 纯重复行护栏
-    });
+    // 与自动识别共用同一条护栏（_skipPureRepeat），保证两种入口行为一致
+    _shiftBack(body, 0, _skipPureRepeat);
     for (i = 0; i < body.length; i++) if (body[i]._pair) return true;
     return false;
   }
@@ -1193,7 +1200,7 @@
     // 渲染层高亮用二分查找"最后一条 time <= pos"的行，依赖组时间非递减，不重排会出现
     // "后一组的时间早于前一组"（实测本地 11 个文件），高亮与滚动会跳错行。
     // 稳定排序保证同刻时"原文在前、译文在后"的相对次序不变（主行仍是原文）。
-    var effMode = mode || lyric.bilingualMode || 'auto';
+    var effMode = mode || 'auto';
     if (normalizeBilingual(lines, effMode)) {
       lines.sort(function(a, b) { return a.time - b.time; });
     }

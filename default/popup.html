@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>CloudMusic 小窗</title>
+<!-- 直接吃主主题的设计令牌（--accent*、--bg-*、--text-*、--r-*、--ease…），
+     再由 popup.js 注入主窗口的封面取色（cm:theme）。 -->
+<link rel="stylesheet" href="css/variables.css?v=34">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg-1);color:var(--text);
+    font-family:'Segoe UI Variable','Segoe UI','Microsoft YaHei UI',sans-serif;
+    font-size:13px;user-select:none;-webkit-font-smoothing:antialiased}
+  #root{position:relative;height:100%;display:flex;flex-direction:column;overflow:hidden;
+    background:var(--bg-1)}
+  #root::before{content:'';position:absolute;left:0;right:0;top:0;height:1px;z-index:3;
+    background:linear-gradient(90deg,transparent,var(--border-strong),transparent);pointer-events:none}
+
+  /* 封面模糊背景 + 压暗遮罩（与主题沉浸页的封面模糊同一做法） */
+  #bg{position:absolute;inset:0;background-position:center;background-size:cover;
+    filter:blur(24px) saturate(1.2);opacity:0;transform:scale(1.05);
+    transition:opacity var(--t-slow);pointer-events:none}
+  #bg.on{opacity:0.4}
+  #scrim{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(180deg,rgba(16,16,19,0.42) 0%,rgba(16,16,19,0.7) 45%,rgba(16,16,19,0.88) 100%)}
+
+  .mode{position:relative;z-index:2;flex:1;min-height:0;display:flex;flex-direction:column}
+  /* .hidden 定义在 css/variables.css（本页第 8 行已引入），此处不再重复一份 */
+
+  /* ---------- 标题栏（两种形态共用：拖动 / 换形态 / 置顶 / 关闭） ---------- */
+  #bar{position:relative;z-index:4;flex:none;height:26px;display:flex;align-items:center;
+    gap:4px;padding:0 6px 0 10px}
+  #drag{flex:1;height:100%;display:flex;align-items:center;gap:6px;min-width:0}
+  #drag .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none;
+    box-shadow:0 0 8px var(--accent-glow)}
+  #drag .cap{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wbtn{width:20px;height:20px;border:none;border-radius:var(--r-s);background:none;color:var(--text-3);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+    transition:background var(--t-fast),color var(--t-fast)}
+  .wbtn:hover{background:var(--bg-3);color:var(--text)}
+  .wbtn.on{color:var(--accent);background:var(--accent-soft)}
+  .wbtn.close:hover{background:#c8382f;color:#fff}
+  .wbtn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---------- 迷你播放器 ----------
+     一行三列：封面 | （曲名 / 歌手 / 进度 / 音量） | 上一首 / 播放 / 下一首。
+     注意 .mode 给的是 flex-direction:column（歌词窗要用），这里必须显式写回 row ——
+     否则整块会竖着堆起来，高 150 的小窗装不下，底部的播放按钮直接被裁掉。 */
+  /* 竖向不额外留底部内边距：内容在"标题栏以下的区域"里居中即可。留着 14px 底边距
+     会把整块往上抬（实测封面距顶 21px、距底 37px，看着是歪的） */
+  #miniBody{flex:1;min-height:0;display:flex;flex-direction:row;align-items:center;gap:16px;padding:0 18px}
+  #cover{flex:none;width:84px;height:84px;border-radius:var(--r-l);overflow:hidden;
+    background:var(--bg-2);box-shadow:var(--shadow-1);display:flex;align-items:center;justify-content:center}
+  #cover img{width:100%;height:100%;object-fit:cover;display:block}
+  #cover .ph svg{width:28px;height:28px;stroke:var(--text-4);fill:none;stroke-width:1.5}
+  #cover.has-img .ph{display:none}
+  /* 竖向只留三行：曲名 / 歌手 / （时间·进度·音量）。
+     音量曾经是"进度条下面再压一条等宽滑条"，两条几乎一样的滑条叠在一起最显乱；
+     现在收成一个 🔊 图标，悬停才展开滑条（与主窗口底栏的音量同一套做法），
+     展开时把进度条挤窄而不是叠在上面。 */
+  #meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+  #mTitle{font-size:15.5px;font-weight:600;letter-spacing:-0.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #mArtist{font-size:12.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #mSeekRow{display:flex;align-items:center;gap:9px}
+  #mSeekRow span{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;
+    flex:none;min-width:34px}
+  /* min-width:0 必需：<input type=range> 的自动最小尺寸就是它那 129px 的默认宽度，
+     不放开的话音量条展开时进度条不肯收缩、整行会撑出 meta 列并盖住右侧播放按钮
+     （实测展开后右缘到 443，而播放按钮组从 373 起） */
+  #mSeek,#seek{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;
+    background:var(--bg-3);outline:none;cursor:pointer}
+  #mSeek::-webkit-slider-thumb,#seek::-webkit-slider-thumb{-webkit-appearance:none;
+    width:11px;height:11px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 3px var(--accent-soft);transition:box-shadow var(--t-fast)}
+  #mSeek:hover::-webkit-slider-thumb,#seek:hover::-webkit-slider-thumb{box-shadow:0 0 0 5px var(--accent-soft)}
+  #mSeek:disabled,#seek:disabled{opacity:.5;cursor:not-allowed}
+  #mSeek:disabled::-webkit-slider-thumb,#seek:disabled::-webkit-slider-thumb{background:var(--text-4);box-shadow:none}
+  #mCtrls{flex:none;display:flex;align-items:center;gap:10px}
+  /* 音量：图标 + 悬停展开的滑条。`.open` 由 popup.js 在拖动期间钉住展开态
+     （按住滑块往外拖时指针会离开图标，不钉住就会中途收起来） */
+  #mVolWrap{flex:none;display:flex;align-items:center;height:20px;padding:0 3px;border-radius:10px;
+    color:var(--text-3);cursor:pointer;transition:background var(--t-fast),color var(--t-fast)}
+  #mVolWrap:hover,#mVolWrap.open{background:var(--bg-3);color:var(--text-2)}
+  #mVolWrap svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round;flex:none}
+  #mVol{width:0;opacity:0;pointer-events:none;-webkit-appearance:none;appearance:none;
+    height:3px;border-radius:2px;background:var(--bg-3);outline:none;cursor:pointer;
+    transition:width var(--t-mid),opacity var(--t-fast),margin-left var(--t-mid)}
+  #mVolWrap:hover #mVol,#mVolWrap.open #mVol{width:76px;opacity:1;pointer-events:auto;margin-left:6px}
+  #mVol::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;border-radius:50%;background:var(--text-2)}
+
+  /* ---------- 歌词窗（竖版：上封面 / 下小字信息 / 中间整首歌词） ---------- */
+  #art{flex:none;width:min(40%,168px);aspect-ratio:1;margin:8px auto 10px;
+    border-radius:var(--r-l);overflow:hidden;background:var(--bg-2);box-shadow:var(--shadow-1);
+    position:relative}
+  #art img{width:100%;height:100%;object-fit:cover;display:block}
+  #art .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  #art .ph svg{width:32%;height:32%;stroke:var(--text-4);fill:none;stroke-width:1.2}
+  #art.has-img .ph{display:none}
+  #info{flex:none;padding:0 18px 10px;text-align:center;min-width:0;
+    border-bottom:1px solid var(--border)}
+  #infoTitle{font-size:15.5px;font-weight:700;letter-spacing:-0.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #infoSub{font-size:11.5px;color:var(--text-3);margin-top:3px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* 歌词整块居中，与上方封面/信息同一条中轴 —— 不再左右混排 */
+  /* position:relative 是必需的：歌词行的 offsetTop 以最近的定位祖先为基准，
+     没有它就会以 .mode 为基准，自动居中的目标值会整体偏掉（滚不到当前行）。 */
+  #lyrWrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+    margin-top:6px;position:relative;
+    mask-image:linear-gradient(to bottom,transparent 0,#000 11%,#000 89%,transparent 100%);
+    -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 11%,#000 89%,transparent 100%)}
+  #lyrList{padding:4px 18px 14px;text-align:center}
+  .ll{padding:7px 10px;border-radius:var(--r-m);font-size:16px;line-height:1.45;
+    color:var(--text-3);cursor:pointer;
+    transition:color var(--t-mid),font-size var(--t-mid),background var(--t-fast)}
+  .ll:hover{color:var(--text-2);background:rgba(255,255,255,0.04)}
+  .ll.active{color:var(--text);font-weight:700;font-size:19px;
+    text-shadow:0 0 18px var(--accent-glow)}
+  .ll .ll-sub{display:block;font-size:12.5px;font-weight:400;color:var(--accent);
+    opacity:0.85;margin-top:3px}
+  #lyrEmpty{padding:30px 22px;text-align:center;font-size:12.5px;color:var(--text-3)}
+
+  #bottom{flex:none;padding:8px 16px 12px;display:flex;flex-direction:column;gap:8px;
+    border-top:1px solid var(--border)}
+  #seekRow{display:flex;align-items:center;gap:9px}
+  #seekRow span{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;
+    flex:none;min-width:32px}
+  #ctrls{display:flex;align-items:center;justify-content:center;gap:12px}
+  .cbtn{width:32px;height:32px;border:none;border-radius:50%;background:none;color:var(--text-2);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+    transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast)}
+  .cbtn:hover{background:var(--bg-3);color:var(--text)}
+  .cbtn:active{transform:scale(0.94)}
+  .cbtn svg{width:16px;height:16px;fill:currentColor;stroke:none}
+  .cbtn.play{width:44px;height:44px;background:var(--accent);color:var(--on-accent);
+    box-shadow:0 4px 16px var(--accent-glow)}
+  .cbtn.play:hover{background:var(--accent);filter:brightness(1.08)}
+  .cbtn.play svg{width:18px;height:18px}
+  .ico-pause{display:none}
+  .playing .ico-play{display:none}
+  .playing .ico-pause{display:block}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="bg"></div>
+  <div id="scrim"></div>
+
+  <!-- 标题栏：两种形态共用 -->
+  <div id="bar">
+    <div id="drag" title="按住拖动窗口">
+      <span class="dot"></span>
+      <span class="cap" id="cap">迷你播放器</span>
+    </div>
+    <button class="wbtn" id="btnMode" title="切换：迷你播放器 / 歌词窗（竖版）">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+    </button>
+    <button class="wbtn on" id="btnPin" title="窗口置顶">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-2.5c0-.5-.5-1-1-1h-1.5l-1-7.5h-7l-1 7.5H6c-.5 0-1 .5-1 1V17z"/></svg>
+    </button>
+    <button class="wbtn close" id="btnClose" title="关闭">
+      <svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+    </button>
+  </div>
+
+  <!-- ==================== 迷你播放器 ==================== -->
+  <div id="miniBody" class="mode">
+    <div id="cover">
+      <img id="coverImg" alt="" style="display:none">
+      <span class="ph"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+    </div>
+    <div id="meta">
+      <div id="mTitle">未在播放</div>
+      <div id="mArtist">--</div>
+      <div id="mSeekRow">
+        <span id="mCur">0:00</span>
+        <input type="range" id="mSeek" min="0" max="1000" value="0">
+        <span id="mTot">0:00</span>
+        <!-- 音量：图标常驻，滑条悬停才展开（也可直接在小窗上滚轮调） -->
+        <div id="mVolWrap" title="悬停展开音量条（也可在小窗上滚轮调节）">
+          <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+          <input type="range" id="mVol" min="0" max="100" value="100">
+        </div>
+      </div>
+    </div>
+    <div id="mCtrls">
+      <button class="cbtn" id="mPrev" title="上一首"><svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><rect x="4" y="5" width="3" height="14" rx="1"/></svg></button>
+      <button class="cbtn play" id="mPlay" title="播放/暂停"><svg viewBox="0 0 24 24" class="ico-play"><polygon points="6 3 20 12 6 21 6 3"/></svg><svg viewBox="0 0 24 24" class="ico-pause"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg></button>
+      <button class="cbtn" id="mNext" title="下一首"><svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="5" width="3" height="14" rx="1"/></svg></button>
+    </div>
+  </div>
+
+  <!-- ==================== 歌词窗（竖版） ==================== -->
+  <div id="lyricsBody" class="mode hidden">
+    <div id="art">
+      <img id="artImg" alt="" style="display:none">
+      <span class="ph"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+    </div>
+    <div id="info">
+      <div id="infoTitle">未在播放</div>
+      <div id="infoSub">--</div>
+    </div>
+    <div id="lyrWrap">
+      <div id="lyrList"></div>
+      <div id="lyrEmpty" class="hidden">暂无歌词 —— 在主题窗口里播放一首有歌词的曲目</div>
+    </div>
+    <div id="bottom">
+      <div id="seekRow">
+        <span id="tCur">0:00</span>
+        <input type="range" id="seek" min="0" max="1000" value="0">
+        <span id="tTot">0:00</span>
+      </div>
+      <div id="ctrls">
+        <button class="cbtn" id="btnPrev" title="上一首"><svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><rect x="4" y="5" width="3" height="14" rx="1"/></svg></button>
+        <button class="cbtn play" id="btnPlay" title="播放/暂停"><svg viewBox="0 0 24 24" class="ico-play"><polygon points="6 3 20 12 6 21 6 3"/></svg><svg viewBox="0 0 24 24" class="ico-pause"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg></button>
+        <button class="cbtn" id="btnNext" title="下一首"><svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="5" width="3" height="14" rx="1"/></svg></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="sdk/bridge.global.js?v=2000"></script>
+<script src="js/popup.js?v=13"></script>
+</body>
+</html>

@@ -35,6 +35,24 @@
     return Array.isArray(v) ? v.join('; ') : (v == null ? '' : String(v));
   }
 
+  // 支持多值的常见字段（v2 的 metadata.write / writeBatch 接受字符串数组，
+  // 空数组=删除该标签）。输入里用「;」或「；」分隔即写成真正的多值标签；
+  // 只有一个值（或该字段不是多值字段）时仍发字符串 —— 于是 "AC/DC" 这种
+  // 带斜杠的值不会被拆开，旧宿主（只认字符串）也照样工作。
+  var MULTI_VALUE_FIELDS = { ARTIST: 1, 'ALBUM ARTIST': 1, GENRE: 1, COMPOSER: 1, PERFORMER: 1 };
+  function splitMulti(key, text) {
+    var v = String(text == null ? '' : text);
+    if (!v) return null;                              // 空值 = 清除该标签
+    if (!MULTI_VALUE_FIELDS[key] || v.indexOf(';') < 0) return v;
+    var parts = v.split(/[;；]/).map(function(s) { return s.trim(); }).filter(Boolean);
+    if (parts.length <= 1) return parts[0] || null;
+    return parts;
+  }
+  // 本地曲目缓存里统一存"展示文本"（列表渲染/排序只认字符串）
+  function cacheText(v) {
+    return Array.isArray(v) ? v.join('; ') : (v == null ? '' : v);
+  }
+
   CM.showTagEditor = function(track) {
     var path = CM.trackPath(track);
     if (!path) { CM.showToast('无法编辑', '未获取到文件路径', 'error'); return; }
@@ -113,16 +131,18 @@
     }
     TAG_FIELDS.forEach(function(f) {
       var val = tagText(tags[f.key]);
+      var multiHint = MULTI_VALUE_FIELDS[f.key] ? '多个值用「;」分隔，会写成多值标签' : '';
       if (isBatch) {
         parts.push('<div class="tag-field batch">' +
           '<input type="checkbox" class="tag-field-check" data-field="' + f.key + '">' +
-          '<label class="tag-field-label">' + f.label + '</label>' +
+          '<label class="tag-field-label"' + (multiHint ? ' title="' + multiHint + '"' : '') + '>' + f.label + '</label>' +
           '<input type="text" class="tag-field-input" data-field="' + f.key + '" placeholder="保持原值" disabled>' +
           '</div>');
       } else {
         parts.push('<div class="tag-field">' +
-          '<label class="tag-field-label">' + f.label + '</label>' +
-          '<input type="text" class="tag-field-input" data-field="' + f.key + '" value="' + esc(val) + '">' +
+          '<label class="tag-field-label"' + (multiHint ? ' title="' + multiHint + '"' : '') + '>' + f.label + '</label>' +
+          '<input type="text" class="tag-field-input" data-field="' + f.key + '" value="' + esc(val) + '"' +
+          (multiHint ? ' placeholder="多个值用 ; 分隔"' : '') + '>' +
           '</div>');
       }
     });
@@ -174,29 +194,43 @@
       // 空格"的字段恒判为已改动，未编辑也被重写并顺带剥掉原空格
       var oldVal = tagText(ctx.original && ctx.original[f.key]);
       if (input.value !== oldVal && newVal !== oldVal) {
-        tags[f.key] = newVal || null; // 空值设为 null 以清除标签
+        tags[f.key] = splitMulti(f.key, newVal); // 空值 → null（清除）；多个值 → 数组（多值标签）
         changed = true;
       }
     });
     if (!changed) { CM.showToast('无变更', '没有检测到修改的标签', null); CM.hideTagEditor(); return; }
     els.tagEditorHint.textContent = '正在写入...';
-    CM.api('metadata.write', { path: path, tags: tags }).then(function(r) {
-      if (!r || r.success === false) {
+    // 走 CM.writeTags：回执只表示"已投递"，真正的写盘结果在 metadata:writeComplete
+    // 事件里。写盘失败时**不更新本地缓存、不关编辑器**，否则列表会显示根本没写进去的值。
+    CM.writeTags('metadata.write', { path: path, tags: tags }, [path]).then(function(out) {
+      var d = out.dispatch, c = out.confirmed;
+      if (!d || d.success === false) {
         if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
-        CM.showToast('写入失败', '标签写入出错', 'error');
+        CM.showToast('写入失败', (d && (CM.errText(d.code) || d.error)) || '标签写入出错', 'error');
+        return;
+      }
+      if (c.failed.length) {
+        if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
+        CM.showToast('标签写入失败',
+          CM.errKindLabel(c.failed[0].code) + (c.failed[0].error ? ' · ' + c.failed[0].error : ''),
+          'error');
         return;
       }
       var track = ctx.tracks[0];
-      CM.showToast('标签已保存', track ? CM.trackName(track) : null, 'success');
+      if (c.unconfirmed) {
+        CM.showToast('标签已提交', '未收到宿主写入完成回执，请核对列表里的标签', null);
+      } else {
+        CM.showToast('标签已保存', track ? CM.trackName(track) : null, 'success');
+      }
       // 更新本地缓存（写入已完成，即使编辑器已在写入期间被关闭也要刷新列表）。
       // 清空的标签（null）同样要反映到缓存，否则列表一直显示旧值
       if (track) {
-        if (tags.TITLE != null) track.title = tags.TITLE; else if ('TITLE' in tags) track.title = '';
-        if (tags.ARTIST != null) track.artist = tags.ARTIST; else if ('ARTIST' in tags) track.artist = '';
-        if (tags.ALBUM != null) track.album = tags.ALBUM; else if ('ALBUM' in tags) track.album = '';
-        if (tags['ALBUM ARTIST'] != null) track.albumArtist = tags['ALBUM ARTIST']; else if ('ALBUM ARTIST' in tags) track.albumArtist = '';
-        if (tags.GENRE != null) track.genre = tags.GENRE; else if ('GENRE' in tags) track.genre = '';
-        if (tags.DATE != null) track.date = tags.DATE; else if ('DATE' in tags) track.date = '';
+        if (tags.TITLE != null) track.title = cacheText(tags.TITLE); else if ('TITLE' in tags) track.title = '';
+        if (tags.ARTIST != null) track.artist = cacheText(tags.ARTIST); else if ('ARTIST' in tags) track.artist = '';
+        if (tags.ALBUM != null) track.album = cacheText(tags.ALBUM); else if ('ALBUM' in tags) track.album = '';
+        if (tags['ALBUM ARTIST'] != null) track.albumArtist = cacheText(tags['ALBUM ARTIST']); else if ('ALBUM ARTIST' in tags) track.albumArtist = '';
+        if (tags.GENRE != null) track.genre = cacheText(tags.GENRE); else if ('GENRE' in tags) track.genre = '';
+        if (tags.DATE != null) track.date = cacheText(tags.DATE); else if ('DATE' in tags) track.date = '';
         if (tags.TRACKNUMBER != null) track.trackNumber = parseInt(tags.TRACKNUMBER, 10) || 0; else if ('TRACKNUMBER' in tags) track.trackNumber = 0;
         if (tags.DISCNUMBER != null) track.discNumber = parseInt(tags.DISCNUMBER, 10) || 0; else if ('DISCNUMBER' in tags) track.discNumber = 0;
         CM.renderTrackTable();
@@ -216,7 +250,7 @@
       if (!cb || !cb.checked) return;
       var input = els.tagEditorBody.querySelector('.tag-field-input[data-field="' + f.key + '"]');
       if (!input) return;
-      tags[f.key] = input.value.trim() || null;
+      tags[f.key] = splitMulti(f.key, input.value.trim());
       hasChecked = true;
     });
     if (!hasChecked) { CM.showToast('未选择字段', '请勾选要批量修改的标签字段', 'error'); return; }
@@ -235,33 +269,44 @@
       CM.showToast('没有可写入的曲目', '选中的都是在线的曲目 —— 先「下载选中」落盘再改标签', 'error');
       return;
     }
-    CM.api('metadata.writeBatch', { items: items }).then(function(r) {
-      if (!r || r.success === false) {
+    var batchPaths = items.map(function(it) { return it.path; });
+    CM.writeTags('metadata.writeBatch', { items: items }, batchPaths).then(function(out) {
+      var d = out.dispatch, c = out.confirmed;
+      if (!d || d.success === false) {
         if (_tagCtx === ctx) els.tagEditorHint.textContent = '写入失败，请重试';
-        CM.showToast('批量写入失败', '标签写入出错', 'error');
+        // 回执里可能带 successCount/failCount（部分条目参数非法时宿主仍会投递其余条目）
+        var dispNote = d && (d.successCount || d.failCount)
+          ? '已投递 ' + (d.successCount || 0) + ' 首、被拒 ' + (d.failCount || 0) + ' 首' : '';
+        CM.showToast('批量写入失败',
+          (d && (CM.errText(d.code) || d.error)) || dispNote || '标签写入出错', 'error');
         return;
       }
-      var ok = r.successCount || 0, fail = r.failCount || 0;
+      // 写盘成败只认事件：事件里报失败的路径既不算成功、也不写进缓存
+      var failPaths = {};
+      c.failed.forEach(function(f) { failPaths[f.path] = 1; });
+      var written = {};
+      batchPaths.forEach(function(p) { if (!failPaths[p]) written[p] = 1; });
+      var ok = Object.keys(written).length, fail = c.failed.length;
       var skipNote = skipped ? '，' + skipped + '首在线曲目已跳过' : '';
       if (fail > 0) {
-        CM.showToast('部分成功', ok + '首成功，' + fail + '首失败' + skipNote, 'error');
+        CM.showToast('部分成功', ok + '首成功，' + fail + '首写入失败' + skipNote, 'error');
+      } else if (c.unconfirmed) {
+        CM.showToast('已提交批量写入', ok + '首（未收到宿主完成回执，请核对列表）' + skipNote, null);
       } else {
         CM.showToast('批量保存成功', ok + '首曲目标签已更新' + skipNote, 'success');
       }
-      // 更新本地缓存：只更新真正写入过的曲目 —— 在线/无路径曲目被跳过，
-      // 它们的标签没有变，不能在列表里显示从未写入过的新值
-      var written = {};
-      items.forEach(function(it) { written[it.path] = 1; });
+      // 更新本地缓存：只更新真正写进去的曲目 —— 在线/无路径曲目被跳过，
+      // 写盘失败的也不更新，否则列表会显示从未写入过的新值
       ctx.tracks.forEach(function(track) {
         if (!track) return;
         var p = CM.trackPath(track);
         if (!p || !written[p]) return;
-        if (tags.TITLE != null) track.title = tags.TITLE;
-        if (tags.ARTIST != null) track.artist = tags.ARTIST;
-        if (tags.ALBUM != null) track.album = tags.ALBUM;
-        if (tags['ALBUM ARTIST'] != null) track.albumArtist = tags['ALBUM ARTIST'];
-        if (tags.GENRE != null) track.genre = tags.GENRE;
-        if (tags.DATE != null) track.date = tags.DATE;
+        if (tags.TITLE != null) track.title = cacheText(tags.TITLE);
+        if (tags.ARTIST != null) track.artist = cacheText(tags.ARTIST);
+        if (tags.ALBUM != null) track.album = cacheText(tags.ALBUM);
+        if (tags['ALBUM ARTIST'] != null) track.albumArtist = cacheText(tags['ALBUM ARTIST']);
+        if (tags.GENRE != null) track.genre = cacheText(tags.GENRE);
+        if (tags.DATE != null) track.date = cacheText(tags.DATE);
         if (tags.TRACKNUMBER != null) track.trackNumber = parseInt(tags.TRACKNUMBER, 10) || 0;
         if (tags.DISCNUMBER != null) track.discNumber = parseInt(tags.DISCNUMBER, 10) || 0;
       });

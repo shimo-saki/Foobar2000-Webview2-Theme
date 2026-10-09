@@ -4,10 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CloudMusic</title>
-<link rel="stylesheet" href="css/variables.css?v=24">
-<link rel="stylesheet" href="css/layout.css?v=37">
-<link rel="stylesheet" href="css/components.css?v=39">
-<link rel="stylesheet" href="css/utilities.css?v=24">
+<script>
+/* 加载期错误痕迹：WebView2 里没有 DevTools 时，脚本 404 / 语法错误 / 启动异常
+   只会表现为"界面白屏"。这里把前几条记进 window.__cmBootErrors（控制台可直接展开），
+   也便于外部冒烟检查读取；正常运行时该数组为空。 */
+window.__cmBootErrors = [];
+window.addEventListener('error', function (e) {
+  try { window.__cmBootErrors.push((e.message || e.type) + ' @ ' + (e.filename || '') + ':' + (e.lineno || 0)); } catch (err) {}
+});
+window.addEventListener('unhandledrejection', function (e) {
+  try {
+    var r = e.reason;
+    window.__cmBootErrors.push('rejection: ' + ((r && (r.message || r.code)) || String(r)));
+  } catch (err) {}
+});
+</script>
+<link rel="stylesheet" href="css/variables.css?v=31">
+<link rel="stylesheet" href="css/layout.css?v=35">
+<link rel="stylesheet" href="css/components.css?v=43">
+<link rel="stylesheet" href="css/utilities.css?v=32">
 </head>
 <body>
 <!-- 装饰图形 sprite：命运石之门齿轮（iconfont 路径），全站 <use> 引用，避免重复贴路径。
@@ -195,6 +210,16 @@
               <div class="pl-header-tag" id="playlistHeaderTag">PLAYLIST</div>
               <div class="pl-header-name" id="playlistHeaderName">播放列表</div>
               <div class="pl-header-meta" id="playlistHeaderMeta"></div>
+              <!-- 歌单内筛选（v2 playlist.getMatchingRows / getTracksAt，查询语法与 foobar 搜索一致） -->
+              <div class="pl-filter-row">
+                <div class="pl-filter-box">
+                  <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+                  <input type="text" id="plFilter" placeholder="在歌单中筛选" spellcheck="false" />
+                  <button class="pl-filter-clear" id="plFilterClear" title="清除筛选" hidden>×</button>
+                </div>
+                <button class="pl-filter-save" id="plFilterSave" title="把当前筛选条件存成一个自动歌单" hidden>存为自动歌单</button>
+                <span class="pl-filter-meta" id="plFilterMeta" hidden></span>
+              </div>
             </div>
             <div class="pl-header-actions">
               <button class="pl-btn pl-btn-primary" id="btnPlayAll">
@@ -495,19 +520,36 @@
           </div>
         </div>
       </div>
+      <!-- 设置与工具：内容由 js/ui-settings.js 生成（分区与行的状态要跟设置/宿主回包实时对上） -->
+      <div class="tab-content" id="tabSettings"></div>
     </div>
 
-    <!-- Queue Drawer -->
+    <!-- Queue Drawer（插队队列 = foobar 原生播放队列；上方是默认收起的「播放历史」按钮：
+         展开后列表由旧到新向下排，一路读到下面的"正在播放"与插队队列，整条时间线自上而下） -->
     <div class="queue-drawer" id="queueDrawer">
       <div class="queue-header">
         <div>
-          <span class="queue-title">播放队列</span><span class="queue-count num" id="queueCount"></span>
+          <span class="queue-title">插队队列</span><span class="queue-count num" id="queueCount"></span>
         </div>
         <div class="queue-actions">
           <button class="queue-clear-btn" id="queueClear">清空</button>
           <button class="icon-btn" id="queueClose" title="关闭">
             <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
+        </div>
+      </div>
+      <button class="queue-hist-toggle" id="historyToggle" type="button" aria-expanded="false" aria-controls="historyRegion" title="播放历史：点击展开 / 收起">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/><polyline points="12 8 12 12 15 14"/></svg>
+        <span>播放历史</span><span class="queue-hist-count num" id="historyCount"></span>
+        <span class="queue-hist-arrow" id="historyArrow">▾</span>
+      </button>
+      <div class="queue-hist-region" id="historyRegion">
+        <div class="queue-hist-panel">
+          <div class="queue-hist-head">
+            <span class="queue-hist-hint" id="historyHint"></span>
+            <button class="queue-clear-btn" id="historyClear">清空</button>
+          </div>
+          <div class="queue-hist-list" id="historyList"></div>
         </div>
       </div>
       <div class="queue-now hidden" id="queueNow"></div>
@@ -599,7 +641,7 @@
           <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="100" />
         </div>
       </div>
-      <button class="icon-btn" id="btnQueue" title="播放队列">
+      <button class="icon-btn" id="btnQueue" title="插队队列">
         <svg viewBox="0 0 24 24"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>
         <span class="count-badge hidden" id="queueBadge">0</span>
       </button>
@@ -632,6 +674,9 @@
   </div>
   <div class="np-tilt-btn" id="npTiltBtn" title="歌词 3D 倾斜：关">
     <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>
+  </div>
+  <div class="np-viz-btn" id="npVizBtn" title="频谱显示：频谱条（点击切换）">
+    <svg viewBox="0 0 24 24"><path d="M4 20V9"/><path d="M10 20V4"/><path d="M16 20v-8"/><path d="M22 20V6"/></svg>
   </div>
   <div class="np-container" id="npContainer">
     <!-- Vinyl / Artwork Side -->
@@ -759,30 +804,37 @@
   </div>
 </div>
 
-<!-- foo_ui_webview2 SDK v1.13.0 -->
-<script src="sdk/bridge.global.js?v=1130"></script>
-<script src="sdk/components.global.js?v=1130"></script>
-<script src="sdk/smp-compat.global.js?v=1130"></script>
-<!-- CloudMusic Theme -->
-<script src="js/core.js?v=34"></script>
-<script src="js/lyric-core.js?v=30"></script>
-<script src="js/ui.js?v=30"></script>
-<script src="js/ui-lyrics.js?v=30"></script>
-<script src="js/ui-playlist.js?v=30"></script>
-<script src="js/ui-discover.js?v=28"></script>
-<script src="js/ui-library.js?v=29"></script>
-<script src="js/ui-queue.js?v=28"></script>
-<script src="js/ui-nowplaying.js?v=29"></script>
-<script src="js/ui-tags.js?v=28"></script>
-<script src="js/controls.js?v=32"></script>
-<script src="js/online-common.js?v=4"></script>
-<script src="js/qqmusic-core.js?v=12"></script>
-<script src="js/qq-playlist-export.js?v=2"></script>
-<script src="js/ui-qqmusic.js?v=26"></script>
-<script src="js/netease-core.js?v=10"></script>
-<script src="js/ui-netease.js?v=26"></script>
-<script src="js/lyrics-resolver.js?v=5"></script>
-<script src="js/artwork-resolver.js?v=7"></script>
-<script src="js/app.js?v=31"></script>
+<!-- foo_ui_webview2 SDK v2.0.0（bridge 必需；components / smp-compat 主题未使用，
+     不再加载以省掉约 278KB 解析 —— 文件仍在 sdk/ 下，需要时把下面两行 script 加回）
+<script src="sdk/components.global.js?v=2000"></script>
+<script src="sdk/smp-compat.global.js?v=2000"></script>
+-->
+<script src="sdk/bridge.global.js?v=2000"></script>
+<!-- CloudMusic Theme v3.0.0 -->
+<script src="js/core.js?v=317"></script>
+<script src="js/lyric-core.js?v=305"></script>
+<script src="js/playback-model.js?v=4"></script>
+<script src="js/ui.js?v=311"></script>
+<script src="js/ui-lyrics.js?v=318"></script>
+<script src="js/ui-playlist.js?v=315"></script>
+<script src="js/ui-discover.js?v=305"></script>
+<script src="js/ui-library.js?v=306"></script>
+<script src="js/ui-queue.js?v=309"></script>
+<script src="js/ui-nowplaying.js?v=311"></script>
+<script src="js/ui-tags.js?v=305"></script>
+<script src="js/audio-viz.js?v=308"></script>
+<script src="js/controls.js?v=323"></script>
+<script src="js/online-common.js?v=306"></script>
+<script src="js/qqmusic-core.js?v=305"></script>
+<script src="js/qq-playlist-export.js?v=304"></script>
+<script src="js/ui-qqmusic.js?v=307"></script>
+<script src="js/netease-core.js?v=305"></script>
+<script src="js/ui-netease.js?v=307"></script>
+<script src="js/lyrics-sources.js?v=2"></script>
+<script src="js/lyrics-resolver.js?v=307"></script>
+<script src="js/artwork-resolver.js?v=304"></script>
+<script src="js/tray.js?v=4"></script>
+<script src="js/ui-settings.js?v=6"></script>
+<script src="js/app.js?v=315"></script>
 </body>
 </html>
